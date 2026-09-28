@@ -376,6 +376,101 @@ function createUI()
         end
     })
     A:Divider({ Text = "伤害免疫" })
+    local godOn = false
+    A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
+    A:Paragraph({ Title = "可以免疫的伤害", Desc = "免疫火焰和车爆炸时候的伤害和银行游戏厅的激光伤害" })
+    
+    A:Toggle({
+        Title = "无限饥饿",
+        Value = false,
+        Callback = function(value)
+            if value then
+                task.spawn(function()
+                    while value and not isDestroyed do
+                        local char = player.Character
+                        if char then
+                            pcall(function()
+                                local args = { [1] = "starving", [2] = char, [3] = false }
+                                ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
+                            end)
+                        end
+                        RunService.Heartbeat:Wait()
+                    end
+                end)
+            end
+        end
+    })
+
+    A:Divider({ Text = "穿墙" })
+    A:Toggle({ Title = "启用人物穿墙", Value = false, Callback = function(value)
+        Settings.NoclipEnabled = value
+        local char = player.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = not value end
+            end
+        end
+    end })
+    A:Divider({ Text = "防甩飞" })
+    A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
+    A:Divider({ Text = "防摔" })
+    antiFallToggle = A:Toggle({
+        Title = "防摔",
+        Value = false,
+        Callback = function(value) antiFallEnabled = value end
+    })
+    task.spawn(function()
+        while not isDestroyed do
+            task.wait(0.1)
+            if antiFallEnabled then
+                local char = player.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if root and hum and not hum.PlatformStand then
+                    local vel = root.Velocity
+                    if vel.Y < -20 then
+                        root.Velocity = Vector3.new(vel.X, math.clamp(vel.Y, -40, -10), vel.Z)
+                    end
+                end
+            end
+        end
+    end)
+    A:Divider({ Text = "碰飞" })
+    A:Button({
+        Title = "碰飞",
+        Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
+    })
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if method == "InvokeServer" and args[1] == "getNavigationPoint" then
+            local result = oldNamecall(self, ...)
+            if navAutoTeleport then
+                local x, z
+                if typeof(result) == "Vector3" then
+                    x, z = result.X, result.Z
+                elseif type(result) == "table" then
+                    x = result[1] or result.X or result.x
+                    z = result[2] or result.Z or result.z
+                end
+                if type(x) == "number" and type(z) == "number" then
+                    task.spawn(function()
+                        task.wait(0.15)
+                        local y = getGroundY(x, z)
+                        local char = player.Character
+                        local root = char and char:FindFirstChild("HumanoidRootPart")
+                        if root then root.CFrame = CFrame.new(x, y, z) end
+                    end)
+                end
+            end
+            return result
+        end
+        if method == "FireServer" then
+            if godOn and type(args[1]) == "string" and args[1] == "takeDamage" then return end
+        end
+        return oldNamecall(self, ...)
+    end)
     local FlyTab = AddTab(MainSection, "飞天与加速", "plane")
     local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
     local InteractTab = AddTab(MainSection, "互动", "hand")
@@ -384,7 +479,7 @@ function createUI()
     local VehicleTab = AddTab(MainSection, "车辆功能", "car")
     local B = AddTab(MainSection, "枪械功能", "target")
     local C = AddTab(MainSection, "杀戮光环", "skull")
-    local D = AddTab(MainSection, "传送点", "map-pin")
+    local D = AddTab(MainSection, "传送", "map-pin")
     local E = AddTab(MainSection, "透视", "eye")
     local PoliceDodgeTab = AddTab(MainSection, "自动躲警察", "shield")
     VehicleTab:Divider({ Text = "车辆加速" })
@@ -1437,31 +1532,6 @@ function createUI()
     InteractTab:Divider({ Text = "互动功能" })
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     InteractTab:Toggle({ Title = "自动互动", Value = false, Callback = function(value) autoInteractEnabled = value end })
-    InteractTab:Divider({ Text = "自动黑客" })
-    local autoHackEnabled = false
-    InteractTab:Toggle({
-        Title = "自动黑客",
-        Value = false,
-        Callback = function(value) autoHackEnabled = value end
-    })
-    task.spawn(function()
-        while not isDestroyed do
-            task.wait(0.1)
-            if autoHackEnabled then
-                local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-                if event then
-                    local gameplay = Workspace:FindFirstChild("Gameplay")
-                    local vehicles = gameplay and gameplay:FindFirstChild("Vehicles")
-                    local camry = vehicles and vehicles:FindFirstChild("Toyota Camry 2016")
-                    local startHack1 = camry and camry:FindFirstChild("StartHack")
-                    local entities = gameplay and gameplay:FindFirstChild("Entities")
-                    local startHack2 = entities and entities:FindFirstChild("StartHack")
-                    if startHack1 then pcall(function() event:InvokeServer("talkToMission", startHack1) end) end
-                    if startHack2 then pcall(function() event:InvokeServer("talkToMission", startHack2) end) end
-                end
-            end
-        end
-    end)
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
     local interactDistance = 30
@@ -1497,7 +1567,7 @@ function createUI()
         Value = false,
         Callback = function(value) autoCuffEnabled = value end
     })
-    PoliceTab:Toggle({
+     PoliceTab:Toggle({
         Title = "自动点护送",
         Value = false,
         Callback = function(value) autoEscortEnabled = value end
@@ -2237,79 +2307,6 @@ end)
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if hum and root and hum.MoveDirection.Magnitude > 0 then root.CFrame = root.CFrame + hum.MoveDirection * speedBypassValue * dt end
     end)
-    local godOn = false
-    A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
-    A:Paragraph({ Title = "可以免疫的伤害", Desc = "免疫火焰和车爆炸时候的伤害和银行游戏厅的激光伤害" })
-    A:Divider({ Text = "穿墙" })
-    A:Toggle({ Title = "启用人物穿墙", Value = false, Callback = function(value)
-        Settings.NoclipEnabled = value
-        local char = player.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = not value end
-            end
-        end
-    end })
-    A:Divider({ Text = "防甩飞" })
-    A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
-    A:Divider({ Text = "防摔" })
-    antiFallToggle = A:Toggle({
-        Title = "防摔",
-        Value = false,
-        Callback = function(value) antiFallEnabled = value end
-    })
-    task.spawn(function()
-        while not isDestroyed do
-            task.wait(0.1)
-            if antiFallEnabled then
-                local char = player.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if root and hum and not hum.PlatformStand then
-                    local vel = root.Velocity
-                    if vel.Y < -20 then
-                        root.Velocity = Vector3.new(vel.X, math.clamp(vel.Y, -40, -10), vel.Z)
-                    end
-                end
-            end
-        end
-    end)
-    A:Divider({ Text = "碰飞" })
-    A:Button({
-        Title = "碰飞",
-        Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
-    })
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        if method == "InvokeServer" and args[1] == "getNavigationPoint" then
-            local result = oldNamecall(self, ...)
-            if navAutoTeleport then
-                local x, z
-                if typeof(result) == "Vector3" then
-                    x, z = result.X, result.Z
-                elseif type(result) == "table" then
-                    x = result[1] or result.X or result.x
-                    z = result[2] or result.Z or result.z
-                end
-                if type(x) == "number" and type(z) == "number" then
-                    task.spawn(function()
-                        task.wait(0.15)
-                        local y = getGroundY(x, z)
-                        local char = player.Character
-                        local root = char and char:FindFirstChild("HumanoidRootPart")
-                        if root then root.CFrame = CFrame.new(x, y, z) end
-                    end)
-                end
-            end
-            return result
-        end
-        if method == "FireServer" then
-            if godOn and type(args[1]) == "string" and args[1] == "takeDamage" then return end
-        end
-        return oldNamecall(self, ...)
-    end)
     B:Divider({ Text = "枪械功能" })
     B:Toggle({ Title = "超快射速", Value = false, Callback = function(value)
         if not value then return end
@@ -2327,6 +2324,27 @@ end)
         if char then local humanoid = char:FindFirstChildOfClass("Humanoid"); if humanoid then humanoid.Died:Connect(ModifyWeaponStats) end end
         WindUI:Notify({ Title = "武器功能", Content = "超快射速已生效", Duration = 3 })
     end })
+    local infAmmoEnabled = false
+    B:Toggle({ Title = "无限子弹", Value = false, Callback = function(value) infAmmoEnabled = value end })
+    task.spawn(function()
+        while not isDestroyed do
+            if infAmmoEnabled then
+                local characterFolder = Workspace:FindFirstChild("Characters") and Workspace.Characters:FindFirstChild(player.Name)
+                if characterFolder then
+                    for _, gun in ipairs(characterFolder:GetChildren()) do
+                        local config = gun:FindFirstChild("Config")
+                        if config then
+                            local ammo = config:FindFirstChild("Ammo")
+                            local totalAmmo = config:FindFirstChild("TotalAmmo")
+                            if ammo then ammo.Value = math.huge end
+                            if totalAmmo then totalAmmo.Value = math.huge end
+                        end
+                    end
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
     B:Divider({ Text = "子弹追踪" })
     local bulletTrackLoaded = false
     B:Toggle({
