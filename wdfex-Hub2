@@ -36,6 +36,7 @@ function createUI()
     local player = Players.LocalPlayer
     local isDestroyed = false
     local connections = {}
+
     local function showBuySuccess(itemName)
         local sg = Instance.new("ScreenGui")
         sg.Name = "BuySuccessGui"
@@ -71,6 +72,7 @@ function createUI()
         tweenOut:Play()
         tweenOut.Completed:Connect(function() sg:Destroy() end)
     end
+
     local Window = WindUI:CreateWindow({
         Title = 'wdfex-Hub',
         Icon = "heart",
@@ -90,9 +92,11 @@ function createUI()
         Search = { Enabled = true, Placeholder = "搜索...", Callback = function(searchText) end },
         SidePanel = { Enabled = true, Content = { { Type = "Button", Text = "wdfex-Hub", Style = "Subtle", Size = UDim2.new(1, -20, 0, 30), Callback = function() end } } }
     })
+
     Window:Tag({ Title = "wdfex-HubNB", Color = Color3.fromHex("#00ffff") })
     Window:EditOpenButton({ Title = "wdfex-Hub", Icon = "rbxassetid://105677776902677", CornerRadius = UDim.new(0,16), StrokeThickness = 4, Color = ColorSequence.new(Color3.fromHex("FF6B6B")), Draggable = true })
     Window:EditOpenButton({ Title = "wdfex-Hub", Icon = "heart", CornerRadius = UDim.new(0,16), StrokeThickness = 4, Color = ColorSequence.new(Color3.fromHex("FF6B6B")), Draggable = true })
+
     task.wait(0.1)
     local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
     if mainGui then
@@ -120,6 +124,7 @@ function createUI()
             table.insert(connections, colorConn)
         end
     end
+
     spawn(function()
         while true do
             for hue = 0, 1, 0.01 do
@@ -128,6 +133,7 @@ function createUI()
             end
         end
     end)
+
     task.spawn(function()
         pcall(function()
             local sound = Instance.new("Sound")
@@ -140,6 +146,7 @@ function createUI()
             sound:Destroy()
         end)
     end)
+
     task.spawn(function()
         pcall(function()
             local bannerGui = Instance.new("ScreenGui")
@@ -177,9 +184,11 @@ function createUI()
             startAnimation()
         end)
     end)
+
     local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false }
     local Whitelist = {}
     local affectedHeads = {}
+
     _G.CatAntiFling_Enabled = false
     _G.CatAntiFling_Running = false
     local function AntiFlingLoop()
@@ -211,18 +220,22 @@ function createUI()
         end)
     end
     AntiFlingLoop()
+
     local AuthorTab = Window:Tab({ Title = "作者信息", Icon = "user" })
     local AuthorSection = AuthorTab:Section({ Title = "", Opened = true })
     AuthorSection:Paragraph({ Title = "", Desc = "", Thumbnail = "rbxassetid://74369447499630", ThumbnailSize = 150, ThumbnailShape = "Square" })
     AuthorSection:Paragraph({ Title = "作者：wdfex", Desc = "" })
     AuthorSection:Paragraph({ Title = "作者QQ：1687426335", Desc = "" })
     AuthorSection:Paragraph({ Title = "此脚本仅wdfex一人开发", Desc = "" })
+
     local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
     local windowDragging, windowDragStart, windowStartPos = false, nil, nil
     local lockWindowBtn = false
+
     local function DestroyWindowQuickToggle()
         if windowQuickScreenGui then windowQuickScreenGui:Destroy(); windowQuickScreenGui = nil; windowQuickButton = nil end
     end
+
     local function CreateWindowQuickToggle()
         if windowQuickButton then return end
         windowQuickScreenGui = Instance.new("ScreenGui")
@@ -230,6 +243,7 @@ function createUI()
         windowQuickScreenGui.ResetOnSpawn = false
         windowQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         windowQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
+
         local button = Instance.new("TextButton")
         button.Size = UDim2.new(0, 115, 0, 46)
         button.Position = UDim2.new(0.5, -58, 0.3, 0)
@@ -242,14 +256,17 @@ function createUI()
         button.Font = Enum.Font.GothamBold
         button.Parent = windowQuickScreenGui
         windowQuickButton = button
+
         local corner = Instance.new("UICorner")
         corner.CornerRadius = UDim.new(0, 8)
         corner.Parent = button
+
         local stroke = Instance.new("UIStroke")
         stroke.Thickness = 2
         stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         stroke.Color = Color3.fromHSV(0.5, 1, 1)
         stroke.Parent = button
+
         task.spawn(function()
             while windowQuickButton and windowQuickButton.Parent do
                 local hue = (tick() * 0.15) % 1
@@ -258,6 +275,7 @@ function createUI()
                 task.wait(0.03)
             end
         end)
+
         button.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 if not lockWindowBtn then
@@ -292,6 +310,7 @@ function createUI()
             end
         end)
     end
+
     AuthorSection:Toggle({
         Title = "悬浮窗快捷开关（如果你使用的是电脑请打开它否则最小化之后无法继续打开主悬浮窗）",
         Value = false,
@@ -302,6 +321,7 @@ function createUI()
         Value = false,
         Callback = function(value) lockWindowBtn = value end
     })
+
     AuthorSection:Toggle({
         Title = "降低卡顿",
         Value = false,
@@ -326,26 +346,34 @@ function createUI()
             end
         end
     })
+
     local NoticeTab = Window:Tab({ Title = "公告", Icon = "info" })
     local NoticeSection = NoticeTab:Section({ Title = "作者消息", Opened = true })
     NoticeSection:Divider()
     NoticeSection:Paragraph({ Title = "注意事项", Desc = "已更换悬浮窗添加了一些功能\n修复了透视卡顿的问题\n修复了杀戮光环攻击有延迟的问题\n如果你使用的过程中出现一些bug请联系作者修复\n被封了就是被挂DC了" })
+
     local infoTab = Window:Tab({ Title = "通知", Icon = "layout-grid", Locked = false })
     local infoSection = infoTab:Section({ Title = "详情信息", Icon = "info", Opened = true })
     infoSection:Divider()
     infoSection:Paragraph({ Title = "关于", Desc = "91", ThumbnailSize = 190 })
     local infoSection2 = infoTab:Section({ Title = "更新公告", Icon = "bell", Opened = true })
     infoSection2:Divider()
-    infoSection2:Paragraph({ Title = "v4.8更新公告", Desc = "杀戮光环增加指定攻击玩家\n修复自动手铐对血量为0的人没效果的问题\n优化了一些问题", ThumbnailSize = 190 })
+    infoSection2:Paragraph({ Title = "v4.8版本更新公告", Desc = "增加自动黑客（在互动里面）\n杀戮光环增加了指定攻击目标\n增加了无线体力无线饥饿（无限体力可能没效果）\n修复了某些功能打开之后卡死的问题", ThumbnailSize = 190 })
     infoTab:Select()
     AuthorTab:Select()
+
     local MainSection = Window:Section({ Title = "主功能", Opened = true })
     local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
+
     local A = AddTab(MainSection, "玩家修改", "user")
+
     local antiFallEnabled = false
     local antiFallToggle = nil
+
     A:Divider({ Text = "地图导航传送" })
+
     local navAutoTeleport = false
+
     local function getGroundY(x, z)
         local origin = Vector3.new(x, 500, z)
         local dir = Vector3.new(0, -1000, 0)
@@ -360,6 +388,7 @@ function createUI()
         end
         return 3
     end
+
     A:Toggle({
         Title = "地图导航传送",
         Value = false,
@@ -375,7 +404,124 @@ function createUI()
             end
         end
     })
+
     A:Divider({ Text = "伤害免疫" })
+    local godOn = false
+    A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
+    A:Paragraph({ Title = "可以免疫的伤害", Desc = "免疫火焰和车爆炸时候的伤害和银行游戏厅的激光伤害" })
+    
+    A:Toggle({
+        Title = "无限体力",
+        Value = false,
+        Callback = function(value)
+            if value then
+                task.spawn(function()
+                    while value and not isDestroyed do
+                        pcall(function()
+                            local args = { [1] = "setStaminaOrFood", [2] = "stamina", [3] = 100 }
+                            ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
+                        end)
+                        RunService.Heartbeat:Wait()
+                    end
+                end)
+            end
+        end
+    })
+
+    A:Toggle({
+        Title = "无限饥饿",
+        Value = false,
+        Callback = function(value)
+            if value then
+                task.spawn(function()
+                    while value and not isDestroyed do
+                        local char = player.Character
+                        if char then
+                            pcall(function()
+                                local args = { [1] = "starving", [2] = char, [3] = false }
+                                ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
+                            end)
+                        end
+                        RunService.Heartbeat:Wait()
+                    end
+                end)
+            end
+        end
+    })
+
+    A:Divider({ Text = "穿墙" })
+    A:Toggle({ Title = "启用人物穿墙", Value = false, Callback = function(value)
+        Settings.NoclipEnabled = value
+        local char = player.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = not value end
+            end
+        end
+    end })
+    A:Divider({ Text = "防甩飞" })
+    A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
+    A:Divider({ Text = "防摔" })
+    antiFallToggle = A:Toggle({
+        Title = "防摔",
+        Value = false,
+        Callback = function(value) antiFallEnabled = value end
+    })
+    task.spawn(function()
+        while not isDestroyed do
+            task.wait(0.1)
+            if antiFallEnabled then
+                local char = player.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if root and hum and not hum.PlatformStand then
+                    local vel = root.Velocity
+                    if vel.Y < -20 then
+                        root.Velocity = Vector3.new(vel.X, math.clamp(vel.Y, -40, -10), vel.Z)
+                    end
+                end
+            end
+        end
+    end)
+
+    A:Divider({ Text = "碰飞" })
+    A:Button({
+        Title = "碰飞",
+        Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
+    })
+
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if method == "InvokeServer" and args[1] == "getNavigationPoint" then
+            local result = oldNamecall(self, ...)
+            if navAutoTeleport then
+                local x, z
+                if typeof(result) == "Vector3" then
+                    x, z = result.X, result.Z
+                elseif type(result) == "table" then
+                    x = result[1] or result.X or result.x
+                    z = result[2] or result.Z or result.z
+                end
+                if type(x) == "number" and type(z) == "number" then
+                    task.spawn(function()
+                        task.wait(0.15)
+                        local y = getGroundY(x, z)
+                        local char = player.Character
+                        local root = char and char:FindFirstChild("HumanoidRootPart")
+                        if root then root.CFrame = CFrame.new(x, y, z) end
+                    end)
+                end
+            end
+            return result
+        end
+        if method == "FireServer" then
+            if godOn and type(args[1]) == "string" and args[1] == "takeDamage" then return end
+        end
+        return oldNamecall(self, ...)
+    end)
+
     local FlyTab = AddTab(MainSection, "飞天与加速", "plane")
     local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
     local InteractTab = AddTab(MainSection, "互动", "hand")
@@ -387,6 +533,7 @@ function createUI()
     local D = AddTab(MainSection, "传送点", "map-pin")
     local E = AddTab(MainSection, "透视", "eye")
     local PoliceDodgeTab = AddTab(MainSection, "自动躲警察", "shield")
+
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Toggle({
         Title = "车辆加速",
@@ -1275,6 +1422,7 @@ function createUI()
             end
         end
     })
+
     RemoteBuyTab:Divider({ Text = "黑市购买" })
     local toolItems = {
         { name = "解密电路", id = "1", itemName = "Decryption Circuit" },
@@ -1430,16 +1578,44 @@ function createUI()
             WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 })
         end
     end })
+
+    InteractTab:Divider({ Text = "自动黑客" })
+    local autoHackEnabled = false
+    InteractTab:Toggle({
+        Title = "自动黑客",
+        Value = false,
+        Callback = function(value)
+            autoHackEnabled = value
+            if value then
+                task.spawn(function()
+                    while autoHackEnabled and not isDestroyed do
+                        pcall(function()
+                            local E = workspace.Gameplay.Entities:FindFirstChild("StartHack")
+                            if E then game:GetService("ReplicatedStorage").Remote.PlayerFunc:InvokeServer("talkToMission", E) end
+                            local V = workspace.Gameplay.Vehicles:FindFirstChild("Toyota Camry 2016")
+                            if V and V:FindFirstChild("StartHack") then game:GetService("ReplicatedStorage").Remote.PlayerFunc:InvokeServer("talkToMission", V.StartHack) end
+                        end)
+                        RunService.Heartbeat:Wait()
+                    end
+                end)
+            end
+        end
+    })
+
+    InteractTab:Divider({ Text = "互动功能" })
     local fastInteractEnabled, autoInteractEnabled, autoCuffEnabled = false, false, false
+
     game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
         if fastInteractEnabled then prompt.HoldDuration = 0 end
     end)
-    InteractTab:Divider({ Text = "互动功能" })
+
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     InteractTab:Toggle({ Title = "自动互动", Value = false, Callback = function(value) autoInteractEnabled = value end })
     InteractTab:Divider({ Text = "增加互动距离" })
+
     local interactDistanceEnabled = false
     local interactDistance = 30
+
     local function ApplyInteractDistance(value)
         interactDistance = value
         for _, obj in ipairs(workspace:GetDescendants()) do
@@ -1448,12 +1624,14 @@ function createUI()
             end
         end
     end
+
     workspace.DescendantAdded:Connect(function(obj)
         task.wait(0.1)
         if obj:IsA("ProximityPrompt") and interactDistanceEnabled then
             obj.MaxActivationDistance = interactDistance
         end
     end)
+
     InteractTab:Toggle({
         Title = "增加互动距离",
         Value = false,
@@ -1462,21 +1640,23 @@ function createUI()
             if value then ApplyInteractDistance(30) end
         end
     })
+
     PoliceTab:Divider({ Text = "警察功能" })
     PoliceTab:Divider({ Text = "自动手铐" })
     PoliceTab:Divider({ Text = "自动点护送" })
-    local autoCuffEnabled = false
     local autoEscortEnabled = false
     PoliceTab:Toggle({
         Title = "自动手铐",
         Value = false,
         Callback = function(value) autoCuffEnabled = value end
     })
-     PoliceTab:Toggle({
+
+    PoliceTab:Toggle({
         Title = "自动点护送",
         Value = false,
         Callback = function(value) autoEscortEnabled = value end
     })
+
     PoliceTab:Button({
         Title = "传送至监狱内部",
         Callback = function()
@@ -1488,14 +1668,10 @@ function createUI()
             end
         end
     })
+
     PoliceTab:Divider({ Text = "传送与甩飞" })
-    local PlayerConfig = {
-        playernamedied = nil,
-        dropdown = {},
-        LoopTeleport = false,
-        LoopTeleportBack = false,
-        LoopFling = false,
-    }
+    local PlayerConfig = { playernamedied = nil, dropdown = {}, LoopTeleport = false, LoopTeleportBack = false, LoopFling = false }
+
     local function shuaxinlb()
         local list = {}
         for _, p in ipairs(Players:GetPlayers()) do
@@ -1505,6 +1681,7 @@ function createUI()
         PlayerConfig.dropdown = list
     end
     shuaxinlb()
+
     local playerDropdown
     playerDropdown = PoliceTab:Dropdown({
         Title = "选择玩家名称",
@@ -1512,12 +1689,10 @@ function createUI()
         Value = PlayerConfig.dropdown[1] or "无",
         Callback = function(value) PlayerConfig.playernamedied = value end
     })
+
     local searchNameInput = ""
-    PoliceTab:Input({
-        Title = "搜索玩家名字",
-        Placeholder = "输入玩家名字后点击搜索...",
-        Callback = function(value) searchNameInput = value end
-    })
+    PoliceTab:Input({ Title = "搜索玩家名字", Placeholder = "输入玩家名字后点击搜索...", Callback = function(value) searchNameInput = value end })
+
     PoliceTab:Button({
         Title = "搜索并选中玩家",
         Callback = function()
@@ -1534,15 +1709,14 @@ function createUI()
             end
             if found then
                 PlayerConfig.playernamedied = found
-                if playerDropdown then
-                    pcall(function() playerDropdown:SetValue(found) end)
-                end
+                if playerDropdown then pcall(function() playerDropdown:SetValue(found) end) end
                 WindUI:Notify({ Title = "wdfex-Hub", Content = "已选中: " .. found, Duration = 3 })
             else
                 WindUI:Notify({ Title = "wdfex-Hub", Content = "未找到该玩家", Duration = 3 })
             end
         end
     })
+
     PoliceTab:Button({
         Title = "传送到玩家旁边",
         Callback = function()
@@ -1558,6 +1732,7 @@ function createUI()
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "循环锁定传送",
         Value = false,
@@ -1574,12 +1749,10 @@ function createUI()
                         task.wait(0.1)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送", Duration = 2 })
             end
         end
     })
+
     PoliceTab:Button({
         Title = "把玩家传送过来",
         Callback = function()
@@ -1595,6 +1768,7 @@ function createUI()
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "循环传送玩家过来",
         Value = false,
@@ -1611,12 +1785,10 @@ function createUI()
                         task.wait(0.1)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送玩家过来", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送玩家过来", Duration = 2 })
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "吸全部玩家",
         Value = false,
@@ -1641,6 +1813,7 @@ function createUI()
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "查看玩家",
         Value = false,
@@ -1663,6 +1836,7 @@ function createUI()
             end
         end
     })
+
     local function ThrowPlayer(targetPlayer)
         local targetChar = targetPlayer.Character
         if not targetChar then return end
@@ -1689,6 +1863,7 @@ function createUI()
         bv:Destroy()
         workspace.FallenPartsDestroyHeight = oldFPDH
     end
+
     PoliceTab:Button({
         Title = "甩飞一次",
         Callback = function()
@@ -1705,6 +1880,7 @@ function createUI()
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "循环甩飞",
         Value = false,
@@ -1720,12 +1896,10 @@ function createUI()
                         task.wait(0.2)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环甩飞", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环甩飞", Duration = 2 })
             end
         end
     })
+
     PoliceTab:Toggle({
         Title = "开启指定自瞄目标",
         Value = false,
@@ -1745,24 +1919,21 @@ function createUI()
             end
         end
     })
+
     local autoHealEnabled = false
     local healRadius = 30
     local healInterval = 0.1
+
     DoctorTab:Divider({ Text = "自动治疗" })
-    DoctorTab:Toggle({
-        Title = "自动治疗",
-        Value = false,
-        Callback = function(value) autoHealEnabled = value end
-    })
+    DoctorTab:Toggle({ Title = "自动治疗", Value = false, Callback = function(value) autoHealEnabled = value end })
+
     DoctorTab:Divider({ Text = "修复物品" })
     DoctorTab:Button({
         Title = "修复MT急救包",
         Callback = function()
             local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
             if event then
-                local success, err = pcall(function()
-                    event:InvokeServer("repairReplenishItem", "MT First Aid Kit")
-                end)
+                local success, err = pcall(function() event:InvokeServer("repairReplenishItem", "MT First Aid Kit") end)
                 if success then
                     WindUI:Notify({ Title = "医生功能", Content = "修复成功", Duration = 3 })
                 else
@@ -1773,11 +1944,13 @@ function createUI()
             end
         end
     })
+
     DoctorTab:Divider({ Text = "循环传送低血量玩家" })
     local loopTeleportLowHpEnabled = false
     local skipPoliceTeleport = false
     local onlyNearbyTeleport = false
     local nearbyDistance = 25
+
     DoctorTab:Toggle({
         Title = "循环传送血量为100以下的玩家",
         Value = false,
@@ -1832,27 +2005,19 @@ function createUI()
                         task.wait(0.1)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送低血量玩家", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送低血量玩家", Duration = 2 })
             end
         end
     })
-    DoctorTab:Toggle({
-        Title = "不传送警察队伍的玩家",
-        Value = false,
-        Callback = function(value) skipPoliceTeleport = value end
-    })
-    DoctorTab:Toggle({
-        Title = "只传送附近的玩家",
-        Value = false,
-        Callback = function(value) onlyNearbyTeleport = value end
-    })
+
+    DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
+    DoctorTab:Toggle({ Title = "只传送附近的玩家", Value = false, Callback = function(value) onlyNearbyTeleport = value end })
+
     game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
         if autoHealEnabled then
             pcall(function() prompt.HoldDuration = 0 end)
         end
     end)
+
     task.spawn(function()
         while not isDestroyed do
             task.wait(healInterval)
@@ -1869,14 +2034,10 @@ function createUI()
                                 local dist = (targetRoot.Position - myRoot.Position).Magnitude
                                 if dist <= healRadius then
                                     for _, obj in ipairs(p.Character:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then
-                                            pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end)
-                                        end
+                                        if obj:IsA("ProximityPrompt") then pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end) end
                                     end
                                     for _, obj in ipairs(char:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then
-                                            pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end)
-                                        end
+                                        if obj:IsA("ProximityPrompt") then pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end) end
                                     end
                                 end
                             end
@@ -1886,6 +2047,7 @@ function createUI()
             end
         end
     end)
+
     task.spawn(function()
         while not isDestroyed do
             if autoInteractEnabled then
@@ -1898,6 +2060,7 @@ function createUI()
             task.wait(0.25)
         end
     end)
+
     task.spawn(function()
         while not isDestroyed do
             task.wait(0.05)
@@ -1922,30 +2085,32 @@ function createUI()
             end
         end
     end)
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if autoEscortEnabled then
-            local char = player.Character
-            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= player and p.Character then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local head = p.Character:FindFirstChild("Head")
-                        if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
-                            local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-                            if event then
-                                task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
-                                task.wait(0.1)
+
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            if autoEscortEnabled then
+                local char = player.Character
+                local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        if p ~= player and p.Character then
+                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                            local head = p.Character:FindFirstChild("Head")
+                            if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
+                                local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
+                                if event then
+                                    task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
+                                    task.wait(0.1)
+                                end
                             end
                         end
                     end
                 end
             end
         end
-    end
-end)
+    end)
+
     local policeDodgeEnabled, policeDodgeDistance, policeDodgeForce, policeDodgeWallCheck, policeDodgeConn = false, 30, 50, true, nil
     local function isVisible(fromPos, toPos, ignoreInstances)
         local direction = (toPos - fromPos).Unit
@@ -2001,6 +2166,7 @@ end)
     PoliceDodgeTab:Slider({ Title = "触发距离", Step = 1, Value = { Min = 1, Max = 100, Default = 30 }, Callback = function(value) policeDodgeDistance = value end })
     PoliceDodgeTab:Slider({ Title = "弹开力度", Step = 1, Value = { Min = 1, Max = 100, Default = 50 }, Callback = function(value) policeDodgeForce = value end })
     PoliceDodgeTab:Toggle({ Title = "墙体检测", Value = true, Callback = function(value) policeDodgeWallCheck = value end })
+
     local FlySpeed = 35
     local flyState = { enabled = false, hrp = nil, hum = nil, microThread = nil, healthThread = nil, diedConn = nil, targetPos = nil, lastTime = 0 }
     local flyAnchor = { active = false, head = nil, hrp = nil, hum = nil, rayLength = 3.5, rayCount = 4, verticalLayers = 2 }
@@ -2116,6 +2282,7 @@ end)
     FlyTab:Divider({ Text = "飞行" })
     FlyTab:Toggle({ Title = "飞行（绕过）", Value = false, Callback = function(value) if value then startFly() else stopFly() end end })
     FlyTab:Slider({ Title = "飞行速度", Step = 1, Value = { Min = 10, Max = 620, Default = 35 }, Callback = function(value) FlySpeed = value end })
+
     local flyQuickToggle, flyQuickScreenGui, flyQuickButton, flyQuickStatusLabel = false, nil, nil, nil
     local flyDragging, flyDragStart, flyStartPos = false, nil, nil
     local flyStrokeConn = nil
@@ -2159,17 +2326,11 @@ end)
             end
         end)
         local function updateFlyStatus()
-            if flyQuickButton then
-                flyQuickButton.Text = flyState.enabled and "飞天: 开" or "飞天: 关"
-            end
+            if flyQuickButton then flyQuickButton.Text = flyState.enabled and "飞天: 开" or "飞天: 关" end
         end
         button.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if not lockFlyBtn then
-                    flyDragging = true
-                    flyDragStart = input.Position
-                    flyStartPos = button.Position
-                end
+                if not lockFlyBtn then flyDragging = true; flyDragStart = input.Position; flyStartPos = button.Position end
             end
         end)
         button.InputChanged:Connect(function(input)
@@ -2179,9 +2340,7 @@ end)
             end
         end)
         button.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                flyDragging = false
-            end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then flyDragging = false end
         end)
         button.MouseButton1Click:Connect(function()
             if flyState.enabled then stopFly() else startFly() end
@@ -2189,18 +2348,11 @@ end)
         end)
         updateFlyStatus()
         task.spawn(function()
-            while flyQuickScreenGui and flyQuickScreenGui.Parent do
-                task.wait(0.3)
-                updateFlyStatus()
-            end
+            while flyQuickScreenGui and flyQuickScreenGui.Parent do task.wait(0.3); updateFlyStatus() end
         end)
     end
     FlyTab:Toggle({ Title = "飞天快捷开关", Value = false, Callback = function(value) flyQuickToggle = value; if value then CreateFlyQuickToggle() else DestroyFlyQuickToggle() end end })
-    FlyTab:Toggle({
-        Title = "锁定飞天快捷开关",
-        Value = false,
-        Callback = function(value) lockFlyBtn = value end
-    })
+    FlyTab:Toggle({ Title = "锁定飞天快捷开关", Value = false, Callback = function(value) lockFlyBtn = value end })
     FlyTab:Divider({ Text = "移速" })
     local speedBypassOn, speedBypassValue = false, 20
     FlyTab:Toggle({ Title = "修改移速（绕过）", Value = false, Callback = function(value) speedBypassOn = value end })
@@ -2212,79 +2364,7 @@ end)
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if hum and root and hum.MoveDirection.Magnitude > 0 then root.CFrame = root.CFrame + hum.MoveDirection * speedBypassValue * dt end
     end)
-    local godOn = false
-    A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
-    A:Paragraph({ Title = "可以免疫的伤害", Desc = "免疫火焰和车爆炸时候的伤害和银行游戏厅的激光伤害" })
-    A:Divider({ Text = "穿墙" })
-    A:Toggle({ Title = "启用人物穿墙", Value = false, Callback = function(value)
-        Settings.NoclipEnabled = value
-        local char = player.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = not value end
-            end
-        end
-    end })
-    A:Divider({ Text = "防甩飞" })
-    A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
-    A:Divider({ Text = "防摔" })
-    antiFallToggle = A:Toggle({
-        Title = "防摔",
-        Value = false,
-        Callback = function(value) antiFallEnabled = value end
-    })
-    task.spawn(function()
-        while not isDestroyed do
-            task.wait(0.1)
-            if antiFallEnabled then
-                local char = player.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if root and hum and not hum.PlatformStand then
-                    local vel = root.Velocity
-                    if vel.Y < -20 then
-                        root.Velocity = Vector3.new(vel.X, math.clamp(vel.Y, -40, -10), vel.Z)
-                    end
-                end
-            end
-        end
-    end)
-    A:Divider({ Text = "碰飞" })
-    A:Button({
-        Title = "碰飞",
-        Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
-    })
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        if method == "InvokeServer" and args[1] == "getNavigationPoint" then
-            local result = oldNamecall(self, ...)
-            if navAutoTeleport then
-                local x, z
-                if typeof(result) == "Vector3" then
-                    x, z = result.X, result.Z
-                elseif type(result) == "table" then
-                    x = result[1] or result.X or result.x
-                    z = result[2] or result.Z or result.z
-                end
-                if type(x) == "number" and type(z) == "number" then
-                    task.spawn(function()
-                        task.wait(0.15)
-                        local y = getGroundY(x, z)
-                        local char = player.Character
-                        local root = char and char:FindFirstChild("HumanoidRootPart")
-                        if root then root.CFrame = CFrame.new(x, y, z) end
-                    end)
-                end
-            end
-            return result
-        end
-        if method == "FireServer" then
-            if godOn and type(args[1]) == "string" and args[1] == "takeDamage" then return end
-        end
-        return oldNamecall(self, ...)
-    end)
+
     B:Divider({ Text = "枪械功能" })
     B:Toggle({ Title = "超快射速", Value = false, Callback = function(value)
         if not value then return end
@@ -2323,6 +2403,7 @@ end)
             RunService.Heartbeat:Wait()
         end
     end)
+
     B:Divider({ Text = "子弹追踪" })
     local bulletTrackLoaded = false
     B:Toggle({
@@ -2332,28 +2413,15 @@ end)
             if value then
                 if bulletTrackLoaded then return end
                 bulletTrackLoaded = true
-                task.spawn(function()
-                    pcall(function()
-                        loadstring(game:HttpGet("https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua", true))()
-                    end)
-                end)
+                task.spawn(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua", true))() end) end)
             else
                 bulletTrackLoaded = false
-                pcall(function()
-                    local lib = getgenv().Library
-                    if lib and lib.Unload then
-                        lib:Unload()
-                    end
-                end)
-                pcall(function()
-                    local env = getgenv()
-                    if env and env.SilentAimSettings then
-                        env.SilentAimSettings.Enabled = false
-                    end
-                end)
+                pcall(function() local lib = getgenv().Library; if lib and lib.Unload then lib:Unload() end end)
+                pcall(function() local env = getgenv(); if env and env.SilentAimSettings then env.SilentAimSettings.Enabled = false end end)
             end
         end
     })
+
     B:Divider({ Text = "自瞄" })
     local aimOn, aimFOV, aimNoTeam, aimWall, aimGui, aimCircle = false, 150, true, true, nil, nil
     local function aimEnsureCircle()
@@ -2416,9 +2484,9 @@ end)
     B:Slider({ Title = "FOV圈大小", Step = 1, Value = { Min = 30, Max = 400, Default = 150 }, Callback = function(value) aimFOV = value end })
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
+
     local KA_MAX_DISTANCE, kaEnabled, KANearestOnly, KA_NEAREST_DISTANCE, KATargetPoliceOnly, KATargetCivilianOnly, KAIgnoreDead, showTarget, currentTarget, targetDisplayGui, targetDisplayLabel = 300, false, false, 25, false, false, true, true, nil, nil, nil
     local KA_SpecifiedPlayerName = nil
-    local KA_SpecifiedPlayer = nil
     local function CreateTargetDisplay()
         if targetDisplayGui then return end
         targetDisplayGui = Instance.new("ScreenGui")
@@ -2451,9 +2519,7 @@ end)
             local sp = Players:FindFirstChild(KA_SpecifiedPlayerName)
             if sp and sp.Character and sp.Character:FindFirstChild("Head") then
                 local hum = sp.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    return sp
-                end
+                if hum and hum.Health > 0 then return sp end
             end
             return nil
         end
@@ -2529,6 +2595,7 @@ end)
     local function setupToolListener(char) if char then char.DescendantAdded:Connect(function(desc) if desc:IsA("Tool") then onToolAdded(desc) end end) end end
     if player.Character then setupToolListener(player.Character) end
     player.CharacterAdded:Connect(function(char) setupToolListener(char) end)
+
     C:Divider({ Text = "杀戮光环" })
     C:Paragraph({ Title = "注意", Desc = "需装备枪械武器才有伤害" })
     C:Toggle({ Title = "启用杀戮光环", Value = false, Callback = function(value)
@@ -2552,6 +2619,7 @@ end)
     C:Divider({ Text = "优先攻击" })
     C:Toggle({ Title = "优先攻击最近目标", Value = false, Callback = function(value) KANearestOnly = value end })
     C:Slider({ Title = "优先攻击距离", Step = 1, Value = { Min = 5, Max = 100, Default = 25 }, Callback = function(value) KA_NEAREST_DISTANCE = value end })
+    
     C:Divider({ Text = "指定攻击目标" })
     local kaSearchInput = ""
     C:Input({ Title = "搜索玩家名字", Placeholder = "输入玩家名字...", Callback = function(value) kaSearchInput = value end })
@@ -2569,7 +2637,6 @@ end)
         end
         if found then
             KA_SpecifiedPlayerName = found
-            KA_SpecifiedPlayer = Players:FindFirstChild(found)
             WindUI:Notify({ Title = "杀戮光环", Content = "已锁定攻击目标: " .. found, Duration = 3 })
         else
             WindUI:Notify({ Title = "杀戮光环", Content = "未找到该玩家", Duration = 3 })
@@ -2577,9 +2644,9 @@ end)
     end })
     C:Button({ Title = "取消攻击指定玩家", Callback = function()
         KA_SpecifiedPlayerName = nil
-        KA_SpecifiedPlayer = nil
         WindUI:Notify({ Title = "杀戮光环", Content = "已取消指定攻击目标，恢复默认", Duration = 3 })
     end })
+
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
         if not Settings.TeleportEnabled then WindUI:Notify({ Title = "传送", Content = "请先开启传送开关", Duration = 3 }); return end
@@ -2675,6 +2742,7 @@ end)
     D:Divider({ Text = "送货能用到的传送" })
     D:Dropdown({ Title = "送货能用到的传送", Values = deliveryNames, Value = deliveryNames[1], Callback = function(value) selectedDelivery = value end })
     D:Button({ Title = "传送到选定地点", Callback = function() for _, data in ipairs(DELIVERY_TELEPORTS) do if data.n == selectedDelivery then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+
     local ESP_ENABLED, ESP_SHOW_NAME, ESP_SHOW_TEAM, ESP_SHOW_HEALTH, ESP_SHOW_DIST, ESP_SHOW_SELF, ESP_SHOW_PEERS, ESP_LIST, ESP_REFRESH_COUNT = false, true, true, true, true, false, true, {}, 0
     local function GetTeam(p)
         if p.Team then
@@ -2729,9 +2797,16 @@ end)
                 l.Position = UDim2.new(0, 0, 0, y)
                 l.BackgroundTransparency = 1
                 if p == player then
-                    if ESP_SHOW_PEERS then l.Text = "wdfex-Hub"; l.TextColor3 = Color3.fromRGB(0, 255, 255) else l.Text = p.Name .. " (你)"; l.TextColor3 = Color3.fromRGB(0, 255, 255) end
+                    if ESP_SHOW_PEERS then
+                        l.Text = "wdfex-Hub"
+                        l.TextColor3 = Color3.fromRGB(0, 255, 255)
+                    else
+                        l.Text = p.Name .. " (你)"
+                        l.TextColor3 = Color3.fromRGB(0, 255, 255)
+                    end
                 else
-                    l.Text = p.Name; l.TextColor3 = color
+                    l.Text = p.Name
+                    l.TextColor3 = color
                 end
                 l.TextSize = 15
                 l.Font = Enum.Font.GothamBold
@@ -2806,6 +2881,7 @@ end)
     task.spawn(function() while not isDestroyed do task.wait(0.3); if ESP_ENABLED then RefreshESP() end end end)
     Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(0.3); if ESP_ENABLED then RefreshESP() end end) end)
     Players.PlayerRemoving:Connect(function(p) RemoveESP(p.UserId) end)
+
     local MusicTab = Window:Tab({ Title = "音乐", Icon = "music" })
     local MusicGroup = MusicTab:Section({ Title = "音乐播放器", Opened = true })
     local SONG_LIST = {
@@ -2861,6 +2937,7 @@ end)
     MusicGroup:Divider()
     MusicGroup:Paragraph({ Title = "播放模式", Desc = "选择音乐的播放方式" })
     MusicGroup:Dropdown({ Title = "播放模式", Values = { "顺序播放", "循环播放", "随机播放" }, Value = "顺序播放", Callback = function(value) playMode = value; WindUI:Notify({ Title = "播放模式", Content = "已切换至: " .. value, Duration = 2 }); if isMusicPlaying then PlaySongByIndex(currentPlayIndex) end end })
+
     local SettingsTab = Window:Tab({ Title = "设置", Icon = "settings" })
     local adminVerified = false
     local KeySection = SettingsTab:Section({ Title = "开发者验证", Opened = true })
@@ -2924,5 +3001,6 @@ end)
         if keyInputValue == "2639zako" then adminVerified = true; WindUI:Notify({ Title = "成功", Content = "验证通过，已解锁开发者后台", Duration = 3 }); buildAdminPanel()
         else WindUI:Notify({ Title = "错误", Content = "卡密错误", Duration = 2 }) end
     end })
+
     WindUI:Notify({ Title = "wdfex-Hub", Content = "脚本已加载成功，欢迎使用！", Duration = 3 })
 end
