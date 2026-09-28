@@ -1612,34 +1612,63 @@ function createUI()
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     InteractTab:Toggle({ Title = "自动互动", Value = false, Callback = function(value) autoInteractEnabled = value end })
     InteractTab:Divider({ Text = "增加互动距离" })
-
     local interactDistanceEnabled = false
     local interactDistance = 30
-
     local function ApplyInteractDistance(value)
         interactDistance = value
         for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") then
-                obj.MaxActivationDistance = interactDistance
-            end
+            if obj:IsA("ProximityPrompt") then obj.MaxActivationDistance = interactDistance end
         end
     end
-
     workspace.DescendantAdded:Connect(function(obj)
         task.wait(0.1)
-        if obj:IsA("ProximityPrompt") and interactDistanceEnabled then
-            obj.MaxActivationDistance = interactDistance
+        if obj:IsA("ProximityPrompt") and interactDistanceEnabled then obj.MaxActivationDistance = interactDistance end
+    end)
+    InteractTab:Toggle({ Title = "增加互动距离", Value = false, Callback = function(value) interactDistanceEnabled = value; if value then ApplyInteractDistance(30) end end })
+
+    InteractTab:Divider({ Text = "自动黑客" })
+    
+    local autoHackVehicleEnabled = false
+    task.spawn(function()
+        while not isDestroyed do
+            if autoHackVehicleEnabled then
+                local char = player.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local closestCar = nil
+                    local minDist = 30
+                    local vehiclesFolder = workspace.Gameplay:FindFirstChild("Vehicles")
+                    if vehiclesFolder then
+                        for _, car in ipairs(vehiclesFolder:GetChildren()) do
+                            local startHack = car:FindFirstChild("StartHack")
+                            if startHack then
+                                local dist = (startHack.Position - root.Position).Magnitude
+                                if dist < minDist then minDist = dist; closestCar = car end
+                            end
+                        end
+                    end
+                    if closestCar then
+                        local args = { [1] = "talkToMission", [2] = closestCar:FindFirstChild("StartHack") }
+                        pcall(function() ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args)) end)
+                    end
+                end
+            end
+            RunService.Heartbeat:Wait()
         end
     end)
+    InteractTab:Toggle({ Title = "自动破解附近车辆", Value = false, Callback = function(value) autoHackVehicleEnabled = value end })
 
-    InteractTab:Toggle({
-        Title = "增加互动距离",
-        Value = false,
-        Callback = function(value)
-            interactDistanceEnabled = value
-            if value then ApplyInteractDistance(30) end
+    local autoHackEntityEnabled = false
+    task.spawn(function()
+        while not isDestroyed do
+            if autoHackEntityEnabled then
+                local args = { [1] = "talkToMission", [2] = workspace.Gameplay.Entities.StartHack }
+                pcall(function() ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args)) end)
+            end
+            RunService.Heartbeat:Wait()
         end
-    })
+    end)
+    InteractTab:Toggle({ Title = "自动破解实体（ATM/房屋）", Value = false, Callback = function(value) autoHackEntityEnabled = value end })
 
     PoliceTab:Divider({ Text = "警察功能" })
     PoliceTab:Divider({ Text = "自动手铐" })
