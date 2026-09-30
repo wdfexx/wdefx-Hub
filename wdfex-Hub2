@@ -485,45 +485,6 @@ function createUI()
     local PoliceDodgeTab = AddTab(MainSection, "自动躲警察", "shield")
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
-    VehicleTab:Divider({ Text = "取消车辆碰撞伤害" })
-
-VehicleTab:Toggle({
-    Title = "取消车辆碰撞伤害",
-    Value = false,
-    Callback = function(value)
-        if value then
-            WindUI:Notify({ Title = "取消车辆碰撞伤害", Content = "开启成功", Duration = 3 })
-            task.spawn(function()
-                while value and not isDestroyed do
-                    local vehicle = workspace:FindFirstChild("Gameplay") 
-                        and workspace.Gameplay:FindFirstChild("Vehicles") 
-                        and workspace.Gameplay.Vehicles:FindFirstChild("Lincoln LS 2002")
-
-                    if vehicle then
-                        local collisions = vehicle:FindFirstChild("Collisions")
-                        if collisions then
-                            local colObj = collisions:FindFirstChild("_Collision")
-                            if colObj then
-                                pcall(function()
-                                    local args = {
-                                        [1] = "vehicle",
-                                        [2] = "collision",
-                                        [3] = { colObj, colObj, colObj },
-                                        [4] = 0
-                                    }
-                                    ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
-                                end)
-                            end
-                        end
-                    end
-                    task.wait(0.1)
-                end
-            end)
-        else
-            WindUI:Notify({ Title = "碰撞免伤", Content = "已关闭", Duration = 3 })
-        end
-    end
-})
 
 VehicleTab:Button({
     Title = "生成车辆",
