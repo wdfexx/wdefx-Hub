@@ -483,6 +483,47 @@ function createUI()
     local E = AddTab(MainSection, "透视", "eye")
     local PoliceDodgeTab = AddTab(MainSection, "自动躲警察", "shield")
     VehicleTab:Divider({ Text = "车辆加速" })
+    VehicleTab:Divider({ Text = "生成车辆" })
+
+VehicleTab:Button({
+    Title = "生成车辆 (生成到脚下)",
+    Callback = function()
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then
+            WindUI:Notify({ Title = "生成车辆", Content = "角色尚未加载", Duration = 3 })
+            return
+        end
+
+        local carsFolder = ReplicatedStorage:FindFirstChild("Stuff")
+            and ReplicatedStorage.Stuff:FindFirstChild("Vehicles")
+            and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian")
+            and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1")
+
+        local carModel = carsFolder and carsFolder:FindFirstChild("Lincoln LS 2002")
+
+        if not carModel then
+            WindUI:Notify({ Title = "生成车辆", Content = "未找到车辆模型 Lincoln LS 2002", Duration = 3 })
+            return
+        end
+
+        local success = pcall(function()
+            local args = {
+                [1] = "spawnVehicle",
+                [2] = carModel,
+                [3] = root
+            }
+            ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+        end)
+
+        if success then
+            WindUI:Notify({ Title = "生成车辆", Content = "请求已发送", Duration = 3 })
+        else
+            WindUI:Notify({ Title = "生成车辆", Content = "服务器拒绝 (距离或权限限制)", Duration = 3 })
+        end
+    end
+})
+
     VehicleTab:Toggle({
         Title = "车辆加速",
         Value = false,
