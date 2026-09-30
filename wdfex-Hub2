@@ -486,40 +486,66 @@ function createUI()
     VehicleTab:Divider({ Text = "生成车辆" })
 
 VehicleTab:Button({
-    Title = "生成车辆 (生成到脚下)",
+    Title = "生成车辆",
     Callback = function()
         local char = player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then
-            WindUI:Notify({ Title = "生成车辆", Content = "角色尚未加载", Duration = 3 })
+            WindUI:Notify({ Title = "失败", Content = "错误代码403", Duration = 3 })
             return
         end
 
-        local carsFolder = ReplicatedStorage:FindFirstChild("Stuff")
-            and ReplicatedStorage.Stuff:FindFirstChild("Vehicles")
-            and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian")
-            and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1")
+        local carModel = ReplicatedStorage:FindFirstChild("Stuff") 
+            and ReplicatedStorage.Stuff:FindFirstChild("Vehicles") 
+            and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian") 
+            and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1") 
+            and ReplicatedStorage.Stuff.Vehicles.Civilian["1"]:FindFirstChild("Lincoln LS 2002")
+        
+        local spawnPoint = workspace:FindFirstChild("World")
+            and workspace.World:FindFirstChild("Interactive")
+            and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn")
+            and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns")
+            and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
 
-        local carModel = carsFolder and carsFolder:FindFirstChild("Lincoln LS 2002")
-
-        if not carModel then
-            WindUI:Notify({ Title = "生成车辆", Content = "未找到车辆模型 Lincoln LS 2002", Duration = 3 })
+        if not carModel or not spawnPoint then
+            WindUI:Notify({ Title = "失败", Content = "请检查服务器", Duration = 3 })
             return
         end
+
+        local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
 
         local success = pcall(function()
-            local args = {
-                [1] = "spawnVehicle",
-                [2] = carModel,
-                [3] = root
-            }
+            local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
             ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
         end)
 
         if success then
-            WindUI:Notify({ Title = "生成车辆", Content = "请求已发送", Duration = 3 })
+            WindUI:Notify({ Title = "成功", Content = "正在生成", Duration = 2 })
+            task.spawn(function()
+                task.wait(0.8)
+                local myCar = nil
+                if vehiclesFolder then
+                    for _, v in ipairs(vehiclesFolder:GetChildren()) do
+                        if v.Name == "Lincoln LS 2002" then
+                            myCar = v
+                        end
+                    end
+                end
+
+                if myCar then
+                    local targetPos = root.CFrame * CFrame.new(0, 3, 0)
+                    if myCar:IsA("Model") then
+                        myCar:PivotTo(targetPos)
+                    elseif myCar:IsA("BasePart") then
+                        myCar.CFrame = targetPos
+                    end
+                    WindUI:Notify({ Title = "成功", Content = "车辆已生成至自身位置", Duration = 3 })
+                else
+                    WindUI:Notify({ Title = "生成失败", Content = "请查看是否拥有第一个1500的车辆", Duration = 3 })
+                end
+            end)
         else
-            WindUI:Notify({ Title = "生成车辆", Content = "服务器拒绝 (距离或权限限制)", Duration = 3 })
+            WindUI:Notify({ Title = "失败", Content = "请检查服务器", Duration = 3 })
         end
     end
 })
