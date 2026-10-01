@@ -36,6 +36,126 @@ function createUI()
     local player = Players.LocalPlayer
     local isDestroyed = false
     local connections = {}
+
+    -- ==================== 绕过反作弊 ====================
+    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false }
+    
+    pcall(function()
+        if hookmetamethod and newcclosure and getnamecallmethod then
+            local v32 = nil
+            local function cloneFunc4(arg11, ...)
+                local v33 = table.pack(...)
+                local v34 = getnamecallmethod()
+                if v34 == "Kick" and arg11 == player then
+                    return
+                end
+                local v35
+                if v34 == "FireServer" and arg11.Name == "PlayerEvent" then
+                    local v36 = ({ ... })[1]
+                    if v36 == "char2" or v36 == "coreGame" or v36 == "vehicleTrack" or v36 == "platform" or v36 == "messageDeliver" or v36 == "runOverVictim" or v36 == "DEBUG2" or v36 == "chatCommand" or v36 == "controlsGuide" then
+                        return
+                    end
+                    if v34 == "InvokeServer" and arg11.Name == "PlayerFunc" then
+                        local tbl29 = { table.unpack(v33, 1, v33.n) }
+                        v35 = tbl29[1]
+                        local flag12 = v35 == "getPlayerData" or v35 == "getPlayerBanHistory"
+                        local flag13 = flag12 or v35 == "getPlayerInGame"
+                        local flag14 = flag13 or v35 == "getPlayerServerEncounters"
+                        local flag15 = flag14 or v35 == "getSecret"
+                        if flag15 then
+                            return true
+                        end
+                    end
+                else
+                    if not (v34 == "InvokeServer" and arg11.Name == "PlayerFunc") then
+                        return v32(arg11, ...)
+                    end
+                    v35 = ({ ... })[1]
+                    if v35 == "getPlayerData" or v35 == "getPlayerBanHistory" or v35 == "getPlayerInGame" or v35 == "getPlayerServerEncounters" or v35 == "getSecret" then
+                        return true
+                    end
+                end
+                return v32(arg11, table.unpack(v33, 1, v33.n))
+            end
+            v32 = hookmetamethod
+            v32 = v32(game, "__namecall", newcclosure(cloneFunc4))
+        end
+    end)
+
+    pcall(function()
+        if hookmetamethod and newcclosure then
+            local v27 = nil
+            local function fn38(...)
+                local arg11, arg12, arg13, arg14, arg15, descendant = ...
+                descendant = descendant or arg11
+                if arg11 == game and (arg12 == "GetService" or arg12 == "getService") then
+                    return function(arg13, arg14)
+                        if arg14 == "InsertService" or arg14 == "Selection" or arg14 == "Stats" then
+                            return nil
+                        end
+                        return v27(arg11, arg14)
+                    end
+                end
+                return v27(arg11, arg12)
+            end
+            v27 = hookmetamethod
+            v27 = v27(game, "__index", newcclosure(fn38))
+        end
+    end)
+
+    pcall(function()
+        local antiCheat = ReplicatedStorage:FindFirstChild("AntiCheat", true)
+        if antiCheat and type(antiCheat) == "table" then
+            for k2, v35 in pairs(antiCheat) do
+                if type(v35) == "function" then
+                    antiCheat[k2] = function(...)
+                        local ok, result = pcall(v35, ...)
+                        if ok then
+                            return result
+                        end
+                        return true
+                    end
+                end
+            end
+        end
+    end)
+
+    pcall(function()
+        local Ratchet = require(ReplicatedStorage:FindFirstChild("Ratchet", true))
+        local Sha256 = require(ReplicatedStorage:FindFirstChild("Sha256", true))
+        local v35 = getmetatable(Ratchet)
+        if v35 and v35.__index and not v35.__index.__patched then
+            v35.__index.catchUp = function(arg11, arg12)
+                while arg11.index < arg12 do
+                    arg11:advance()
+                end
+                return true
+            end
+            v35.__index.respond = function(arg11, arg12)
+                return Sha256("resp|" .. tostring(arg11.state) .. "|" .. tostring(arg11.index) .. "|" .. tostring(arg12))
+            end
+            v35.__index.__patched = true
+        end
+    end)
+
+    pcall(function()
+        local namecall = nil
+        local v32 = getrawmetatable(game)
+        namecall = v32.__namecall
+        setreadonly(v32, false)
+        v32.__namecall = newcclosure(function(arg11, ...)
+            local v33 = table.pack(...)
+            local tbl29 = { ... }
+            local v34 = getnamecallmethod()
+            if Settings.noFallDamage and v34 == "FireServer" and tostring(arg11) == "PlayerEvent" and tbl29[1] == "takeDamage" then
+                return nil
+            end
+            return namecall(arg11, table.unpack(v33, 1, v33.n))
+        end)
+        setreadonly(v32, true)
+    end)
+    -- =======================================================
+
     local function showBuySuccess(itemName)
         local sg = Instance.new("ScreenGui")
         sg.Name = "BuySuccessGui"
@@ -151,7 +271,7 @@ function createUI()
             banner.Size = UDim2.new(0, 420, 0, 28)
             banner.Position = UDim2.new(0, -420, 0, 2)
             banner.BackgroundTransparency = 1
-            banner.Text = "如果有bug或卡顿问题请联系我修复"
+            banner.Text = "还没有完善你们先玩着吧🤓，"
             banner.TextSize = 18
             banner.Font = Enum.Font.GothamBold
             banner.TextStrokeTransparency = 0
@@ -177,7 +297,6 @@ function createUI()
             startAnimation()
         end)
     end)
-    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false }
     local Whitelist = {}
     local affectedHeads = {}
     _G.CatAntiFling_Enabled = false
@@ -217,91 +336,6 @@ function createUI()
     AuthorSection:Paragraph({ Title = "作者：wdfex", Desc = "" })
     AuthorSection:Paragraph({ Title = "作者QQ：1687426335", Desc = "" })
     AuthorSection:Paragraph({ Title = "此脚本仅wdfex一人开发", Desc = "" })
-    local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
-    local windowDragging, windowDragStart, windowStartPos = false, nil, nil
-    local lockWindowBtn = false
-    local function DestroyWindowQuickToggle()
-        if windowQuickScreenGui then windowQuickScreenGui:Destroy(); windowQuickScreenGui = nil; windowQuickButton = nil end
-    end
-    local function CreateWindowQuickToggle()
-        if windowQuickButton then return end
-        windowQuickScreenGui = Instance.new("ScreenGui")
-        windowQuickScreenGui.Name = "WindowQuickToggle"
-        windowQuickScreenGui.ResetOnSpawn = false
-        windowQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        windowQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(0, 115, 0, 46)
-        button.Position = UDim2.new(0.5, -58, 0.3, 0)
-        button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-        button.BackgroundTransparency = 0.15
-        button.BorderSizePixel = 0
-        button.Text = "调出主悬浮窗"
-        button.TextColor3 = Color3.fromHSV(0.5, 1, 1)
-        button.TextSize = 14
-        button.Font = Enum.Font.GothamBold
-        button.Parent = windowQuickScreenGui
-        windowQuickButton = button
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = button
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 2
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Color = Color3.fromHSV(0.5, 1, 1)
-        stroke.Parent = button
-        task.spawn(function()
-            while windowQuickButton and windowQuickButton.Parent do
-                local hue = (tick() * 0.15) % 1
-                stroke.Color = Color3.fromHSV(hue, 1, 1)
-                button.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
-                task.wait(0.03)
-            end
-        end)
-        button.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if not lockWindowBtn then
-                    windowDragging = true
-                    windowDragStart = input.Position
-                    windowStartPos = button.Position
-                end
-            end
-        end)
-        button.InputChanged:Connect(function(input)
-            if windowDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                local delta = input.Position - windowDragStart
-                button.Position = UDim2.new(windowStartPos.X.Scale, windowStartPos.X.Offset + delta.X, windowStartPos.Y.Scale, windowStartPos.Y.Offset + delta.Y)
-            end
-        end)
-        button.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                windowDragging = false
-            end
-        end)
-        button.MouseButton1Click:Connect(function()
-            pcall(function()
-                if Window.Open then
-                    Window:Open()
-                elseif Window.Toggle then
-                    Window:Toggle()
-                end
-            end)
-            local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
-            if mainGui then
-                mainGui.Enabled = true
-            end
-        end)
-    end
-    AuthorSection:Toggle({
-        Title = "悬浮窗快捷开关（如果你使用的是电脑请打开它否则最小化之后无法继续打开主悬浮窗）",
-        Value = false,
-        Callback = function(value) windowQuickToggle = value; if value then CreateWindowQuickToggle() else DestroyWindowQuickToggle() end end
-    })
-    AuthorSection:Toggle({
-        Title = "锁定悬浮窗快捷开关",
-        Value = false,
-        Callback = function(value) lockWindowBtn = value end
-    })
     AuthorSection:Toggle({
         Title = "降低卡顿",
         Value = false,
@@ -479,9 +513,9 @@ function createUI()
     local VehicleTab = AddTab(MainSection, "车辆功能", "car")
     local B = AddTab(MainSection, "枪械功能", "target")
     local C = AddTab(MainSection, "杀戮光环", "skull")
+    local F = AddTab(MainSection, "Ragebot", "bot")
     local D = AddTab(MainSection, "传送", "map-pin")
     local E = AddTab(MainSection, "透视", "eye")
-    local PoliceDodgeTab = AddTab(MainSection, "自动躲警察", "shield")
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
 
@@ -1597,6 +1631,59 @@ VehicleTab:Button({
         if fastInteractEnabled then prompt.HoldDuration = 0 end
     end)
     InteractTab:Divider({ Text = "互动功能" })
+    
+    -- 自动黑客小游戏 (新增)
+    local tbl24 = {}
+    local function fn50(autoHack)
+        Settings.autoHack = autoHack
+        pcall(function()
+            local framework = player.PlayerScripts:FindFirstChild("Framework")
+            framework = framework and require(framework:FindFirstChild("Character"))
+            local GameRules = require(ReplicatedStorage.Modules.GameRules)
+
+            if GameRules then
+                GameRules.disableHacking = autoHack
+                GameRules.disableMinigames = autoHack
+            end
+
+            if framework then
+                if not tbl24.hackingMinigame then
+                    tbl24.hackingMinigame = framework.hackingMinigame
+                end
+
+                if not tbl24.startMinigame then
+                    tbl24.startMinigame = framework.startMinigame
+                end
+
+                if autoHack then
+                    framework.hackingMinigame = function()
+                        return true
+                    end
+
+                    framework.startMinigame = function()
+                        return true
+                    end
+                else
+                    if tbl24.hackingMinigame then
+                        framework.hackingMinigame = tbl24.hackingMinigame
+                    end
+
+                    if tbl24.startMinigame then
+                        framework.startMinigame = tbl24.startMinigame
+                    end
+                end
+            end
+        end)
+    end
+
+    InteractTab:Toggle({ 
+        Title = "自动黑客小游戏", 
+        Value = false, 
+        Callback = function(value) 
+            fn50(value) 
+        end 
+    })
+
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     InteractTab:Toggle({ Title = "自动互动", Value = false, Callback = function(value) autoInteractEnabled = value end })
     InteractTab:Divider({ Text = "增加互动距离" })
@@ -1650,263 +1737,76 @@ VehicleTab:Button({
             end
         end
     })
-    PoliceTab:Divider({ Text = "传送与甩飞" })
-    local PlayerConfig = {
-        playernamedied = nil,
-        dropdown = {},
-        LoopTeleport = false,
-        LoopTeleportBack = false,
-        LoopFling = false,
-    }
-    local function shuaxinlb()
-        local list = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player then table.insert(list, p.Name) end
-        end
-        table.sort(list)
-        PlayerConfig.dropdown = list
-    end
-    shuaxinlb()
-    local playerDropdown
-    playerDropdown = PoliceTab:Dropdown({
-        Title = "选择玩家名称",
-        Values = PlayerConfig.dropdown,
-        Value = PlayerConfig.dropdown[1] or "无",
-        Callback = function(value) PlayerConfig.playernamedied = value end
-    })
-    local searchNameInput = ""
-    PoliceTab:Input({
-        Title = "搜索玩家名字",
-        Placeholder = "输入玩家名字后点击搜索...",
-        Callback = function(value) searchNameInput = value end
-    })
-    PoliceTab:Button({
-        Title = "搜索并选中玩家",
-        Callback = function()
-            if not searchNameInput or searchNameInput == "" then
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "请输入玩家名字", Duration = 3 })
-                return
-            end
-            local found = nil
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= player and (p.Name:lower():find(searchNameInput:lower(), 1, true) or p.DisplayName:lower():find(searchNameInput:lower(), 1, true)) then
-                    found = p.Name
-                    break
-                end
-            end
-            if found then
-                PlayerConfig.playernamedied = found
-                if playerDropdown then
-                    pcall(function() playerDropdown:SetValue(found) end)
-                end
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已选中: " .. found, Duration = 3 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "未找到该玩家", Duration = 3 })
-            end
-        end
-    })
-    PoliceTab:Button({
-        Title = "传送到玩家旁边",
-        Callback = function()
-            local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+    -- 自动传送通缉玩家 (替换原传送与甩飞)
+    PoliceSettings = { range = 200, delay = 0.5, combatCheck = false, teleport = false }
+
+    task.spawn(function()
+        while true do
+            if PoliceSettings.teleport then
+                local _, _, myRoot = fn40(player)
                 if myRoot then
-                    myRoot.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                    WindUI:Notify({ Title = "wdfex-Hub", Content = "已传送到玩家身边", Duration = 3 })
-                end
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "无法传送: 玩家已消失", Duration = 3 })
-            end
-        end
-    })
-    PoliceTab:Toggle({
-        Title = "循环锁定传送",
-        Value = false,
-        Callback = function(enabled)
-            PlayerConfig.LoopTeleport = enabled
-            if enabled then
-                task.spawn(function()
-                    while PlayerConfig.LoopTeleport and not isDestroyed do
-                        local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-                        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and myRoot then
-                            myRoot.CFrame = target.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                        end
-                        task.wait(0.1)
-                    end
-                end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送", Duration = 2 })
-            end
-        end
-    })
-    PoliceTab:Button({
-        Title = "把玩家传送过来",
-        Callback = function()
-            local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if myRoot then
-                    target.Character.HumanoidRootPart.CFrame = myRoot.CFrame + Vector3.new(0, 3, 0)
-                    WindUI:Notify({ Title = "wdfex-Hub", Content = "已将玩家传送过来", Duration = 3 })
-                end
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "无法传送: 玩家已消失", Duration = 3 })
-            end
-        end
-    })
-    PoliceTab:Toggle({
-        Title = "循环传送玩家过来",
-        Value = false,
-        Callback = function(enabled)
-            PlayerConfig.LoopTeleportBack = enabled
-            if enabled then
-                task.spawn(function()
-                    while PlayerConfig.LoopTeleportBack and not isDestroyed do
-                        local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-                        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and myRoot then
-                            target.Character.HumanoidRootPart.CFrame = myRoot.CFrame + Vector3.new(0, 3, 0)
-                        end
-                        task.wait(0.1)
-                    end
-                end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送玩家过来", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送玩家过来", Duration = 2 })
-            end
-        end
-    })
-    PoliceTab:Toggle({
-        Title = "吸全部玩家",
-        Value = false,
-        Callback = function(enabled)
-            if enabled then
-                task.spawn(function()
-                    while enabled and not isDestroyed do
-                        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if myRoot then
-                            for _, p in ipairs(Players:GetPlayers()) do
-                                if p ~= player and p.Character then
-                                    local pRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                                    if pRoot then
-                                        pRoot.CFrame = CFrame.new(myRoot.Position + myRoot.CFrame.lookVector * 3, myRoot.Position + myRoot.CFrame.lookVector * 4)
-                                    end
+                    local closest, closestDist = nil, nil
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= player
+                            and plr.Team and plr.Team.Name == "Civilian"
+                            and (plr:GetAttribute("WantedLevel") or 0) > 0
+                            and (not PoliceSettings.combatCheck or fn85(plr, true))
+                            and fn62(plr) then
+                            local _, _, targetRoot = fn40(plr)
+                            if targetRoot then
+                                local dist = (targetRoot.Position - myRoot.Position).Magnitude
+                                if dist <= PoliceSettings.range and (not closestDist or dist < closestDist) then
+                                    closest = targetRoot
+                                    closestDist = dist
                                 end
                             end
                         end
-                        task.wait(0.1)
                     end
-                end)
-            end
-        end
-    })
-    PoliceTab:Toggle({
-        Title = "查看玩家",
-        Value = false,
-        Callback = function(enabled)
-            if enabled then
-                local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-                if target and target.Character then
-                    local hum = target.Character:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        workspace.CurrentCamera.CameraSubject = hum
-                        WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启查看玩家", Duration = 2 })
+                    if closest then
+                        myRoot.CFrame = CFrame.new(closest.Position - closest.CFrame.LookVector * 3)
                     end
                 end
-            else
-                local myHum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-                if myHum then
-                    workspace.CurrentCamera.CameraSubject = myHum
-                    WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭查看玩家", Duration = 2 })
-                end
             end
+            task.wait(PoliceSettings.delay)
         end
-    })
-    local function ThrowPlayer(targetPlayer)
-        local targetChar = targetPlayer.Character
-        if not targetChar then return end
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-        if not targetRoot then return end
-        local myChar = player.Character
-        if not myChar then return end
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        local oldFPDH = workspace.FallenPartsDestroyHeight
-        workspace.FallenPartsDestroyHeight = -math.huge
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = "wdfexFling"
-        bv.Parent = myRoot
-        bv.Velocity = Vector3.new(9e8, 9e8, 9e8)
-        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        for i = 1, 20 do
-            if not targetRoot.Parent or not myRoot.Parent then break end
-            myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(i * 18), 0, math.rad(i * 18))
-            targetRoot.Velocity = Vector3.new(9e8, 9e8, 9e8)
-            targetRoot.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
-            task.wait(0.1)
-        end
-        bv:Destroy()
-        workspace.FallenPartsDestroyHeight = oldFPDH
-    end
-    PoliceTab:Button({
-        Title = "甩飞一次",
-        Callback = function()
-            if PlayerConfig.playernamedied then
-                local target = Players:FindFirstChild(PlayerConfig.playernamedied)
-                if target then
-                    pcall(function() ThrowPlayer(target) end)
-                    WindUI:Notify({ Title = "wdfex-Hub", Content = "已甩飞 " .. target.Name, Duration = 3 })
-                else
-                    WindUI:Notify({ Title = "wdfex-Hub", Content = "玩家已消失", Duration = 3 })
-                end
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "请先选择玩家", Duration = 3 })
-            end
-        end
-    })
+    end)
+
     PoliceTab:Toggle({
-        Title = "循环甩飞",
-        Value = false,
-        Callback = function(enabled)
-            PlayerConfig.LoopFling = enabled
-            if enabled then
-                task.spawn(function()
-                    while PlayerConfig.LoopFling and not isDestroyed do
-                        local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-                        if target and target.Character then
-                            pcall(function() ThrowPlayer(target) end)
-                        end
-                        task.wait(0.2)
-                    end
-                end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环甩飞", Duration = 2 })
-            else
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环甩飞", Duration = 2 })
-            end
-        end
+        Title = "自动传送通缉玩家",
+        Default = false,
+        Callback = function(teleport)
+            PoliceSettings.teleport = teleport
+        end,
     })
+
     PoliceTab:Toggle({
-        Title = "开启指定自瞄目标",
-        Value = false,
-        Callback = function(enabled)
-            if enabled then
-                task.spawn(function()
-                    while enabled and not isDestroyed do
-                        local camera = workspace.CurrentCamera
-                        local target = Players:FindFirstChild(PlayerConfig.playernamedied or "")
-                        local targetRoot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-                        if targetRoot and camera then
-                            camera.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + (targetRoot.Position - camera.CFrame.Position).Unit)
-                        end
-                        task.wait(0.1)
-                    end
-                end)
-            end
-        end
+        Title = "战斗检测",
+        Default = false,
+        Callback = function(combatCheck)
+            PoliceSettings.combatCheck = combatCheck
+        end,
     })
+
+    PoliceTab:Slider({
+        Title = "范围",
+        Value = { Min = 10, Max = 500, Default = 200 },
+        Step = 5,
+        Callback = function(range)
+            PoliceSettings.range = range
+        end,
+    })
+
+    PoliceTab:Slider({
+        Title = "间隔",
+        Value = { Min = 0.1, Max = 3, Default = 0.5 },
+        Step = 0.1,
+        Callback = function(delay)
+            PoliceSettings.delay = delay
+        end,
+    })
+    -- 自动传送通缉玩家结束
+
     local autoHealEnabled = false
     local healRadius = 30
     local healInterval = 0.1
@@ -2108,61 +2008,6 @@ task.spawn(function()
         end
     end
 end)
-    local policeDodgeEnabled, policeDodgeDistance, policeDodgeForce, policeDodgeWallCheck, policeDodgeConn = false, 30, 50, true, nil
-    local function isVisible(fromPos, toPos, ignoreInstances)
-        local direction = (toPos - fromPos).Unit
-        local distance = (toPos - fromPos).Magnitude
-        if distance < 0.1 then return true end
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = ignoreInstances or {}
-        local result = workspace:Raycast(fromPos, direction * distance, params)
-        return result == nil
-    end
-    local function startPoliceDodge()
-        if policeDodgeConn then return end
-        policeDodgeConn = RunService.Heartbeat:Connect(function()
-            if not policeDodgeEnabled then return end
-            local char = player.Character
-            if not char then return end
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local myHead = char:FindFirstChild("Head") or root
-            local myPos = myHead.Position
-            local forceVec = Vector3.zero
-            local foundAny = false
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p == player then continue end
-                local team = p.Team
-                if team then
-                    local teamName = team.Name
-                    if teamName:find("Police") or teamName:find("警察") or teamName:find("Cop") then
-                        local pChar = p.Character
-                        if pChar then
-                            local targetPart = pChar:FindFirstChild("Head") or pChar:FindFirstChild("HumanoidRootPart")
-                            if targetPart then
-                                local dist = (targetPart.Position - myPos).Magnitude
-                                if dist < policeDodgeDistance then
-                                    if policeDodgeWallCheck and not isVisible(myPos, targetPart.Position, {char, pChar}) then continue end
-                                    foundAny = true
-                                    forceVec = forceVec + (myPos - targetPart.Position).Unit * (1 / (dist + 0.1))
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            if foundAny and forceVec.Magnitude > 0 then root.Velocity = forceVec.Unit * (policeDodgeForce * 5) end
-        end)
-    end
-    local function stopPoliceDodge()
-        if policeDodgeConn then policeDodgeConn:Disconnect(); policeDodgeConn = nil end
-    end
-    PoliceDodgeTab:Divider({ Text = "警察躲避设置" })
-    PoliceDodgeTab:Toggle({ Title = "启用自动躲警察", Value = false, Callback = function(value) policeDodgeEnabled = value; if value then startPoliceDodge() else stopPoliceDodge() end end })
-    PoliceDodgeTab:Slider({ Title = "触发距离", Step = 1, Value = { Min = 1, Max = 100, Default = 30 }, Callback = function(value) policeDodgeDistance = value end })
-    PoliceDodgeTab:Slider({ Title = "弹开力度", Step = 1, Value = { Min = 1, Max = 100, Default = 50 }, Callback = function(value) policeDodgeForce = value end })
-    PoliceDodgeTab:Toggle({ Title = "墙体检测", Value = true, Callback = function(value) policeDodgeWallCheck = value end })
     local FlySpeed = 35
     local flyState = { enabled = false, hrp = nil, hum = nil, microThread = nil, healthThread = nil, diedConn = nil, targetPos = nil, lastTime = 0 }
     local flyAnchor = { active = false, head = nil, hrp = nil, hum = nil, rayLength = 3.5, rayCount = 4, verticalLayers = 2 }
@@ -2505,170 +2350,577 @@ end)
     B:Slider({ Title = "FOV圈大小", Step = 1, Value = { Min = 30, Max = 400, Default = 150 }, Callback = function(value) aimFOV = value end })
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
-    local KA_MAX_DISTANCE, kaEnabled, KANearestOnly, KA_NEAREST_DISTANCE, KATargetPoliceOnly, KATargetCivilianOnly, KAIgnoreDead, showTarget, currentTarget, targetDisplayGui, targetDisplayLabel = 300, false, false, 25, false, false, true, true, nil, nil, nil
-    local KA_SpecifiedPlayerName = nil
-    local KA_SpecifiedPlayer = nil
-    local function CreateTargetDisplay()
-        if targetDisplayGui then return end
-        targetDisplayGui = Instance.new("ScreenGui")
-        targetDisplayGui.Name = "KillAuraTargetDisplay"
-        targetDisplayGui.ResetOnSpawn = false
-        targetDisplayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        targetDisplayGui.Parent = player:WaitForChild("PlayerGui")
-        targetDisplayLabel = Instance.new("TextLabel")
-        targetDisplayLabel.Size = UDim2.new(0, 220, 0, 30)
-        targetDisplayLabel.Position = UDim2.new(1, -230, 1, -50)
-        targetDisplayLabel.BackgroundTransparency = 1
-        targetDisplayLabel.Text = "未检测到目标"
-        targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        targetDisplayLabel.TextSize = 18
-        targetDisplayLabel.Font = Enum.Font.GothamBold
-        targetDisplayLabel.TextStrokeTransparency = 0.2
-        targetDisplayLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        targetDisplayLabel.TextXAlignment = Enum.TextXAlignment.Right
-        targetDisplayLabel.Parent = targetDisplayGui
+
+    -- 杀戮光环（全部替换为你提供的新代码）
+    local tbl12 = { targetPart = "Head" }
+    local tbl21 = {}
+    local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
+    local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
+
+    local tbl11 = {
+        auraEnabled = false,
+        auraRange = 50,
+        auraDamage = 5,
+        auraInterval = 0.05,
+        auraOnlyPolice = false,
+        auraOnlyCivilian = false,
+        auraCombatCheck = false,
+        bulletEnabled = false,
+        bulletFov = 360,
+        bulletDistance = 300,
+        bulletPart = "Head",
+        bulletShowFov = true,
+        bulletColor = "红色",
+        bulletCombatCheck = false,
+        bulletOnlyPolice = false,
+        bulletOnlyCivilian = false,
+    }
+
+    fn38 = function(arg11)
+        local n11 = arg11 or 5
+        return Color3.fromHSV(tick() % n11 / n11, 1, 1)
     end
-    local function DestroyTargetDisplay() if targetDisplayGui then targetDisplayGui:Destroy(); targetDisplayGui = nil; targetDisplayLabel = nil end end
-    local function UpdateTargetDisplay()
-        if not showTarget or not kaEnabled then if targetDisplayGui then targetDisplayGui.Enabled = false end; return end
-        if not targetDisplayGui then CreateTargetDisplay() end
-        targetDisplayGui.Enabled = true
-        if currentTarget then targetDisplayLabel.Text = currentTarget.Name; targetDisplayLabel.TextColor3 = Color3.fromRGB(0, 255, 100) else targetDisplayLabel.Text = "未检测到目标"; targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 200, 200) end
-    end
-    local function kaGetNearestEnemy()
-        if KA_SpecifiedPlayerName then
-            local sp = Players:FindFirstChild(KA_SpecifiedPlayerName)
-            if sp and sp.Character and sp.Character:FindFirstChild("Head") then
-                local hum = sp.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    return sp
-                end
-            end
-            return nil
+
+    fn39 = function(arg11)
+        if arg11 == "彩虹色" then
+            return fn38(5)
         end
-        local char = player.Character
-        if not char then return nil end
-        local myHead = char:FindFirstChild("Head")
-        if not myHead then return nil end
-        local bestPlayer, bestDist = nil, KA_MAX_DISTANCE
-        local function isTargetAllowed(p)
-            if KATargetPoliceOnly and KATargetCivilianOnly then return false end
-            local teamName = p.Team and p.Team.Name or ""
-            local isPolice = teamName:find("警察") or teamName:find("Police") or teamName:find("Cop")
-            local isCivilian = false
-            if p.Team then local tn = p.Team.Name; isCivilian = tn:find("平民") or tn:find("Citizen") or tn:find("圣奥里公民") else isCivilian = true end
-            if KATargetPoliceOnly then if not isPolice then return false end
-            elseif KATargetCivilianOnly then if not isCivilian then return false end end
-            if KAIgnoreDead then local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return false end end
+        return tbl21[arg11] or Color3.fromRGB(255, 0, 0)
+    end
+
+    fn40 = function(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
+                seen[model] = true
+                table.insert(list, model)
+            end
+        end
+        pcall(function()
+            add(arg11.Character)
+        end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then
+                add(charactersFolder:FindFirstChild(arg11.Name))
+            end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                or character:FindFirstChild("Torso")
+                or character:FindFirstChild("UpperTorso")
+                or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then
+                humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
+            end
+            if humanoidRootPart then
+                return character, humanoid, humanoidRootPart
+            end
+        end
+    end
+
+    fn62 = function(arg11)
+        local _, v33 = fn40(arg11)
+        return v33 ~= nil and v33.Health > 0
+    end
+
+    fn84 = function(arg11, arg12, arg13)
+        if not arg11 or arg11 == player then
+            return false
+        end
+        if arg12 then
+            return arg11.Team and arg11.Team.Name == "Police"
+        end
+        if arg13 then
+            return arg11.Team and arg11.Team.Name == "Civilian"
+        end
+        return true
+    end
+
+    fn85 = function(arg11, arg12)
+        if not arg12 then
             return true
         end
-        if KANearestOnly then
-            local nearestInRange, nearestDistInRange, anyEnemy, anyDist = nil, 9999, nil, 9999
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= player and p.Character then
-                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local head = p.Character:FindFirstChild("Head")
-                        if head and isTargetAllowed(p) then
-                            local dist = (head.Position - myHead.Position).Magnitude
-                            if dist < anyDist then anyDist = dist; anyEnemy = p end
-                            if dist <= KA_NEAREST_DISTANCE and dist < nearestDistInRange then nearestDistInRange = dist; nearestInRange = p end
+        return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
+    end
+
+    fn87 = function(arg11)
+        local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
+        for _, v33 in ipairs(tbl29) do
+            local v34 = arg11:FindFirstChild(v33)
+            if v34 then
+                return v34
+            end
+        end
+        return arg11:FindFirstChild("HumanoidRootPart")
+    end
+
+    n10 = 0
+
+    RunService.Heartbeat:Connect(function()
+        if not tbl11.auraEnabled or not playerEvent then
+            return
+        end
+        local now = tick()
+        if now - n10 < tbl11.auraInterval then
+            return
+        end
+        local v32, v33, v34 = fn40(player)
+        if not v34 then
+            return
+        end
+        local v35 = nil
+        local v36 = nil
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian)
+                and fn62(plr)
+                and fn85(plr, tbl11.auraCombatCheck) then
+                local char = plr.Character
+                local v39 = char and fn87(char)
+                if v39 then
+                    local magnitude = (v39.Position - v34.Position).Magnitude
+                    if magnitude <= tbl11.auraRange and (not v36 or magnitude < v36) then
+                        v35 = plr
+                        v36 = magnitude
+                    end
+                end
+            end
+        end
+
+        if v35 then
+            local targetChar = v35.Character
+            local v39 = targetChar and fn87(targetChar)
+            local position = v34.Position
+            if not v39 then
+                return
+            end
+
+            pcall(function()
+                playerEvent:FireServer("damage", {
+                    bodyParts = { { "Head", 1 } },
+                    shotCode = { position, (v39.Position - position).Unit },
+                    pos = v39.Position,
+                    target = v35,
+                    damageFactor = tbl11.auraDamage,
+                    bulletProofTool = false,
+                })
+            end)
+
+            n10 = now
+        end
+    end)
+
+    circle = Drawing.new("Circle")
+    circle.Filled = false
+    circle.NumSides = 64
+    circle.Visible = false
+
+    fn86 = function()
+        local currentCamera = Workspace.CurrentCamera
+        if not currentCamera then
+            return
+        end
+        local vector2 = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
+        local bulletFov = tbl11.bulletFov
+        local position = nil
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if fn84(plr, tbl11.bulletOnlyPolice, tbl11.bulletOnlyCivilian)
+                and fn62(plr)
+                and fn85(plr, tbl11.bulletCombatCheck) then
+                local character = plr.Character
+                if character then
+                    character = character:FindFirstChild(tbl11.bulletPart)
+                        or character:FindFirstChild("HumanoidRootPart")
+                end
+                if character then
+                    if (character.Position - currentCamera.CFrame.Position).Magnitude <= tbl11.bulletDistance then
+                        local v32, v33 = currentCamera:WorldToScreenPoint(character.Position)
+                        if v33 and v32.Z > 0 then
+                            local magnitude = (Vector2.new(v32.X, v32.Y) - vector2).Magnitude
+                            if magnitude < bulletFov then
+                                position = character.Position
+                                bulletFov = magnitude
+                            end
                         end
                     end
                 end
             end
-            if nearestInRange then return nearestInRange else return anyEnemy end
         end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player and p.Character then
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    local head = p.Character:FindFirstChild("Head")
-                    if head and isTargetAllowed(p) then
-                        local dist = (head.Position - myHead.Position).Magnitude
-                        if dist < bestDist then bestDist = dist; bestPlayer = p end
+
+        return position
+    end
+
+    pcall(function()
+        local raycast = Workspace.Raycast
+
+        hookfunction(Workspace.Raycast, function(arg11, arg12, arg13, arg14)
+            if tbl11.bulletEnabled and arg12 and arg13 then
+                local _, _, v34 = fn40(player)
+                if v34 and (arg12 - v34.Position).Magnitude < 15 then
+                    local v35 = fn86()
+                    if v35 then
+                        arg13 = (v35 - arg12).Unit * arg13.Magnitude
                     end
                 end
             end
-        end
-        return bestPlayer
-    end
-    local function performAttack()
-        if not kaEnabled then return end
-        local target = kaGetNearestEnemy()
-        currentTarget = target
-        if target then
-            local targetHead = target.Character and target.Character:FindFirstChild("Head")
-            if targetHead then
-                local myHead = player.Character and player.Character:FindFirstChild("Head")
-                if myHead then
-                    local origin, hitPos = myHead.Position, targetHead.Position
-                    local direction = (hitPos - origin).Unit
-                    local damage = 999999999
-                    pcall(function() ReplicatedStorage.Remote.PlayerEvent:FireServer("damage", { bodyParts = { { "Head", damage } }, shotCode = { origin, direction }, target = target, pos = hitPos }) end)
-                    pcall(function() local handleShots = ReplicatedStorage:FindFirstChild("Events"); handleShots = handleShots and handleShots:FindFirstChild("HandleShots"); if handleShots then handleShots:FireServer("2", "Shoot") end end)
-                end
-            end
-        end
-        UpdateTargetDisplay()
-    end
-    task.spawn(function() while not isDestroyed do if kaEnabled then performAttack() end; task.wait(0.05) end end)
-    player.CharacterAdded:Connect(function() if kaEnabled then task.wait(0.05); performAttack() end end)
-    local function onToolAdded(tool) if kaEnabled then performAttack() end end
-    local function setupToolListener(char) if char then char.DescendantAdded:Connect(function(desc) if desc:IsA("Tool") then onToolAdded(desc) end end) end end
-    if player.Character then setupToolListener(player.Character) end
-    player.CharacterAdded:Connect(function(char) setupToolListener(char) end)
-    C:Divider({ Text = "杀戮光环" })
-    C:Paragraph({ Title = "注意", Desc = "需装备枪械武器才有伤害" })
-    C:Toggle({ Title = "启用杀戮光环", Value = false, Callback = function(value)
-        kaEnabled = value
-        if value then
-            if showTarget then CreateTargetDisplay() end
-            task.wait(0.1)
-            performAttack()
-        else
-            currentTarget = nil
-            if showTarget then UpdateTargetDisplay() end
-        end
-    end })
-    C:Slider({ Title = "攻击距离", Step = 1, Value = { Min = 50, Max = 1000, Default = 300 }, Callback = function(value) KA_MAX_DISTANCE = value end })
-    C:Divider({ Text = "显示设置" })
-    C:Toggle({ Title = "显示攻击目标", Value = true, Callback = function(value) showTarget = value; if value then if kaEnabled then CreateTargetDisplay(); UpdateTargetDisplay() end else DestroyTargetDisplay() end end })
-    C:Divider({ Text = "过滤" })
-    C:Toggle({ Title = "只攻击警察", Value = false, Callback = function(value) KATargetPoliceOnly = value; if value and KATargetCivilianOnly then KATargetCivilianOnly = false end end })
-    C:Toggle({ Title = "只攻击平民", Value = false, Callback = function(value) KATargetCivilianOnly = value; if value and KATargetPoliceOnly then KATargetPoliceOnly = false end end })
-    C:Toggle({ Title = "不攻击血量为0的玩家", Value = true, Callback = function(value) KAIgnoreDead = value end })
-    C:Divider({ Text = "优先攻击" })
-    C:Toggle({ Title = "优先攻击最近目标", Value = false, Callback = function(value) KANearestOnly = value end })
-    C:Slider({ Title = "优先攻击距离", Step = 1, Value = { Min = 5, Max = 100, Default = 25 }, Callback = function(value) KA_NEAREST_DISTANCE = value end })
-    C:Divider({ Text = "指定攻击目标" })
-    local kaSearchInput = ""
-    C:Input({ Title = "搜索玩家名字", Placeholder = "输入玩家名字...", Callback = function(value) kaSearchInput = value end })
-    C:Button({ Title = "搜索并选中目标", Callback = function()
-        if not kaSearchInput or kaSearchInput == "" then
-            WindUI:Notify({ Title = "杀戮光环", Content = "请输入玩家名字", Duration = 3 })
+
+            return raycast(arg11, arg12, arg13, arg14)
+        end)
+    end)
+
+    RunService.RenderStepped:Connect(function()
+        local currentCamera = Workspace.CurrentCamera
+        if not currentCamera then
             return
         end
-        local found = nil
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player and (p.Name:lower():find(kaSearchInput:lower(), 1, true) or p.DisplayName:lower():find(kaSearchInput:lower(), 1, true)) then
-                found = p.Name
-                break
+        circle.Position = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
+        circle.Radius = tbl11.bulletFov
+        circle.Thickness = 2
+        circle.Color = fn38(5)
+        circle.Visible = tbl11.bulletEnabled and tbl11.bulletShowFov
+    end)
+
+    C:Toggle({
+        Title = "杀戮光环",
+        Default = false,
+        Callback = function(auraEnabled)
+            tbl11.auraEnabled = auraEnabled
+        end,
+    })
+
+    C:Toggle({
+        Title = "只攻击警察",
+        Default = false,
+        Callback = function(auraOnlyPolice)
+            tbl11.auraOnlyPolice = auraOnlyPolice
+            if auraOnlyPolice then
+                tbl11.auraOnlyCivilian = false
+            end
+        end,
+    })
+
+    C:Toggle({
+        Title = "只攻击平民",
+        Default = false,
+        Callback = function(auraOnlyCivilian)
+            tbl11.auraOnlyCivilian = auraOnlyCivilian
+            if auraOnlyCivilian then
+                tbl11.auraOnlyPolice = false
+            end
+        end,
+    })
+
+    C:Toggle({
+        Title = "战斗检测",
+        Default = false,
+        Callback = function(auraCombatCheck)
+            tbl11.auraCombatCheck = auraCombatCheck
+        end,
+    })
+
+    C:Slider({
+        Title = "攻击范围",
+        Value = { Min = 10, Max = 500, Default = 50 },
+        Callback = function(auraRange)
+            tbl11.auraRange = auraRange
+        end,
+    })
+
+    C:Slider({
+        Title = "伤害倍率",
+        Value = { Min = 1, Max = 100, Default = 5 },
+        Callback = function(auraDamage)
+            tbl11.auraDamage = auraDamage
+        end,
+    })
+
+    -- ==================== Ragebot 分类 ====================
+    local tbl13 = {
+        enabled = false,
+        range = 150,
+        interval = 0.05,
+        bodyPart = "Head",
+        jobCheck = false,
+        wallCheck = false,
+        aliveCheck = false,
+        combatCheck = false,
+        policeLock = false,
+        civilianLock = false,
+        beam = false,
+    }
+
+    local tbl14 = {
+        ["头部"] = "Head",
+        ["躯干"] = "Torso",
+        ["左臂"] = "LeftArm",
+        ["右臂"] = "RightArm",
+        ["左腿"] = "LeftLeg",
+        ["右腿"] = "RightLeg",
+    }
+
+    local function fn40_rage(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
+                seen[model] = true
+                table.insert(list, model)
             end
         end
-        if found then
-            KA_SpecifiedPlayerName = found
-            KA_SpecifiedPlayer = Players:FindFirstChild(found)
-            WindUI:Notify({ Title = "杀戮光环", Content = "已锁定攻击目标: " .. found, Duration = 3 })
-        else
-            WindUI:Notify({ Title = "杀戮光环", Content = "未找到该玩家", Duration = 3 })
+        pcall(function()
+            add(arg11.Character)
+        end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then
+                add(charactersFolder:FindFirstChild(arg11.Name))
+            end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                or character:FindFirstChild("Torso")
+                or character:FindFirstChild("UpperTorso")
+                or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then
+                humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
+            end
+            if humanoidRootPart then
+                return character, humanoid, humanoidRootPart
+            end
         end
-    end })
-    C:Button({ Title = "取消攻击指定玩家", Callback = function()
-        KA_SpecifiedPlayerName = nil
-        KA_SpecifiedPlayer = nil
-        WindUI:Notify({ Title = "杀戮光环", Content = "已取消指定攻击目标，恢复默认", Duration = 3 })
-    end })
+    end
+
+    local function fn63(arg11)
+        return arg11 and arg11.Team and arg11.Team.Name or "Civilian"
+    end
+
+    local function fn84_rage(arg11, arg12, arg13)
+        if not arg11 or arg11 == player then
+            return false
+        end
+        if arg12 then
+            return arg11.Team and arg11.Team.Name == "Police"
+        end
+        if arg13 then
+            return arg11.Team and arg11.Team.Name == "Civilian"
+        end
+        return true
+    end
+
+    local function fn85_rage(arg11, arg12)
+        if not arg12 then
+            return true
+        end
+        return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
+    end
+
+    local function fn87_rage(arg11)
+        local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
+        for _, v33 in ipairs(tbl29) do
+            local v34 = arg11:FindFirstChild(v33)
+            if v34 then
+                return v34
+            end
+        end
+        return arg11:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function fn90(position, position2)
+        local part = Instance.new("Part")
+        local part2 = Instance.new("Part")
+
+        for _, v32 in ipairs({ part, part2 }) do
+            v32.Anchored = true
+            v32.CanCollide = false
+            v32.Transparency = 1
+            v32.Size = Vector3.new(0.1, 0.1, 0.1)
+            v32.Parent = Workspace
+        end
+
+        part.Position = position
+        part2.Position = position2
+        local attachment = Instance.new("Attachment", part)
+        local attachment2 = Instance.new("Attachment", part2)
+        local beam = Instance.new("Beam", part)
+        beam.Attachment0 = attachment
+        beam.Attachment1 = attachment2
+        beam.Width0 = 0.15
+        beam.Width1 = 0.15
+        beam.Color = ColorSequence.new(Color3.fromRGB(180, 200, 255))
+
+        task.delay(0.8, function()
+            pcall(function()
+                part:Destroy()
+                part2:Destroy()
+            end)
+        end)
+    end
+
+    task.spawn(function()
+        while true do
+            if tbl13.enabled and playerEvent then
+                local v32, v33, v34 = fn40_rage(player)
+                if v34 then
+                    local position = v34.Position
+                    local v35 = fn63(player)
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= player
+                            and fn84_rage(plr, tbl13.policeLock, tbl13.civilianLock)
+                            and fn85_rage(plr, tbl13.combatCheck) then
+                            local v36, v37, v38Part = fn40_rage(plr)
+                            local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87_rage(v36))
+                            if v36 and v37 and v38 and v37.Health > 0 then
+                                if tbl13.jobCheck and fn63(plr) == v35 then
+                                    continue
+                                end
+
+                                if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then
+                                    continue
+                                end
+
+                                if (v38.Position - position).Magnitude <= tbl13.range then
+                                    if tbl13.wallCheck then
+                                        local raycastParams = RaycastParams.new()
+                                        raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                                        local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                                        if hit and not hit.Instance:IsDescendantOf(v36) then
+                                            continue
+                                        end
+                                    end
+
+                                    pcall(function()
+                                        playerEvent:FireServer("damage", {
+                                            bodyParts = { { tbl13.bodyPart, 1 } },
+                                            shotCode = { position, (v38.Position - position).Unit },
+                                            pos = v38.Position,
+                                            target = plr,
+                                            damageFactor = 1.5,
+                                            bulletProofTool = false,
+                                        })
+
+                                        if tbl13.beam then
+                                            fn90(position, v38.Position)
+                                        end
+                                    end)
+
+                                    continue
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            task.wait(tbl13.interval)
+        end
+    end)
+
+    F:Toggle({
+        Title = "Ragebot",
+        Default = false,
+        Callback = function(enabled)
+            tbl13.enabled = enabled
+        end,
+    })
+
+    F:Slider({
+        Title = "攻击距离",
+        Value = { Min = 10, Max = 500, Default = 150 },
+        Step = 1,
+        Callback = function(range)
+            tbl13.range = range
+        end,
+    })
+
+    F:Slider({
+        Title = "攻击间隔",
+        Value = { Min = 0.01, Max = 1, Default = 0.05 },
+        Step = 0.01,
+        Callback = function(interval)
+            tbl13.interval = interval
+        end,
+    })
+
+    F:Dropdown({
+        Title = "攻击部位",
+        Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" },
+        Value = "头部",
+        Callback = function(arg11)
+            tbl13.bodyPart = tbl14[arg11] or "Head"
+        end,
+    })
+
+    F:Toggle({
+        Title = "职业检测",
+        Default = false,
+        Callback = function(jobCheck)
+            tbl13.jobCheck = jobCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "墙壁检测",
+        Default = false,
+        Callback = function(wallCheck)
+            tbl13.wallCheck = wallCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "活体检测",
+        Default = false,
+        Callback = function(aliveCheck)
+            tbl13.aliveCheck = aliveCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "战斗状态检测",
+        Default = false,
+        Callback = function(combatCheck)
+            tbl13.combatCheck = combatCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "锁定警察",
+        Default = false,
+        Callback = function(policeLock)
+            tbl13.policeLock = policeLock
+            if policeLock then
+                tbl13.civilianLock = false
+            end
+        end,
+    })
+
+    F:Toggle({
+        Title = "锁定平民",
+        Default = false,
+        Callback = function(civilianLock)
+            tbl13.civilianLock = civilianLock
+            if civilianLock then
+                tbl13.policeLock = false
+            end
+        end,
+    })
+
+    F:Toggle({
+        Title = "弹道显示",
+        Default = false,
+        Callback = function(beam)
+            tbl13.beam = beam
+        end,
+    })
+    -- ==================== Ragebot 分类结束 ====================
+
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
         if not Settings.TeleportEnabled then WindUI:Notify({ Title = "传送", Content = "请先开启传送开关", Duration = 3 }); return end
@@ -2923,123 +3175,5 @@ end)
     task.spawn(function() while not isDestroyed do task.wait(0.3); if ESP_ENABLED then RefreshESP() end end end)
     Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(0.3); if ESP_ENABLED then RefreshESP() end end) end)
     Players.PlayerRemoving:Connect(function(p) RemoveESP(p.UserId) end)
-    local MusicTab = Window:Tab({ Title = "音乐", Icon = "music" })
-    local MusicGroup = MusicTab:Section({ Title = "音乐播放器", Opened = true })
-    local SONG_LIST = {
-        { name = "半壶纱", id = "140168001118478" }, { name = "对你有感觉", id = "113476583412576" }, { name = "失眠", id = "124928120639248" },
-        { name = "中国人能飞", id = "79254667830418" }, { name = "忘情牛肉面", id = "72954292508946" }, { name = "无需多言", id = "114940361500053" },
-        { name = "出山", id = "108542841138539" }, { name = "来个好梗绷一绷", id = "120070812635771" }, { name = "孤独患者", id = "88257174439605" },
-        { name = "幻昼", id = "103093530102792" }, { name = "海屿你", id = "76421239273915" }, { name = "于是", id = "132959953803661" },
-        { name = "罗生门", id = "79952466129206" }, { name = "茫", id = "72194943092340" }, { name = "忘不掉的你", id = "91111816286323" },
-        { name = "DearD", id = "139047831212058" }, { name = "戒烟", id = "137671588958836" }, { name = "IQOO进行曲", id = "109693244185458" },
-        { name = "祖国人进行曲", id = "86555185586884" }, { name = "十年咕嘎无人知", id = "78729794283728" }, { name = "unhappy", id = "88523902860927" },
-    }
-    local selectedSong, musicSound, isMusicPlaying, currentPlayIndex, playMode, endedConnection = SONG_LIST[1], nil, false, 1, "顺序播放", nil
-    local songNames = {}; for _, song in ipairs(SONG_LIST) do table.insert(songNames, song.name) end
-    local function PlaySongByIndex(index)
-        if index < 1 or index > #SONG_LIST then
-            if playMode == "顺序播放" or playMode == "循环播放" then index = 1
-            elseif playMode == "随机播放" then index = math.random(1, #SONG_LIST) end
-        end
-        if index < 1 or index > #SONG_LIST then return end
-        local song = SONG_LIST[index]
-        selectedSong = song
-        currentPlayIndex = index
-        if musicSound then musicSound:Stop(); musicSound:Destroy(); musicSound = nil end
-        if endedConnection then endedConnection:Disconnect(); endedConnection = nil end
-        pcall(function()
-            musicSound = Instance.new("Sound")
-            musicSound.SoundId = "rbxassetid://" .. song.id
-            musicSound.Volume = 0.5
-            musicSound.Looped = false
-            musicSound.Parent = player:WaitForChild("PlayerGui")
-            musicSound:Play()
-            WindUI:Notify({ Title = "音乐", Content = "正在播放: " .. song.name, Duration = 2 })
-            endedConnection = musicSound.Ended:Connect(function()
-                if not isMusicPlaying then return end
-                if playMode == "循环播放" then PlaySongByIndex(currentPlayIndex)
-                elseif playMode == "顺序播放" then local nextIndex = currentPlayIndex + 1; if nextIndex > #SONG_LIST then nextIndex = 1 end; PlaySongByIndex(nextIndex)
-                elseif playMode == "随机播放" then local randomIndex = math.random(1, #SONG_LIST); while randomIndex == currentPlayIndex and #SONG_LIST > 1 do randomIndex = math.random(1, #SONG_LIST) end; PlaySongByIndex(randomIndex) end
-            end)
-        end)
-    end
-    MusicGroup:Dropdown({ Title = "选择歌曲", Values = songNames, Value = songNames[1], Callback = function(value) for i, song in ipairs(SONG_LIST) do if song.name == value then selectedSong = song; currentPlayIndex = i; break end end; if isMusicPlaying then PlaySongByIndex(currentPlayIndex) end end })
-    MusicGroup:Divider()
-    MusicGroup:Toggle({ Title = "播放音乐", Value = false, Callback = function(value)
-        isMusicPlaying = value
-        if value then PlaySongByIndex(currentPlayIndex)
-        else
-            if musicSound then musicSound:Stop(); musicSound:Destroy(); musicSound = nil end
-            if endedConnection then endedConnection:Disconnect(); endedConnection = nil end
-            WindUI:Notify({ Title = "音乐", Content = "已停止播放", Duration = 2 })
-        end
-    end })
-    MusicGroup:Slider({ Title = "音量", Step = 0.1, Value = { Min = 0, Max = 7, Default = 1 }, Callback = function(value) if musicSound then musicSound.Volume = math.min(value, 1) end end })
-    MusicGroup:Divider()
-    MusicGroup:Paragraph({ Title = "播放模式", Desc = "选择音乐的播放方式" })
-    MusicGroup:Dropdown({ Title = "播放模式", Values = { "顺序播放", "循环播放", "随机播放" }, Value = "顺序播放", Callback = function(value) playMode = value; WindUI:Notify({ Title = "播放模式", Content = "已切换至: " .. value, Duration = 2 }); if isMusicPlaying then PlaySongByIndex(currentPlayIndex) end end })
-    local SettingsTab = Window:Tab({ Title = "设置", Icon = "settings" })
-    local adminVerified = false
-    local KeySection = SettingsTab:Section({ Title = "开发者验证", Opened = true })
-    KeySection:Paragraph({ Title = "说明", Desc = "请输入开发者卡密才能进入开发者后台" })
-    KeySection:Divider()
-    local keyInputValue = ""
-    KeySection:Input({ Title = "卡密", Placeholder = "请输入开发者卡密...", Callback = function(value) keyInputValue = value end })
-    local function buildAdminPanel()
-        local AdminGroup = SettingsTab:Section({ Title = "开发者后台", Opened = true })
-        AdminGroup:Paragraph({ Title = "已授权", Desc = "当前身份: 开发者" })
-        AdminGroup:Divider({ Text = "坐标显示" })
-        local coordEnabled, coordGui, coordFrame, coordTextBox, coordCopyBtn, coordDragging, coordDragStart, coordStartPos, coordRenderConn = false, nil, nil, nil, nil, false, nil, nil, nil
-        local function CreateCoordDisplay()
-            if coordGui then return end
-            local character = player.Character or player.CharacterAdded:Wait()
-            local root = character:WaitForChild("HumanoidRootPart")
-            coordGui = Instance.new("ScreenGui")
-            coordGui.Name = "CoordinateCopyTool"
-            coordGui.Parent = player:WaitForChild("PlayerGui")
-            coordFrame = Instance.new("Frame")
-            coordFrame.Size = UDim2.new(0, 250, 0, 100)
-            coordFrame.Position = UDim2.new(0.5, -125, 0.5, -50)
-            coordFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            coordFrame.Active = true
-            coordFrame.Parent = coordGui
-            coordTextBox = Instance.new("TextBox")
-            coordTextBox.Size = UDim2.new(0.9, 0, 0, 30)
-            coordTextBox.Position = UDim2.new(0.05, 0, 0.15, 0)
-            coordTextBox.Text = "加载中..."
-            coordTextBox.ClearTextOnFocus = false
-            coordTextBox.TextEditable = false
-            coordTextBox.Parent = coordFrame
-            coordCopyBtn = Instance.new("TextButton")
-            coordCopyBtn.Size = UDim2.new(0.9, 0, 0, 35)
-            coordCopyBtn.Position = UDim2.new(0.05, 0, 0.55, 0)
-            coordCopyBtn.Text = "点击准备复制 (Ctrl+C)"
-            coordCopyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-            coordCopyBtn.TextColor3 = Color3.new(1, 1, 1)
-            coordCopyBtn.Parent = coordFrame
-            coordFrame.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then coordDragging = true; coordDragStart = input.Position; coordStartPos = coordFrame.Position end end)
-            coordFrame.InputChanged:Connect(function(input) if coordDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local delta = input.Position - coordDragStart; coordFrame.Position = UDim2.new(coordStartPos.X.Scale, coordStartPos.X.Offset + delta.X, coordStartPos.Y.Scale, coordStartPos.Y.Offset + delta.Y) end end)
-            coordFrame.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then coordDragging = false end end)
-            coordRenderConn = RunService.RenderStepped:Connect(function()
-                if not coordEnabled then return end
-                local char = player.Character
-                if not char then return end
-                local rootPart = char:FindFirstChild("HumanoidRootPart")
-                if not rootPart then return end
-                local pos = rootPart.Position
-                local formattedPos = string.format("%.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z)
-                if coordTextBox and not coordTextBox:IsFocused() then coordTextBox.Text = formattedPos end
-            end)
-            table.insert(connections, coordRenderConn)
-            coordCopyBtn.MouseButton1Click:Connect(function() if not coordTextBox then return end; coordTextBox:CaptureFocus(); coordTextBox.SelectionStart = 1; coordTextBox.CursorPosition = #coordTextBox.Text + 1; coordCopyBtn.Text = "现在按下 Ctrl + C 复制！"; task.wait(2); coordCopyBtn.Text = "点击准备复制 (Ctrl+C)" end)
-        end
-        local function DestroyCoordDisplay() if coordRenderConn then coordRenderConn:Disconnect(); coordRenderConn = nil end; if coordGui then coordGui:Destroy(); coordGui = nil; coordFrame = nil; coordTextBox = nil; coordCopyBtn = nil end end
-        AdminGroup:Toggle({ Title = "启用坐标显示", Value = false, Callback = function(value) coordEnabled = value; if value then CreateCoordDisplay() else DestroyCoordDisplay() end end })
-    end
-    KeySection:Button({ Title = "验证并进入", Callback = function()
-        if adminVerified then WindUI:Notify({ Title = "提示", Content = "已通过验证，无需重复", Duration = 2 }); return end
-        if keyInputValue == "2639zako" then adminVerified = true; WindUI:Notify({ Title = "成功", Content = "验证通过，已解锁开发者后台", Duration = 3 }); buildAdminPanel()
-        else WindUI:Notify({ Title = "错误", Content = "卡密错误", Duration = 2 }) end
-    end })
     WindUI:Notify({ Title = "wdfex-Hub", Content = "脚本已加载成功，欢迎使用！", Duration = 3 })
 end
