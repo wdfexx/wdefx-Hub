@@ -2832,18 +2832,48 @@ end)
                 lines = lines + 1
             end
             if ESP_SHOW_TEAM then
+                local isWanted = false
+                if p:GetAttribute("Wanted") then
+                    isWanted = p:GetAttribute("Wanted")
+                elseif p:GetAttribute("WantedLevel") and p:GetAttribute("WantedLevel") > 0 then
+                    isWanted = true
+                elseif p:GetAttribute("Bounty") and p:GetAttribute("Bounty") > 0 then
+                    isWanted = true
+                elseif p:GetAttribute("IsWanted") then
+                    isWanted = true
+                end
+                
+                if p.Character then
+                    for _, child in pairs(p.Character:GetChildren()) do
+                        if child:IsA("ObjectValue") then
+                            if child.Name:lower():match("wanted") or child.Name:lower():match("bounty") then
+                                isWanted = true
+                            end
+                        end
+                    end
+                end
+
                 local l = Instance.new("TextLabel")
                 l.Size = UDim2.new(1, 0, 0, 18)
                 l.Position = UDim2.new(0, 0, 0, y)
-                l.BackgroundTransparency = 1
-                l.Text = "[" .. team .. "]"
-                l.TextColor3 = color
                 l.TextSize = 13
                 l.Font = Enum.Font.GothamBold
                 l.TextStrokeTransparency = 0.3
                 l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
                 l.TextXAlignment = Enum.TextXAlignment.Center
                 l.Parent = f
+                
+                if isWanted then
+                    l.Text = "通缉"
+                    l.TextColor3 = Color3.fromRGB(255, 50, 50)
+                    l.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+                    l.BackgroundTransparency = 0.3
+                else
+                    l.Text = "[" .. team .. "]"
+                    l.TextColor3 = color
+                    l.BackgroundTransparency = 1
+                end
+                
                 y = y + 20
                 lines = lines + 1
             end
