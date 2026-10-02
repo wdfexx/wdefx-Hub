@@ -2272,7 +2272,7 @@ VehicleTab:Button({
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     
-    -- 自动捡钱（优化版，降低卡顿）
+    -- 自动捡钱（保留传送逻辑，替换拾取函数为 fn71）
     local function fn40_interact(arg11)
         arg11 = arg11 or player
         local seen = {}
@@ -2307,8 +2307,10 @@ VehicleTab:Button({
         end
     end
 
-    local function fn71_interact(arg11)
-        if not arg11 then return end
+    fn71 = function(arg11)
+        if not arg11 then
+            return
+        end
         pcall(function()
             if fireproximityprompt then
                 fireproximityprompt(arg11, 0)
@@ -2375,7 +2377,7 @@ VehicleTab:Button({
                             fn72_interact(fn70_interact(v36))
                             task.wait(0.3)
                         end
-                        fn71_interact(v36)
+                        fn71(v36)
                     end
                 end
             end
