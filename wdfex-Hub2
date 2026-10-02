@@ -38,70 +38,71 @@ function createUI()
     local connections = {}
 
     -- ==================== 绕过反作弊 ====================
-    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false }
-    
-    pcall(function()
-        if hookmetamethod and newcclosure and getnamecallmethod then
-            local v32 = nil
-            local function cloneFunc4(arg11, ...)
-                local v33 = table.pack(...)
-                local v34 = getnamecallmethod()
-                if v34 == "Kick" and arg11 == player then
+    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false, autoMoney = false, combatBlock = false,
+        autoMission = false, farmer = false, taxi = false, bus = false, golf = false,
+        priorityHighReward = false, taxiSafe = false, taxiDelayMode = "随机时间", taxiOrigin = nil,
+        stamina = false, food = false, antiPrisonPull = false
+    }
+    local v30 = nil
+
+    if hookmetamethod and newcclosure and getnamecallmethod then
+        local v32 = nil
+        local function cloneFunc4(arg11, ...)
+            local v33 = table.pack(...)
+            local v34 = getnamecallmethod()
+            if v34 == "Kick" and arg11 == player then
+                return
+            end
+            local v35
+            if v34 == "FireServer" and arg11.Name == "PlayerEvent" then
+                local v36 = ({ ... })[1]
+                if v36 == "char2" or v36 == "coreGame" or v36 == "vehicleTrack" or v36 == "platform" or v36 == "messageDeliver" or v36 == "runOverVictim" or v36 == "DEBUG2" or v36 == "chatCommand" or v36 == "controlsGuide" then
                     return
                 end
-                local v35
-                if v34 == "FireServer" and arg11.Name == "PlayerEvent" then
-                    local v36 = ({ ... })[1]
-                    if v36 == "char2" or v36 == "coreGame" or v36 == "vehicleTrack" or v36 == "platform" or v36 == "messageDeliver" or v36 == "runOverVictim" or v36 == "DEBUG2" or v36 == "chatCommand" or v36 == "controlsGuide" then
-                        return
-                    end
-                    if v34 == "InvokeServer" and arg11.Name == "PlayerFunc" then
-                        local tbl29 = { table.unpack(v33, 1, v33.n) }
-                        v35 = tbl29[1]
-                        local flag12 = v35 == "getPlayerData" or v35 == "getPlayerBanHistory"
-                        local flag13 = flag12 or v35 == "getPlayerInGame"
-                        local flag14 = flag13 or v35 == "getPlayerServerEncounters"
-                        local flag15 = flag14 or v35 == "getSecret"
-                        if flag15 then
-                            return true
-                        end
-                    end
-                else
-                    if not (v34 == "InvokeServer" and arg11.Name == "PlayerFunc") then
-                        return v32(arg11, ...)
-                    end
-                    v35 = ({ ... })[1]
-                    if v35 == "getPlayerData" or v35 == "getPlayerBanHistory" or v35 == "getPlayerInGame" or v35 == "getPlayerServerEncounters" or v35 == "getSecret" then
+                if v34 == "InvokeServer" and arg11.Name == "PlayerFunc" then
+                    local tbl29 = { table.unpack(v33, 1, v33.n) }
+                    v35 = tbl29[1]
+                    local flag12 = v35 == "getPlayerData" or v35 == "getPlayerBanHistory"
+                    local flag13 = flag12 or v35 == "getPlayerInGame"
+                    local flag14 = flag13 or v35 == "getPlayerServerEncounters"
+                    local flag15 = flag14 or v35 == "getSecret"
+                    if flag15 then
                         return true
                     end
                 end
-                return v32(arg11, table.unpack(v33, 1, v33.n))
-            end
-            v32 = hookmetamethod
-            v32 = v32(game, "__namecall", newcclosure(cloneFunc4))
-        end
-    end)
-
-    pcall(function()
-        if hookmetamethod and newcclosure then
-            local v27 = nil
-            local function fn38(...)
-                local arg11, arg12, arg13, arg14, arg15, descendant = ...
-                descendant = descendant or arg11
-                if arg11 == game and (arg12 == "GetService" or arg12 == "getService") then
-                    return function(arg13, arg14)
-                        if arg14 == "InsertService" or arg14 == "Selection" or arg14 == "Stats" then
-                            return nil
-                        end
-                        return v27(arg11, arg14)
-                    end
+            else
+                if not (v34 == "InvokeServer" and arg11.Name == "PlayerFunc") then
+                    return v32(arg11, ...)
                 end
-                return v27(arg11, arg12)
+                v35 = ({ ... })[1]
+                if v35 == "getPlayerData" or v35 == "getPlayerBanHistory" or v35 == "getPlayerInGame" or v35 == "getPlayerServerEncounters" or v35 == "getSecret" then
+                    return true
+                end
             end
-            v27 = hookmetamethod
-            v27 = v27(game, "__index", newcclosure(fn38))
+            return v32(arg11, table.unpack(v33, 1, v33.n))
         end
-    end)
+        v32 = hookmetamethod
+        v32 = v32(game, "__namecall", newcclosure(cloneFunc4))
+    end
+
+    if hookmetamethod and newcclosure then
+        local v27 = nil
+        local function fn38(...)
+            local arg11, arg12, arg13, arg14, arg15, descendant = ...
+            descendant = descendant or arg11
+            if arg11 == game and (arg12 == "GetService" or arg12 == "getService") then
+                return function(arg13, arg14)
+                    if arg14 == "InsertService" or arg14 == "Selection" or arg14 == "Stats" then
+                        return nil
+                    end
+                    return v27(arg11, arg14)
+                end
+            end
+            return v27(arg11, arg12)
+        end
+        v27 = hookmetamethod
+        v27 = v27(game, "__index", newcclosure(fn38))
+    end
 
     pcall(function()
         local antiCheat = ReplicatedStorage:FindFirstChild("AntiCheat", true)
@@ -138,8 +139,8 @@ function createUI()
         end
     end)
 
+    local namecall = nil
     pcall(function()
-        local namecall = nil
         local v32 = getrawmetatable(game)
         namecall = v32.__namecall
         setreadonly(v32, false)
@@ -271,7 +272,7 @@ function createUI()
             banner.Size = UDim2.new(0, 420, 0, 28)
             banner.Position = UDim2.new(0, -420, 0, 2)
             banner.BackgroundTransparency = 1
-            banner.Text = "还没有完善你们先玩着吧🤓，"
+            banner.Text = "如果有bug或卡顿问题请联系我修复"
             banner.TextSize = 18
             banner.Font = Enum.Font.GothamBold
             banner.TextStrokeTransparency = 0
@@ -360,18 +361,95 @@ function createUI()
             end
         end
     })
-    local NoticeTab = Window:Tab({ Title = "公告", Icon = "info" })
-    local NoticeSection = NoticeTab:Section({ Title = "作者消息", Opened = true })
-    NoticeSection:Divider()
-    NoticeSection:Paragraph({ Title = "注意事项", Desc = "已更换悬浮窗添加了一些功能\n修复了透视卡顿的问题\n修复了杀戮光环攻击有延迟的问题\n如果你使用的过程中出现一些bug请联系作者修复\n被封了就是被挂DC了" })
-    local infoTab = Window:Tab({ Title = "通知", Icon = "layout-grid", Locked = false })
-    local infoSection = infoTab:Section({ Title = "详情信息", Icon = "info", Opened = true })
-    infoSection:Divider()
-    infoSection:Paragraph({ Title = "关于", Desc = "91", ThumbnailSize = 190 })
-    local infoSection2 = infoTab:Section({ Title = "更新公告", Icon = "bell", Opened = true })
-    infoSection2:Divider()
-    infoSection2:Paragraph({ Title = "更新公告", Desc = "增加了地图导航传送\n修复所有卡顿的问题\n删除部分没用的功能\n增加了部分功能", ThumbnailSize = 190 })
-    infoTab:Select()
+
+    -- 悬浮窗快捷开关
+    local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
+    local windowDragging, windowDragStart, windowStartPos = false, nil, nil
+    local lockWindowBtn = false
+    local function DestroyWindowQuickToggle()
+        if windowQuickScreenGui then windowQuickScreenGui:Destroy(); windowQuickScreenGui = nil; windowQuickButton = nil end
+    end
+    local function CreateWindowQuickToggle()
+        if windowQuickButton then return end
+        windowQuickScreenGui = Instance.new("ScreenGui")
+        windowQuickScreenGui.Name = "WindowQuickToggle"
+        windowQuickScreenGui.ResetOnSpawn = false
+        windowQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        windowQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(0, 115, 0, 46)
+        button.Position = UDim2.new(0.5, -58, 0.3, 0)
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        button.BackgroundTransparency = 0.15
+        button.BorderSizePixel = 0
+        button.Text = "调出主悬浮窗"
+        button.TextColor3 = Color3.fromHSV(0.5, 1, 1)
+        button.TextSize = 14
+        button.Font = Enum.Font.GothamBold
+        button.Parent = windowQuickScreenGui
+        windowQuickButton = button
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Color = Color3.fromHSV(0.5, 1, 1)
+        stroke.Parent = button
+        task.spawn(function()
+            while windowQuickButton and windowQuickButton.Parent do
+                local hue = (tick() * 0.15) % 1
+                stroke.Color = Color3.fromHSV(hue, 1, 1)
+                button.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+                task.wait(0.03)
+            end
+        end)
+        button.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if not lockWindowBtn then
+                    windowDragging = true
+                    windowDragStart = input.Position
+                    windowStartPos = button.Position
+                end
+            end
+        end)
+        button.InputChanged:Connect(function(input)
+            if windowDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - windowDragStart
+                button.Position = UDim2.new(windowStartPos.X.Scale, windowStartPos.X.Offset + delta.X, windowStartPos.Y.Scale, windowStartPos.Y.Offset + delta.Y)
+            end
+        end)
+        button.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                windowDragging = false
+            end
+        end)
+        button.MouseButton1Click:Connect(function()
+            pcall(function()
+                if Window.Open then
+                    Window:Open()
+                elseif Window.Toggle then
+                    Window:Toggle()
+                end
+            end)
+            local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
+            if mainGui then
+                mainGui.Enabled = true
+            end
+        end)
+    end
+
+    AuthorSection:Toggle({
+        Title = "悬浮窗快捷开关（如果你使用的是电脑请打开它否则最小化之后无法继续打开主悬浮窗）",
+        Value = false,
+        Callback = function(value) windowQuickToggle = value; if value then CreateWindowQuickToggle() else DestroyWindowQuickToggle() end end
+    })
+    AuthorSection:Toggle({
+        Title = "锁定悬浮窗快捷开关",
+        Value = false,
+        Callback = function(value) lockWindowBtn = value end
+    })
+
     AuthorTab:Select()
     local MainSection = Window:Section({ Title = "主功能", Opened = true })
     local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
@@ -412,39 +490,157 @@ function createUI()
     A:Divider({ Text = "伤害免疫" })
     local godOn = false
     A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
-    A:Paragraph({ Title = "可以免疫的伤害", Desc = "免疫火焰和车爆炸时候的伤害和银行游戏厅的激光伤害" })
-    
+
+    -- 无限体力
+    RunService.Heartbeat:Connect(function()
+        if Core and Settings.stamina then
+            pcall(function()
+                Core.stamina = 100
+            end)
+        end
+    end)
+
+    A:Toggle({
+        Title = "无限体力",
+        Default = false,
+        Callback = function(stamina)
+            Settings.stamina = stamina
+        end,
+    })
+
+    -- 无限饥饿
+    RunService.Heartbeat:Connect(function()
+        if Core and Settings.food then
+            pcall(function()
+                Core.food = 100
+            end)
+        end
+    end)
+
     A:Toggle({
         Title = "无限饥饿",
-        Value = false,
-        Callback = function(value)
-            if value then
-                task.spawn(function()
-                    while value and not isDestroyed do
-                        local char = player.Character
-                        if char then
-                            pcall(function()
-                                local args = { [1] = "starving", [2] = char, [3] = false }
-                                ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
-                            end)
-                        end
-                        RunService.Heartbeat:Wait()
+        Default = false,
+        Callback = function(food)
+            Settings.food = food
+        end,
+    })
+
+    -- 防监狱拉回
+    local charPivotTo = nil
+    local notify = nil
+    local function fn49(antiPrisonPull)
+        Settings.antiPrisonPull = antiPrisonPull
+
+        pcall(function()
+            local Algorithms = require(ReplicatedStorage.Modules.Algorithms)
+
+            if antiPrisonPull and not charPivotTo then
+                charPivotTo = Algorithms.charPivotTo
+
+                Algorithms.charPivotTo = function()
+                    return nil
+                end
+            elseif not antiPrisonPull and charPivotTo then
+                Algorithms.charPivotTo = charPivotTo
+                charPivotTo = nil
+            end
+        end)
+
+        pcall(function()
+            if not Core then
+                return
+            end
+
+            if antiPrisonPull and not notify then
+                notify = Core.notify
+
+                Core.notify = function(arg11)
+                    if arg11 and arg11.message and string.find(arg11.message, "You can't leave prison yet") then
+                        return nil
                     end
+                    return notify(arg11)
+                end
+            elseif not antiPrisonPull and notify then
+                Core.notify = notify
+                notify = nil
+            end
+        end)
+    end
+
+    A:Toggle({ Title = "防监狱拉回", Default = false, Callback = fn49 })
+
+    -- 穿墙
+    local MovementSettings = MovementSettings or {}
+    MovementSettings.noclip = false
+
+    local FlyState = FlyState or {}
+    FlyState.noclipConn = nil
+    FlyState.collisionCache = {}
+
+    local function restoreCollision()
+        for part, canCollide in pairs(FlyState.collisionCache) do
+            if part and part.Parent then
+                pcall(function()
+                    part.CanCollide = canCollide
                 end)
             end
         end
+        FlyState.collisionCache = {}
+    end
+
+    local function stopNoclip()
+        if FlyState.noclipConn then
+            FlyState.noclipConn:Disconnect()
+            FlyState.noclipConn = nil
+        end
+        restoreCollision()
+    end
+
+    local function startNoclip()
+        stopNoclip()
+        if not MovementSettings.noclip then
+            return
+        end
+        FlyState.noclipConn = RunService.Stepped:Connect(function()
+            if not MovementSettings.noclip then
+                return
+            end
+            local character = player.Character
+            if not character then
+                return
+            end
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if FlyState.collisionCache[part] == nil then
+                        FlyState.collisionCache[part] = part.CanCollide
+                    end
+                    part.CanCollide = false
+                end
+            end
+        end)
+    end
+
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        FlyState.collisionCache = {}
+        if MovementSettings.noclip then
+            startNoclip()
+        end
+    end)
+
+    A:Toggle({
+        Title = "穿墙",
+        Default = false,
+        Callback = function(noclip)
+            MovementSettings.noclip = noclip
+            if noclip then
+                startNoclip()
+            else
+                stopNoclip()
+            end
+        end,
     })
 
-    A:Divider({ Text = "穿墙" })
-    A:Toggle({ Title = "启用人物穿墙", Value = false, Callback = function(value)
-        Settings.NoclipEnabled = value
-        local char = player.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = not value end
-            end
-        end
-    end })
     A:Divider({ Text = "防甩飞" })
     A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
     A:Divider({ Text = "防摔" })
@@ -474,6 +670,26 @@ function createUI()
         Title = "碰飞",
         Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
     })
+
+    -- 战斗拦截
+    local function fn45(combatBlock)
+        Settings.combatBlock = combatBlock
+
+        if combatBlock and not v30 and hookmetamethod and newcclosure then
+            v30 = hookmetamethod(game, "__namecall", newcclosure(function(arg11, ...)
+                local v32 = table.pack(...)
+                local tbl29 = { ... }
+                local v33 = getnamecallmethod()
+                if Settings.combatBlock and v33 == "FireServer" and tbl29[1] == "combatMode" then
+                    return nil
+                end
+                return v30(arg11, table.unpack(v32, 1, v32.n))
+            end))
+        end
+    end
+
+    A:Toggle({ Title = "战斗拦截", Default = false, Callback = fn45 })
+
     local oldNamecall
     oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
@@ -506,6 +722,8 @@ function createUI()
         return oldNamecall(self, ...)
     end)
     local FlyTab = AddTab(MainSection, "飞天与加速", "plane")
+    local E = AddTab(MainSection, "透视", "eye")
+    local G = AddTab(MainSection, "刷钱", "money-bill-wave")
     local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
     local InteractTab = AddTab(MainSection, "互动", "hand")
     local PoliceTab = AddTab(MainSection, "警察功能", "shield")
@@ -515,7 +733,375 @@ function createUI()
     local C = AddTab(MainSection, "杀戮光环", "skull")
     local F = AddTab(MainSection, "Ragebot", "bot")
     local D = AddTab(MainSection, "传送", "map-pin")
-    local E = AddTab(MainSection, "透视", "eye")
+
+    -- 刷钱分类
+    local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
+    local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
+
+    local tbl10 = {
+        missionInterval = 2,
+        priorityHighReward = false,
+        taxiSafe = false,
+        taxiDelayMode = "随机时间",
+        taxiOrigin = nil,
+    }
+
+    local function fn40_money(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
+                seen[model] = true
+                table.insert(list, model)
+            end
+        end
+        pcall(function() add(arg11.Character) end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
+            if humanoidRootPart then return character, humanoid, humanoidRootPart end
+        end
+    end
+
+    local function fn70_money(arg11)
+        if not arg11 or not arg11.Parent then return end
+        local parent = arg11.Parent
+        if parent:IsA("BasePart") then return parent.Position end
+        if parent:IsA("Attachment") then return parent.WorldPosition end
+        if parent:IsA("Model") then
+            local primaryPart = parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
+            if primaryPart then return primaryPart.Position end
+        end
+    end
+
+    local function fn71_money(arg11)
+        if not arg11 then return end
+        pcall(function()
+            if fireproximityprompt then
+                fireproximityprompt(arg11, 0)
+            else
+                arg11.HoldDuration = 0
+                arg11:InputHoldBegin()
+                task.wait(0.1)
+                arg11:InputHoldEnd()
+            end
+        end)
+    end
+
+    local function fn72_money(arg11)
+        local v32, v33, v34 = fn40_money(player)
+        if not v32 or not v34 or not arg11 then return end
+        local cframe = CFrame.new(arg11 + Vector3.new(0, 3, 0))
+        v32:PivotTo(cframe)
+        pcall(function()
+            if playerEvent then
+                local n11 = ((v32:GetAttribute("CharPivotToId") or 0) + 1) % 100
+                v32:SetAttribute("CharPivotToId", n11)
+                playerEvent:FireServer("charPivotTo", cframe, v32, n11)
+            end
+        end)
+    end
+
+    local function fn74_money()
+        if not getgc then return end
+        for _, v32 in pairs(getgc(true)) do
+            if type(v32) == "table" and rawget(v32, "teamJobs") then
+                return v32.teamJobs
+            end
+        end
+    end
+
+    local function fn75_money()
+        if player:GetAttribute("Mission") then return true end
+        local v32 = fn74_money()
+        if v32 then
+            for _, v33 in pairs(v32) do
+                if v33.joined then return true end
+            end
+        end
+        return false
+    end
+
+    local function fn76_money()
+        local v32 = fn74_money()
+        if not v32 then return end
+        local n11 = -math.huge
+        local v33 = nil
+        for k2, v34 in pairs(v32) do
+            if not v34.joined then
+                if not tbl10.priorityHighReward then
+                    return k2
+                end
+                local n12 = (v34.profitability or 1) * 1000000 + (v34.reward or 0)
+                if n11 < n12 then
+                    n11 = n12
+                    v33 = k2
+                end
+            end
+        end
+        return v33
+    end
+
+    local function fn77_money()
+        task.spawn(function()
+            while true do
+                if Settings.autoMission and playerFunc and not fn75_money() then
+                    local v32 = fn76_money()
+                    if v32 then
+                        pcall(function()
+                            playerFunc:InvokeServer("talkToMission", tostring(v32) .. "join")
+                        end)
+                    end
+                end
+                task.wait(tbl10.missionInterval)
+            end
+        end)
+    end
+
+    local function fn79_money()
+        task.spawn(function()
+            while true do
+                if Settings.farmer then
+                    local v32 = player.Character and player.Character:FindFirstChildOfClass("Tool")
+                    if v32 then
+                        task.wait(0.4)
+                    end
+                    local v33, v34, v35 = fn40_money(player)
+                    if v35 then
+                        local v36 = nil
+                        local v37 = nil
+                        for _, descendant in ipairs(Workspace:GetDescendants()) do
+                            if descendant:IsA("ProximityPrompt") and descendant.ActionText == "Pick Up" then
+                                local v38 = fn70_money(descendant)
+                                if v38 then
+                                    local magnitude = (v35.Position - v38).Magnitude
+                                    if not v36 or magnitude < v36 then
+                                        v36 = magnitude
+                                        v37 = descendant
+                                        continue
+                                    end
+                                end
+                            end
+                        end
+                        if v37 then
+                            local pickPos = fn70_money(v37)
+                            if pickPos then
+                                local pickDist = (v35.Position - pickPos).Magnitude
+                                if pickDist > 8 then
+                                    fn72_money(pickPos)
+                                    task.wait(0.3)
+                                else
+                                    fn71_money(v37)
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.3)
+            end
+        end)
+    end
+
+    local function fn80_money()
+        task.spawn(function()
+            local v32 = nil
+            while true do
+                if Settings.taxi then
+                    local gameplay = Workspace:FindFirstChild("Gameplay")
+                    gameplay = gameplay and gameplay:FindFirstChild("Entities")
+                    gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
+                    if gameplay and gameplay:IsA("Model") then
+                        local primaryPart = gameplay.PrimaryPart or gameplay:FindFirstChildWhichIsA("BasePart")
+                        local v33, v34, v35 = fn40_money(player)
+                        if primaryPart and v35 then
+                            local position = primaryPart.Position
+                            if v32 == nil or (position - v32).Magnitude > 5 then
+                                if tbl10.taxiSafe and tbl10.taxiOrigin then
+                                    v35.CFrame = CFrame.new(tbl10.taxiOrigin)
+                                    local magnitude = (tbl10.taxiOrigin - position).Magnitude
+                                    local n11
+                                    if tbl10.taxiDelayMode == "距离测算" then
+                                        n11 = math.clamp(15 + (math.clamp(magnitude, 2000, 6000) - 2000) / 4000 * 30 + math.random() * 2 - 1, 15, 45)
+                                    else
+                                        n11 = magnitude > 2000 and math.random(15, 45) or 15
+                                    end
+                                    task.wait(n11)
+                                end
+                                v35.CFrame = CFrame.new(position)
+                                v32 = position
+                            end
+                        end
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)
+    end
+
+    local function fn81_money()
+        local gameplay = Workspace:FindFirstChild("Gameplay")
+        gameplay = gameplay and gameplay:FindFirstChild("Entities")
+        gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
+        gameplay = gameplay and gameplay:GetChildren()[1]
+        return gameplay and gameplay:FindFirstChild("Area")
+    end
+
+    local function fn82_money()
+        task.spawn(function()
+            while true do
+                if Settings.bus then
+                    local v32 = fn81_money()
+                    local v33, v34, v35 = fn40_money(player)
+                    if v32 and v34 and v35 then
+                        local seatPart = v34.SeatPart
+                        if seatPart then
+                            local cFrame = v35.CFrame
+                            seatPart.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0) * cFrame:ToObjectSpace(seatPart.CFrame)
+                            seatPart.AssemblyLinearVelocity = Vector3.zero
+                            seatPart.AssemblyAngularVelocity = Vector3.zero
+                            task.wait(0.1)
+                            v34.Sit = false
+                        else
+                            v35.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0)
+                        end
+                        task.wait(5)
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    end
+
+    local function fn83_money()
+        task.spawn(function()
+            local function cloneFunc4(arg11)
+                local v32 = Workspace
+                for _, v33 in ipairs(arg11) do
+                    v32 = v32 and v32:FindFirstChild(v33)
+                    if not v32 then return end
+                end
+                return v32
+            end
+            while true do
+                if Settings.golf and playerFunc then
+                    pcall(function()
+                        playerFunc:InvokeServer("miniGolf", "createLobby")
+                        task.wait(0.1)
+                        playerFunc:InvokeServer("miniGolf", "setLobbyBid", { bid = 500 })
+                        task.wait(0.1)
+                        playerFunc:InvokeServer("miniGolf", "setLobbyReady")
+                        task.wait(4)
+                        playerFunc:InvokeServer("miniGolf", "shot")
+                        task.wait(0.5)
+                        local v32 = cloneFunc4({ "Gameplay", "Entities", "Content", player.Name })
+                        local v33 = cloneFunc4({ "Gameplay", "Entities", "Content", "_Flag", "FlagPole", "Part" })
+                        if v32 and v33 and v32:IsA("BasePart") then
+                            v32.Position = v33.Position
+                        end
+                    end)
+                end
+                task.wait(Settings.golf and 5 or 1)
+            end
+        end)
+    end
+
+    pcall(fn77_money)
+    pcall(fn79_money)
+    pcall(fn80_money)
+    pcall(fn82_money)
+    pcall(fn83_money)
+
+    G:Toggle({
+        Title = "自动接取任务",
+        Default = false,
+        Callback = function(autoMission)
+            Settings.autoMission = autoMission
+        end,
+    })
+
+    G:Toggle({
+        Title = "优先高收益任务",
+        Default = false,
+        Callback = function(priorityHighReward)
+            tbl10.priorityHighReward = priorityHighReward
+        end,
+    })
+
+    G:Input({
+        Title = "接取间隔",
+        Value = "2",
+        PlaceholderText = "输入间隔秒数",
+        ClearTextOnFocus = false,
+        Callback = function(arg11)
+            local missionInterval = tonumber(arg11)
+            if missionInterval and missionInterval > 0 then
+                tbl10.missionInterval = missionInterval
+            end
+        end,
+    })
+
+    G:Toggle({
+        Title = "安全模式(出租车)",
+        Default = false,
+        Callback = function(taxiSafe)
+            tbl10.taxiSafe = taxiSafe
+            if taxiSafe then
+                local _, _, v44 = fn40_money(player)
+                if v44 then
+                    tbl10.taxiOrigin = v44.Position
+                end
+            end
+        end,
+    })
+
+    G:Dropdown({
+        Title = "出租车延迟模式",
+        Values = { "随机时间", "距离测算" },
+        Value = "随机时间",
+        Callback = function(taxiDelayMode)
+            tbl10.taxiDelayMode = taxiDelayMode
+        end,
+    })
+
+    G:Toggle({
+        Title = "出租车刷钱",
+        Default = false,
+        Callback = function(taxi)
+            Settings.taxi = taxi
+        end,
+    })
+
+    G:Toggle({
+        Title = "公交车刷钱",
+        Default = false,
+        Callback = function(bus)
+            Settings.bus = bus
+        end,
+    })
+
+    G:Toggle({
+        Title = "农民刷钱",
+        Default = false,
+        Callback = function(farmer)
+            Settings.farmer = farmer
+        end,
+    })
+
+    G:Toggle({
+        Title = "高尔夫刷钱",
+        Default = false,
+        Callback = function(golf)
+            Settings.golf = golf
+        end,
+    })
+
+    -- 车辆功能
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
 
@@ -1626,13 +2212,13 @@ VehicleTab:Button({
             WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 })
         end
     end })
-    local fastInteractEnabled, autoInteractEnabled, autoCuffEnabled = false, false, false
+    local fastInteractEnabled, autoCuffEnabled = false, false
     game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
         if fastInteractEnabled then prompt.HoldDuration = 0 end
     end)
     InteractTab:Divider({ Text = "互动功能" })
     
-    -- 自动黑客小游戏 (新增)
+    -- 自动黑客小游戏
     local tbl24 = {}
     local function fn50(autoHack)
         Settings.autoHack = autoHack
@@ -1685,7 +2271,126 @@ VehicleTab:Button({
     })
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
-    InteractTab:Toggle({ Title = "自动互动", Value = false, Callback = function(value) autoInteractEnabled = value end })
+    
+    -- 自动捡钱（优化版，降低卡顿）
+    local function fn40_interact(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
+                seen[model] = true
+                table.insert(list, model)
+            end
+        end
+        pcall(function() add(arg11.Character) end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
+            if humanoidRootPart then return character, humanoid, humanoidRootPart end
+        end
+    end
+
+    local function fn70_interact(arg11)
+        if not arg11 or not arg11.Parent then return end
+        local parent = arg11.Parent
+        if parent:IsA("BasePart") then return parent.Position end
+        if parent:IsA("Attachment") then return parent.WorldPosition end
+        if parent:IsA("Model") then
+            local primaryPart = parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
+            if primaryPart then return primaryPart.Position end
+        end
+    end
+
+    local function fn71_interact(arg11)
+        if not arg11 then return end
+        pcall(function()
+            if fireproximityprompt then
+                fireproximityprompt(arg11, 0)
+            else
+                arg11.HoldDuration = 0
+                arg11:InputHoldBegin()
+                task.wait(0.1)
+                arg11:InputHoldEnd()
+            end
+        end)
+    end
+
+    local function fn72_interact(arg11)
+        local v32, v33, v34 = fn40_interact(player)
+        if not v32 or not v34 or not arg11 then return end
+        local cframe = CFrame.new(arg11 + Vector3.new(0, 3, 0))
+        v32:PivotTo(cframe)
+        pcall(function()
+            if playerEvent then
+                local n11 = ((v32:GetAttribute("CharPivotToId") or 0) + 1) % 100
+                v32:SetAttribute("CharPivotToId", n11)
+                playerEvent:FireServer("charPivotTo", cframe, v32, n11)
+            end
+        end)
+    end
+
+    task.spawn(function()
+        while true do
+            if Settings.autoMoney then
+                local v32, v33, v34 = fn40_interact(player)
+                if v34 then
+                    local v35 = nil
+                    local v36 = nil
+                    local count = 0
+                    for _, descendant in ipairs(Workspace:GetDescendants()) do
+                        count = count + 1
+                        if count % 100 == 0 then
+                            task.wait()
+                        end
+                        local isProximityPrompt = descendant:IsA("ProximityPrompt")
+                        local flag12
+                        if isProximityPrompt then
+                            local promptName = descendant.Name
+                            local actionText = string.lower(tostring(descendant.ActionText or ""))
+                            local objectText = string.lower(tostring(descendant.ObjectText or ""))
+                            flag12 = promptName == "CashDrop" or promptName == "GetItem" or promptName == "Money" or actionText:find("pick", 1, true) or actionText:find("cash", 1, true) or actionText:find("collect", 1, true) or actionText:find("grab", 1, true) or objectText:find("cash", 1, true) or objectText:find("money", 1, true)
+                        else
+                            flag12 = isProximityPrompt
+                        end
+                        if flag12 then
+                            local v37 = fn70_interact(descendant)
+                            if v37 then
+                                local magnitude = (v34.Position - v37).Magnitude
+                                if not v35 or magnitude < v35 then
+                                    v35 = magnitude
+                                    v36 = descendant
+                                    continue
+                                end
+                            end
+                        end
+                    end
+                    if v36 and v35 and v35 < 120 then
+                        if v35 > 8 then
+                            fn72_interact(fn70_interact(v36))
+                            task.wait(0.3)
+                        end
+                        fn71_interact(v36)
+                    end
+                end
+            end
+            task.wait(1)
+        end
+    end)
+
+    InteractTab:Toggle({
+        Title = "自动捡钱",
+        Default = false,
+        Callback = function(autoMoney)
+            Settings.autoMoney = autoMoney
+        end,
+    })
+    
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
     local interactDistance = 30
@@ -1738,7 +2443,7 @@ VehicleTab:Button({
         end
     })
 
-    -- 自动传送通缉玩家 (替换原传送与甩飞)
+    -- 自动传送通缉玩家
     PoliceSettings = { range = 200, delay = 0.5, combatCheck = false, teleport = false }
 
     task.spawn(function()
@@ -1805,7 +2510,6 @@ VehicleTab:Button({
             PoliceSettings.delay = delay
         end,
     })
-    -- 自动传送通缉玩家结束
 
     local autoHealEnabled = false
     local healRadius = 30
@@ -1950,19 +2654,6 @@ VehicleTab:Button({
     end)
     task.spawn(function()
         while not isDestroyed do
-            if autoInteractEnabled then
-                for _, descendant in pairs(workspace:GetDescendants()) do
-                    if descendant:IsA("ProximityPrompt") then
-                        pcall(function() fireproximityprompt(descendant) end)
-                    end
-                end
-            end
-            task.wait(0.25)
-        end
-    end)
-    task.spawn(function()
-        while not isDestroyed do
-            task.wait(0.05)
             if autoCuffEnabled then
                 local char = player.Character
                 local myRoot = char and char:FindFirstChild("HumanoidRootPart")
@@ -1982,6 +2673,7 @@ VehicleTab:Button({
                     end
                 end
             end
+            task.wait(0.05)
         end
     end)
 task.spawn(function()
@@ -2351,11 +3043,10 @@ end)
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
-    -- 杀戮光环（全部替换为你提供的新代码）
+    -- 杀戮光环
     local tbl12 = { targetPart = "Head" }
     local tbl21 = {}
     local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
-    local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
 
     local tbl11 = {
         auraEnabled = false,
@@ -2639,7 +3330,7 @@ end)
         end,
     })
 
-    -- ==================== Ragebot 分类 ====================
+    -- Ragebot
     local tbl13 = {
         enabled = false,
         range = 150,
@@ -2919,7 +3610,6 @@ end)
             tbl13.beam = beam
         end,
     })
-    -- ==================== Ragebot 分类结束 ====================
 
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
