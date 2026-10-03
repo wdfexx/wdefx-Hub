@@ -2272,7 +2272,7 @@ VehicleTab:Button({
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     
-    -- 自动捡钱（保留传送逻辑，替换拾取函数为 fn71）
+    -- 自动捡钱（保留传送逻辑，使用 fn71 拾取）
     local function fn40_interact(arg11)
         arg11 = arg11 or player
         local seen = {}
@@ -3045,7 +3045,7 @@ end)
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
-    -- 杀戮光环
+    -- ==================== 杀戮光环 ====================
     local tbl12 = { targetPart = "Head" }
     local tbl21 = {}
     local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
@@ -3058,6 +3058,7 @@ end)
         auraOnlyPolice = false,
         auraOnlyCivilian = false,
         auraCombatCheck = false,
+        affectNPC = false,
         bulletEnabled = false,
         bulletFov = 360,
         bulletDistance = 300,
@@ -3152,6 +3153,7 @@ end)
     end
 
     n10 = 0
+    local lastNPCCheckAura = 0
 
     RunService.Heartbeat:Connect(function()
         if not tbl11.auraEnabled or not playerEvent then
@@ -3204,6 +3206,42 @@ end)
             end)
 
             n10 = now
+        end
+
+        if tbl11.affectNPC and now - lastNPCCheckAura >= 0.5 then
+            lastNPCCheckAura = now
+            local playerPos = v34.Position
+            local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
+            local nearestNPC, nearestNPCHead, nearestNPCDist = nil, nil, nil
+            for _, part in ipairs(nearbyParts) do
+                local model = part:FindFirstAncestorOfClass("Model")
+                if model and not Players:GetPlayerFromCharacter(model) then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                        if head then
+                            local dist = (head.Position - playerPos).Magnitude
+                            if dist <= 20 and (not nearestNPCDist or dist < nearestNPCDist) then
+                                nearestNPC = model
+                                nearestNPCHead = head
+                                nearestNPCDist = dist
+                            end
+                        end
+                    end
+                end
+            end
+            if nearestNPC and nearestNPCHead then
+                pcall(function()
+                    playerEvent:FireServer("damage", {
+                        bodyParts = { { "Head", 1 } },
+                        shotCode = { playerPos, (nearestNPCHead.Position - playerPos).Unit },
+                        pos = nearestNPCHead.Position,
+                        target = nearestNPC,
+                        damageFactor = tbl11.auraDamage,
+                        bulletProofTool = false,
+                    })
+                end)
+            end
         end
     end)
 
@@ -3309,6 +3347,14 @@ end)
     })
 
     C:Toggle({
+        Title = "攻击NPC",
+        Default = false,
+        Callback = function(value)
+            tbl11.affectNPC = value
+        end,
+    })
+
+    C:Toggle({
         Title = "战斗检测",
         Default = false,
         Callback = function(auraCombatCheck)
@@ -3332,7 +3378,7 @@ end)
         end,
     })
 
-    -- Ragebot
+    -- ==================== Ragebot ====================
     local tbl13 = {
         enabled = false,
         range = 150,
@@ -3345,6 +3391,7 @@ end)
         policeLock = false,
         civilianLock = false,
         beam = false,
+        affectNPC = false,
     }
 
     local tbl14 = {
@@ -3456,6 +3503,8 @@ end)
         end)
     end
 
+    local lastNPCCheckRage = 0
+
     task.spawn(function()
         while true do
             if tbl13.enabled and playerEvent then
@@ -3507,6 +3556,45 @@ end)
                                     continue
                                 end
                             end
+                        end
+                    end
+
+                    if tbl13.affectNPC and tick() - lastNPCCheckRage >= 0.5 then
+                        lastNPCCheckRage = tick()
+                        local playerPos = position
+                        local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
+                        local nearestNPC, nearestNPCHead, nearestNPCDist = nil, nil, nil
+                        for _, part in ipairs(nearbyParts) do
+                            local model = part:FindFirstAncestorOfClass("Model")
+                            if model and not Players:GetPlayerFromCharacter(model) then
+                                local hum = model:FindFirstChildOfClass("Humanoid")
+                                if hum and hum.Health > 0 then
+                                    local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                                    if head then
+                                        local dist = (head.Position - playerPos).Magnitude
+                                        if dist <= 20 and (not nearestNPCDist or dist < nearestNPCDist) then
+                                            nearestNPC = model
+                                            nearestNPCHead = head
+                                            nearestNPCDist = dist
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        if nearestNPC and nearestNPCHead then
+                            pcall(function()
+                                playerEvent:FireServer("damage", {
+                                    bodyParts = { { tbl13.bodyPart, 1 } },
+                                    shotCode = { playerPos, (nearestNPCHead.Position - playerPos).Unit },
+                                    pos = nearestNPCHead.Position,
+                                    target = nearestNPC,
+                                    damageFactor = 1.5,
+                                    bulletProofTool = false,
+                                })
+                                if tbl13.beam then
+                                    fn90(playerPos, nearestNPCHead.Position)
+                                end
+                            end)
                         end
                     end
                 end
@@ -3602,6 +3690,14 @@ end)
             if civilianLock then
                 tbl13.policeLock = false
             end
+        end,
+    })
+
+    F:Toggle({
+        Title = "攻击NPC",
+        Default = false,
+        Callback = function(value)
+            tbl13.affectNPC = value
         end,
     })
 
