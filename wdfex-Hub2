@@ -37,7 +37,7 @@ function createUI()
     local isDestroyed = false
     local connections = {}
 
-    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false, autoMoney = false, combatBlock = false,
+    local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false, noRagdoll = false, autoMoney = false, combatBlock = false,
         autoMission = false, farmer = false, taxi = false, bus = false, golf = false,
         priorityHighReward = false, taxiSafe = false, taxiDelayMode = "随机时间", taxiOrigin = nil,
         stamina = false, food = false, antiPrisonPull = false
@@ -154,6 +154,85 @@ function createUI()
         end)
         setreadonly(v32, true)
     end)
+
+    local activate = nil
+    local activateServer = nil
+    pcall(function()
+        local Ragdoll = require(ReplicatedStorage.Modules.Ragdoll)
+        activate = Ragdoll.activate
+        activateServer = Ragdoll.activateServer
+
+        Ragdoll.activate = function(arg11, arg12, arg13, ...)
+            if Settings.noRagdoll and arg12 then
+                return
+            end
+            local v32 = activate
+            local v33 = table.pack(...)
+            v33.n = 4 + v33.n - 1
+            table.move(v33, 1, v33.n, 4, v33)
+            v33[1] = arg11
+            v33[2] = arg12
+            v33[3] = arg13
+            return v32(table.unpack(v33, 1, v33.n))
+        end
+
+        if activateServer then
+            Ragdoll.activateServer = function(arg11, arg12, arg13, ...)
+                if Settings.noRagdoll and arg12 then
+                    return
+                end
+                local v32 = activateServer
+                local v33 = table.pack(...)
+                v33.n = 4 + v33.n - 1
+                table.move(v33, 1, v33.n, 4, v33)
+                v33[1] = arg11
+                v33[2] = arg12
+                v33[3] = arg13
+                return v32(table.unpack(v33, 1, v33.n))
+            end
+        end
+    end)
+
+    local charPivotTo = nil
+    local notify = nil
+    local function fn49(antiPrisonPull)
+        Settings.antiPrisonPull = antiPrisonPull
+
+        pcall(function()
+            local Algorithms = require(ReplicatedStorage.Modules.Algorithms)
+
+            if antiPrisonPull and not charPivotTo then
+                charPivotTo = Algorithms.charPivotTo
+
+                Algorithms.charPivotTo = function()
+                    return nil
+                end
+            elseif not antiPrisonPull and charPivotTo then
+                Algorithms.charPivotTo = charPivotTo
+                charPivotTo = nil
+            end
+        end)
+
+        pcall(function()
+            if not Core then
+                return
+            end
+
+            if antiPrisonPull and not notify then
+                notify = Core.notify
+
+                Core.notify = function(arg11)
+                    if arg11 and arg11.message and string.find(arg11.message, "You can't leave prison yet") then
+                        return nil
+                    end
+                    return notify(arg11)
+                end
+            elseif not antiPrisonPull and notify then
+                Core.notify = notify
+                notify = nil
+            end
+        end)
+    end
 
     local function showBuySuccess(itemName)
         local sg = Instance.new("ScreenGui")
@@ -520,47 +599,6 @@ function createUI()
         end,
     })
 
-    local charPivotTo = nil
-    local notify = nil
-    local function fn49(antiPrisonPull)
-        Settings.antiPrisonPull = antiPrisonPull
-
-        pcall(function()
-            local Algorithms = require(ReplicatedStorage.Modules.Algorithms)
-
-            if antiPrisonPull and not charPivotTo then
-                charPivotTo = Algorithms.charPivotTo
-
-                Algorithms.charPivotTo = function()
-                    return nil
-                end
-            elseif not antiPrisonPull and charPivotTo then
-                Algorithms.charPivotTo = charPivotTo
-                charPivotTo = nil
-            end
-        end)
-
-        pcall(function()
-            if not Core then
-                return
-            end
-
-            if antiPrisonPull and not notify then
-                notify = Core.notify
-
-                Core.notify = function(arg11)
-                    if arg11 and arg11.message and string.find(arg11.message, "You can't leave prison yet") then
-                        return nil
-                    end
-                    return notify(arg11)
-                end
-            elseif not antiPrisonPull and notify then
-                Core.notify = notify
-                notify = nil
-            end
-        end)
-    end
-
     A:Toggle({ Title = "防监狱拉回", Default = false, Callback = fn49 })
 
     local MovementSettings = MovementSettings or {}
@@ -715,7 +753,6 @@ function createUI()
     end)
     local FlyTab = AddTab(MainSection, "飞天与加速", "plane")
     local E = AddTab(MainSection, "透视", "eye")
-    local G = AddTab(MainSection, "刷钱", "money-bill-wave")
     local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
     local InteractTab = AddTab(MainSection, "互动", "hand")
     local PoliceTab = AddTab(MainSection, "警察功能", "shield")
@@ -728,369 +765,6 @@ function createUI()
 
     local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
     local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-
-    local tbl10 = {
-        missionInterval = 2,
-        priorityHighReward = false,
-        taxiSafe = false,
-        taxiDelayMode = "随机时间",
-        taxiOrigin = nil,
-    }
-
-    local function fn40_money(arg11)
-        arg11 = arg11 or player
-        local seen = {}
-        local list = {}
-        local function add(model)
-            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
-                seen[model] = true
-                table.insert(list, model)
-            end
-        end
-        pcall(function() add(arg11.Character) end)
-        pcall(function()
-            local charactersFolder = Workspace:FindFirstChild("Characters")
-            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
-        end)
-        for _, character in ipairs(list) do
-            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or (humanoid and humanoid.RootPart)
-            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
-            if humanoidRootPart then return character, humanoid, humanoidRootPart end
-        end
-    end
-
-    local function fn70_money(arg11)
-        if not arg11 or not arg11.Parent then return end
-        local parent = arg11.Parent
-        if parent:IsA("BasePart") then return parent.Position end
-        if parent:IsA("Attachment") then return parent.WorldPosition end
-        if parent:IsA("Model") then
-            local primaryPart = parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
-            if primaryPart then return primaryPart.Position end
-        end
-    end
-
-    local function fn71_money(arg11)
-        if not arg11 then return end
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(arg11, 0)
-            else
-                arg11.HoldDuration = 0
-                arg11:InputHoldBegin()
-                task.wait(0.1)
-                arg11:InputHoldEnd()
-            end
-        end)
-    end
-
-    local function fn72_money(arg11)
-        local v32, v33, v34 = fn40_money(player)
-        if not v32 or not v34 or not arg11 then return end
-        local cframe = CFrame.new(arg11 + Vector3.new(0, 3, 0))
-        v32:PivotTo(cframe)
-        pcall(function()
-            if playerEvent then
-                local n11 = ((v32:GetAttribute("CharPivotToId") or 0) + 1) % 100
-                v32:SetAttribute("CharPivotToId", n11)
-                playerEvent:FireServer("charPivotTo", cframe, v32, n11)
-            end
-        end)
-    end
-
-    local function fn74_money()
-        if not getgc then return end
-        for _, v32 in pairs(getgc(true)) do
-            if type(v32) == "table" and rawget(v32, "teamJobs") then
-                return v32.teamJobs
-            end
-        end
-    end
-
-    local function fn75_money()
-        if player:GetAttribute("Mission") then return true end
-        local v32 = fn74_money()
-        if v32 then
-            for _, v33 in pairs(v32) do
-                if v33.joined then return true end
-            end
-        end
-        return false
-    end
-
-    local function fn76_money()
-        local v32 = fn74_money()
-        if not v32 then return end
-        local n11 = -math.huge
-        local v33 = nil
-        for k2, v34 in pairs(v32) do
-            if not v34.joined then
-                if not tbl10.priorityHighReward then
-                    return k2
-                end
-                local n12 = (v34.profitability or 1) * 1000000 + (v34.reward or 0)
-                if n11 < n12 then
-                    n11 = n12
-                    v33 = k2
-                end
-            end
-        end
-        return v33
-    end
-
-    local function fn77_money()
-        task.spawn(function()
-            while true do
-                if Settings.autoMission and playerFunc and not fn75_money() then
-                    local v32 = fn76_money()
-                    if v32 then
-                        pcall(function()
-                            playerFunc:InvokeServer("talkToMission", tostring(v32) .. "join")
-                        end)
-                    end
-                end
-                task.wait(tbl10.missionInterval)
-            end
-        end)
-    end
-
-    local function fn79_money()
-        task.spawn(function()
-            while true do
-                if Settings.farmer then
-                    local v32 = player.Character and player.Character:FindFirstChildOfClass("Tool")
-                    if v32 then
-                        task.wait(0.4)
-                    end
-                    local v33, v34, v35 = fn40_money(player)
-                    if v35 then
-                        local v36 = nil
-                        local v37 = nil
-                        for _, descendant in ipairs(Workspace:GetDescendants()) do
-                            if descendant:IsA("ProximityPrompt") and descendant.ActionText == "Pick Up" then
-                                local v38 = fn70_money(descendant)
-                                if v38 then
-                                    local magnitude = (v35.Position - v38).Magnitude
-                                    if not v36 or magnitude < v36 then
-                                        v36 = magnitude
-                                        v37 = descendant
-                                        continue
-                                    end
-                                end
-                            end
-                        end
-                        if v37 then
-                            local pickPos = fn70_money(v37)
-                            if pickPos then
-                                local pickDist = (v35.Position - pickPos).Magnitude
-                                if pickDist > 8 then
-                                    fn72_money(pickPos)
-                                    task.wait(0.3)
-                                else
-                                    fn71_money(v37)
-                                end
-                            end
-                        end
-                    end
-                end
-                task.wait(0.3)
-            end
-        end)
-    end
-
-    local function fn80_money()
-        task.spawn(function()
-            local v32 = nil
-            while true do
-                if Settings.taxi then
-                    local gameplay = Workspace:FindFirstChild("Gameplay")
-                    gameplay = gameplay and gameplay:FindFirstChild("Entities")
-                    gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
-                    if gameplay and gameplay:IsA("Model") then
-                        local primaryPart = gameplay.PrimaryPart or gameplay:FindFirstChildWhichIsA("BasePart")
-                        local v33, v34, v35 = fn40_money(player)
-                        if primaryPart and v35 then
-                            local position = primaryPart.Position
-                            if v32 == nil or (position - v32).Magnitude > 5 then
-                                if tbl10.taxiSafe and tbl10.taxiOrigin then
-                                    v35.CFrame = CFrame.new(tbl10.taxiOrigin)
-                                    local magnitude = (tbl10.taxiOrigin - position).Magnitude
-                                    local n11
-                                    if tbl10.taxiDelayMode == "距离测算" then
-                                        n11 = math.clamp(15 + (math.clamp(magnitude, 2000, 6000) - 2000) / 4000 * 30 + math.random() * 2 - 1, 15, 45)
-                                    else
-                                        n11 = magnitude > 2000 and math.random(15, 45) or 15
-                                    end
-                                    task.wait(n11)
-                                end
-                                v35.CFrame = CFrame.new(position)
-                                v32 = position
-                            end
-                        end
-                    end
-                end
-                task.wait(0.5)
-            end
-        end)
-    end
-
-    local function fn81_money()
-        local gameplay = Workspace:FindFirstChild("Gameplay")
-        gameplay = gameplay and gameplay:FindFirstChild("Entities")
-        gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
-        gameplay = gameplay and gameplay:GetChildren()[1]
-        return gameplay and gameplay:FindFirstChild("Area")
-    end
-
-    local function fn82_money()
-        task.spawn(function()
-            while true do
-                if Settings.bus then
-                    local v32 = fn81_money()
-                    local v33, v34, v35 = fn40_money(player)
-                    if v32 and v34 and v35 then
-                        local seatPart = v34.SeatPart
-                        if seatPart then
-                            local cFrame = v35.CFrame
-                            seatPart.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0) * cFrame:ToObjectSpace(seatPart.CFrame)
-                            seatPart.AssemblyLinearVelocity = Vector3.zero
-                            seatPart.AssemblyAngularVelocity = Vector3.zero
-                            task.wait(0.1)
-                            v34.Sit = false
-                        else
-                            v35.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0)
-                        end
-                        task.wait(5)
-                    end
-                end
-                task.wait(1)
-            end
-        end)
-    end
-
-    local function fn83_money()
-        task.spawn(function()
-            local function cloneFunc4(arg11)
-                local v32 = Workspace
-                for _, v33 in ipairs(arg11) do
-                    v32 = v32 and v32:FindFirstChild(v33)
-                    if not v32 then return end
-                end
-                return v32
-            end
-            while true do
-                if Settings.golf and playerFunc then
-                    pcall(function()
-                        playerFunc:InvokeServer("miniGolf", "createLobby")
-                        task.wait(0.1)
-                        playerFunc:InvokeServer("miniGolf", "setLobbyBid", { bid = 500 })
-                        task.wait(0.1)
-                        playerFunc:InvokeServer("miniGolf", "setLobbyReady")
-                        task.wait(4)
-                        playerFunc:InvokeServer("miniGolf", "shot")
-                        task.wait(0.5)
-                        local v32 = cloneFunc4({ "Gameplay", "Entities", "Content", player.Name })
-                        local v33 = cloneFunc4({ "Gameplay", "Entities", "Content", "_Flag", "FlagPole", "Part" })
-                        if v32 and v33 and v32:IsA("BasePart") then
-                            v32.Position = v33.Position
-                        end
-                    end)
-                end
-                task.wait(Settings.golf and 5 or 1)
-            end
-        end)
-    end
-
-    pcall(fn77_money)
-    pcall(fn79_money)
-    pcall(fn80_money)
-    pcall(fn82_money)
-    pcall(fn83_money)
-
-    G:Toggle({
-        Title = "自动接取任务",
-        Default = false,
-        Callback = function(autoMission)
-            Settings.autoMission = autoMission
-        end,
-    })
-
-    G:Toggle({
-        Title = "优先高收益任务",
-        Default = false,
-        Callback = function(priorityHighReward)
-            tbl10.priorityHighReward = priorityHighReward
-        end,
-    })
-
-    G:Input({
-        Title = "接取间隔",
-        Value = "2",
-        PlaceholderText = "输入间隔秒数",
-        ClearTextOnFocus = false,
-        Callback = function(arg11)
-            local missionInterval = tonumber(arg11)
-            if missionInterval and missionInterval > 0 then
-                tbl10.missionInterval = missionInterval
-            end
-        end,
-    })
-
-    G:Toggle({
-        Title = "安全模式(出租车)",
-        Default = false,
-        Callback = function(taxiSafe)
-            tbl10.taxiSafe = taxiSafe
-            if taxiSafe then
-                local _, _, v44 = fn40_money(player)
-                if v44 then
-                    tbl10.taxiOrigin = v44.Position
-                end
-            end
-        end,
-    })
-
-    G:Dropdown({
-        Title = "出租车延迟模式",
-        Values = { "随机时间", "距离测算" },
-        Value = "随机时间",
-        Callback = function(taxiDelayMode)
-            tbl10.taxiDelayMode = taxiDelayMode
-        end,
-    })
-
-    G:Toggle({
-        Title = "出租车刷钱",
-        Default = false,
-        Callback = function(taxi)
-            Settings.taxi = taxi
-        end,
-    })
-
-    G:Toggle({
-        Title = "公交车刷钱",
-        Default = false,
-        Callback = function(bus)
-            Settings.bus = bus
-        end,
-    })
-
-    G:Toggle({
-        Title = "农民刷钱",
-        Default = false,
-        Callback = function(farmer)
-            Settings.farmer = farmer
-        end,
-    })
-
-    G:Toggle({
-        Title = "高尔夫刷钱",
-        Default = false,
-        Callback = function(golf)
-            Settings.golf = golf
-        end,
-    })
 
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
