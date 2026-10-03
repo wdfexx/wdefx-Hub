@@ -37,7 +37,6 @@ function createUI()
     local isDestroyed = false
     local connections = {}
 
-    -- ==================== 绕过反作弊 ====================
     local Settings = { HoldTime = 0, Distance = 25, HitboxEnabled = false, HitboxSize = 10, WhitelistEnabled = false, TeleportEnabled = false, NoclipEnabled = false, noFallDamage = false, autoMoney = false, combatBlock = false,
         autoMission = false, farmer = false, taxi = false, bus = false, golf = false,
         priorityHighReward = false, taxiSafe = false, taxiDelayMode = "随机时间", taxiOrigin = nil,
@@ -155,7 +154,6 @@ function createUI()
         end)
         setreadonly(v32, true)
     end)
-    -- =======================================================
 
     local function showBuySuccess(itemName)
         local sg = Instance.new("ScreenGui")
@@ -362,7 +360,6 @@ function createUI()
         end
     })
 
-    -- 悬浮窗快捷开关
     local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
     local windowDragging, windowDragStart, windowStartPos = false, nil, nil
     local lockWindowBtn = false
@@ -491,7 +488,6 @@ function createUI()
     local godOn = false
     A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
 
-    -- 无限体力
     RunService.Heartbeat:Connect(function()
         if Core and Settings.stamina then
             pcall(function()
@@ -508,7 +504,6 @@ function createUI()
         end,
     })
 
-    -- 无限饥饿
     RunService.Heartbeat:Connect(function()
         if Core and Settings.food then
             pcall(function()
@@ -525,7 +520,6 @@ function createUI()
         end,
     })
 
-    -- 防监狱拉回
     local charPivotTo = nil
     local notify = nil
     local function fn49(antiPrisonPull)
@@ -569,7 +563,6 @@ function createUI()
 
     A:Toggle({ Title = "防监狱拉回", Default = false, Callback = fn49 })
 
-    -- 穿墙
     local MovementSettings = MovementSettings or {}
     MovementSettings.noclip = false
 
@@ -671,7 +664,6 @@ function createUI()
         Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end
     })
 
-    -- 战斗拦截
     local function fn45(combatBlock)
         Settings.combatBlock = combatBlock
 
@@ -734,7 +726,6 @@ function createUI()
     local F = AddTab(MainSection, "Ragebot", "bot")
     local D = AddTab(MainSection, "传送", "map-pin")
 
-    -- 刷钱分类
     local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
     local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
 
@@ -1101,7 +1092,6 @@ function createUI()
         end,
     })
 
-    -- 车辆功能
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
 
@@ -2218,7 +2208,6 @@ VehicleTab:Button({
     end)
     InteractTab:Divider({ Text = "互动功能" })
     
-    -- 自动黑客小游戏
     local tbl24 = {}
     local function fn50(autoHack)
         Settings.autoHack = autoHack
@@ -2272,7 +2261,6 @@ VehicleTab:Button({
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     
-    -- 自动捡钱（保留传送逻辑，使用 fn71 拾取）
     local function fn40_interact(arg11)
         arg11 = arg11 or player
         local seen = {}
@@ -2445,7 +2433,6 @@ VehicleTab:Button({
         end
     })
 
-    -- 自动传送通缉玩家
     PoliceSettings = { range = 200, delay = 0.5, combatCheck = false, teleport = false }
 
     task.spawn(function()
@@ -2471,7 +2458,7 @@ VehicleTab:Button({
                         end
                     end
                     if closest then
-                        myRoot.CFrame = CFrame.new(closest.Position - closest.CFrame.LookVector * 3)
+                        myRoot.CFrame = closest.CFrame + Vector3.new(0, 3, 0)
                     end
                 end
             end
@@ -3045,7 +3032,6 @@ end)
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
-    -- ==================== 杀戮光环 ====================
     local tbl12 = { targetPart = "Head" }
     local tbl21 = {}
     local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
@@ -3378,7 +3364,6 @@ end)
         end,
     })
 
-    -- ==================== Ragebot ====================
     local tbl13 = {
         enabled = false,
         range = 150,
@@ -3503,104 +3488,105 @@ end)
         end)
     end
 
+    local lastRageAttack = 0
     local lastNPCCheckRage = 0
 
-    task.spawn(function()
-        while true do
-            if tbl13.enabled and playerEvent then
-                local v32, v33, v34 = fn40_rage(player)
-                if v34 then
-                    local position = v34.Position
-                    local v35 = fn63(player)
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= player
-                            and fn84_rage(plr, tbl13.policeLock, tbl13.civilianLock)
-                            and fn85_rage(plr, tbl13.combatCheck) then
-                            local v36, v37, v38Part = fn40_rage(plr)
-                            local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87_rage(v36))
-                            if v36 and v37 and v38 and v37.Health > 0 then
-                                if tbl13.jobCheck and fn63(plr) == v35 then
-                                    continue
-                                end
+    RunService.Heartbeat:Connect(function()
+        if not tbl13.enabled or not playerEvent then return end
+        local now = tick()
+        if now - lastRageAttack < tbl13.interval then return end
 
-                                if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then
-                                    continue
-                                end
+        local v32, v33, v34 = fn40_rage(player)
+        if not v34 then return end
 
-                                if (v38.Position - position).Magnitude <= tbl13.range then
-                                    if tbl13.wallCheck then
-                                        local raycastParams = RaycastParams.new()
-                                        raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
-                                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                                        local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
-                                        if hit and not hit.Instance:IsDescendantOf(v36) then
-                                            continue
-                                        end
-                                    end
+        local position = v34.Position
+        local v35 = fn63(player)
+        local bestTarget = nil
+        local bestTargetPart = nil
+        local bestDist = nil
 
-                                    pcall(function()
-                                        playerEvent:FireServer("damage", {
-                                            bodyParts = { { tbl13.bodyPart, 1 } },
-                                            shotCode = { position, (v38.Position - position).Unit },
-                                            pos = v38.Position,
-                                            target = plr,
-                                            damageFactor = 1.5,
-                                            bulletProofTool = false,
-                                        })
-
-                                        if tbl13.beam then
-                                            fn90(position, v38.Position)
-                                        end
-                                    end)
-
-                                    continue
-                                end
-                            end
-                        end
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player
+                and fn84_rage(plr, tbl13.policeLock, tbl13.civilianLock)
+                and fn85_rage(plr, tbl13.combatCheck) then
+                local v36, v37, v38Part = fn40_rage(plr)
+                local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87_rage(v36))
+                if v36 and v37 and v38 and v37.Health > 0 then
+                    if tbl13.jobCheck and fn63(plr) == v35 then
+                        continue
                     end
-
-                    if tbl13.affectNPC and tick() - lastNPCCheckRage >= 0.5 then
-                        lastNPCCheckRage = tick()
-                        local playerPos = position
-                        local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
-                        local nearestNPC, nearestNPCHead, nearestNPCDist = nil, nil, nil
-                        for _, part in ipairs(nearbyParts) do
-                            local model = part:FindFirstAncestorOfClass("Model")
-                            if model and not Players:GetPlayerFromCharacter(model) then
-                                local hum = model:FindFirstChildOfClass("Humanoid")
-                                if hum and hum.Health > 0 then
-                                    local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
-                                    if head then
-                                        local dist = (head.Position - playerPos).Magnitude
-                                        if dist <= 20 and (not nearestNPCDist or dist < nearestNPCDist) then
-                                            nearestNPC = model
-                                            nearestNPCHead = head
-                                            nearestNPCDist = dist
-                                        end
-                                    end
-                                end
+                    if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then
+                        continue
+                    end
+                    local dist = (v38.Position - position).Magnitude
+                    if dist <= tbl13.range then
+                        if tbl13.wallCheck then
+                            local raycastParams = RaycastParams.new()
+                            raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                            local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                            if hit and not hit.Instance:IsDescendantOf(v36) then
+                                continue
                             end
                         end
-                        if nearestNPC and nearestNPCHead then
-                            pcall(function()
-                                playerEvent:FireServer("damage", {
-                                    bodyParts = { { tbl13.bodyPart, 1 } },
-                                    shotCode = { playerPos, (nearestNPCHead.Position - playerPos).Unit },
-                                    pos = nearestNPCHead.Position,
-                                    target = nearestNPC,
-                                    damageFactor = 1.5,
-                                    bulletProofTool = false,
-                                })
-                                if tbl13.beam then
-                                    fn90(playerPos, nearestNPCHead.Position)
-                                end
-                            end)
+                        if not bestDist or dist < bestDist then
+                            bestDist = dist
+                            bestTarget = plr
+                            bestTargetPart = v38
                         end
                     end
                 end
             end
+        end
 
-            task.wait(tbl13.interval)
+        if tbl13.affectNPC and now - lastNPCCheckRage >= 0.5 then
+            lastNPCCheckRage = now
+            local nearbyParts = Workspace:GetPartBoundsInRadius(position, 20)
+            for _, part in ipairs(nearbyParts) do
+                local model = part:FindFirstAncestorOfClass("Model")
+                if model and not Players:GetPlayerFromCharacter(model) then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local head = model:FindFirstChild(tbl13.bodyPart) or model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                        if head then
+                            local dist = (head.Position - position).Magnitude
+                            if dist <= 20 then
+                                if tbl13.wallCheck then
+                                    local raycastParams = RaycastParams.new()
+                                    raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                                    local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, head.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                                    if hit and not hit.Instance:IsDescendantOf(model) then
+                                        continue
+                                    end
+                                end
+                                if not bestDist or dist < bestDist then
+                                    bestDist = dist
+                                    bestTarget = model
+                                    bestTargetPart = head
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if bestTarget and bestTargetPart then
+            pcall(function()
+                playerEvent:FireServer("damage", {
+                    bodyParts = { { tbl13.bodyPart, 1 } },
+                    shotCode = { position, (bestTargetPart.Position - position).Unit },
+                    pos = bestTargetPart.Position,
+                    target = bestTarget,
+                    damageFactor = 1.5,
+                    bulletProofTool = false,
+                })
+                if tbl13.beam then
+                    fn90(position, bestTargetPart.Position)
+                end
+            end)
+            lastRageAttack = now
         end
     end)
 
