@@ -730,23 +730,30 @@ function createUI()
     local DoctorTab = AddTab(MainSection, "医生功能", "heart-pulse")
     local VehicleTab = AddTab(MainSection, "车辆功能", "car")
     local B = AddTab(MainSection, "枪械功能", "target")
+    local BulletTrackTab = AddTab(MainSection, "子弹追踪", "crosshairs")
     local C = AddTab(MainSection, "杀戮光环", "skull")
     local F = AddTab(MainSection, "Ragebot", "bot")
     local D = AddTab(MainSection, "传送", "map-pin")
 
-    -- 刷钱分类
-    local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
-    local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-
-    local tbl10 = {
-        missionInterval = 2,
-        priorityHighReward = false,
-        taxiSafe = false,
-        taxiDelayMode = "随机时间",
-        taxiOrigin = nil,
+    -- 子弹追踪分类
+    local bulletCfg = {
+        bulletEnabled = false,
+        bulletFov = 360,
+        bulletDistance = 300,
+        bulletPart = "Head",
+        bulletShowFov = true,
+        bulletColor = "红色",
+        bulletCombatCheck = false,
+        bulletOnlyPolice = false,
+        bulletOnlyCivilian = false,
     }
 
-    local function fn40_money(arg11)
+    local function fn38_bullet(arg11)
+        local n11 = arg11 or 5
+        return Color3.fromHSV(tick() % n11 / n11, 1, 1)
+    end
+
+    local function fn40_bullet(arg11)
         arg11 = arg11 or player
         local seen = {}
         local list = {}
@@ -769,335 +776,163 @@ function createUI()
         end
     end
 
-    local function fn70_money(arg11)
-        if not arg11 or not arg11.Parent then return end
-        local parent = arg11.Parent
-        if parent:IsA("BasePart") then return parent.Position end
-        if parent:IsA("Attachment") then return parent.WorldPosition end
-        if parent:IsA("Model") then
-            local primaryPart = parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
-            if primaryPart then return primaryPart.Position end
+    local function fn62_bullet(arg11)
+        local _, v33 = fn40_bullet(arg11)
+        return v33 ~= nil and v33.Health > 0
+    end
+
+    local function fn84_bullet(arg11, arg12, arg13)
+        if not arg11 or arg11 == player then
+            return false
         end
-    end
-
-    local function fn71_money(arg11)
-        if not arg11 then return end
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(arg11, 0)
-            else
-                arg11.HoldDuration = 0
-                arg11:InputHoldBegin()
-                task.wait(0.1)
-                arg11:InputHoldEnd()
-            end
-        end)
-    end
-
-    local function fn72_money(arg11)
-        local v32, v33, v34 = fn40_money(player)
-        if not v32 or not v34 or not arg11 then return end
-        local cframe = CFrame.new(arg11 + Vector3.new(0, 3, 0))
-        v32:PivotTo(cframe)
-        pcall(function()
-            if playerEvent then
-                local n11 = ((v32:GetAttribute("CharPivotToId") or 0) + 1) % 100
-                v32:SetAttribute("CharPivotToId", n11)
-                playerEvent:FireServer("charPivotTo", cframe, v32, n11)
-            end
-        end)
-    end
-
-    local function fn74_money()
-        if not getgc then return end
-        for _, v32 in pairs(getgc(true)) do
-            if type(v32) == "table" and rawget(v32, "teamJobs") then
-                return v32.teamJobs
-            end
+        if arg12 then
+            return arg11.Team and arg11.Team.Name == "Police"
         end
-    end
-
-    local function fn75_money()
-        if player:GetAttribute("Mission") then return true end
-        local v32 = fn74_money()
-        if v32 then
-            for _, v33 in pairs(v32) do
-                if v33.joined then return true end
-            end
+        if arg13 then
+            return arg11.Team and arg11.Team.Name == "Civilian"
         end
-        return false
+        return true
     end
 
-    local function fn76_money()
-        local v32 = fn74_money()
-        if not v32 then return end
-        local n11 = -math.huge
-        local v33 = nil
-        for k2, v34 in pairs(v32) do
-            if not v34.joined then
-                if not tbl10.priorityHighReward then
-                    return k2
+    local function fn85_bullet(arg11, arg12)
+        if not arg12 then
+            return true
+        end
+        return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
+    end
+
+    local function fn86_bullet()
+        local currentCamera = Workspace.CurrentCamera
+        if not currentCamera then return end
+        local vector2 = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
+        local bulletFov = bulletCfg.bulletFov
+        local position = nil
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if fn84_bullet(plr, bulletCfg.bulletOnlyPolice, bulletCfg.bulletOnlyCivilian)
+                and fn62_bullet(plr)
+                and fn85_bullet(plr, bulletCfg.bulletCombatCheck) then
+                local character = plr.Character
+                if character then
+                    character = character:FindFirstChild(bulletCfg.bulletPart)
+                        or character:FindFirstChild("HumanoidRootPart")
                 end
-                local n12 = (v34.profitability or 1) * 1000000 + (v34.reward or 0)
-                if n11 < n12 then
-                    n11 = n12
-                    v33 = k2
-                end
-            end
-        end
-        return v33
-    end
-
-    local function fn77_money()
-        task.spawn(function()
-            while true do
-                if Settings.autoMission and playerFunc and not fn75_money() then
-                    local v32 = fn76_money()
-                    if v32 then
-                        pcall(function()
-                            playerFunc:InvokeServer("talkToMission", tostring(v32) .. "join")
-                        end)
+                if character then
+                    if (character.Position - currentCamera.CFrame.Position).Magnitude <= bulletCfg.bulletDistance then
+                        local v32, v33 = currentCamera:WorldToScreenPoint(character.Position)
+                        if v33 and v32.Z > 0 then
+                            local magnitude = (Vector2.new(v32.X, v32.Y) - vector2).Magnitude
+                            if magnitude < bulletFov then
+                                position = character.Position
+                                bulletFov = magnitude
+                            end
+                        end
                     end
                 end
-                task.wait(tbl10.missionInterval)
             end
-        end)
+        end
+        return position
     end
 
-    local function fn79_money()
-        task.spawn(function()
-            while true do
-                if Settings.farmer then
-                    local v32 = player.Character and player.Character:FindFirstChildOfClass("Tool")
-                    if v32 then
-                        task.wait(0.4)
-                    end
-                    local v33, v34, v35 = fn40_money(player)
+    pcall(function()
+        local raycast = Workspace.Raycast
+        hookfunction(Workspace.Raycast, function(arg11, arg12, arg13, arg14)
+            if bulletCfg.bulletEnabled and arg12 and arg13 then
+                local _, _, v34 = fn40_bullet(player)
+                if v34 and (arg12 - v34.Position).Magnitude < 15 then
+                    local v35 = fn86_bullet()
                     if v35 then
-                        local v36 = nil
-                        local v37 = nil
-                        for _, descendant in ipairs(Workspace:GetDescendants()) do
-                            if descendant:IsA("ProximityPrompt") and descendant.ActionText == "Pick Up" then
-                                local v38 = fn70_money(descendant)
-                                if v38 then
-                                    local magnitude = (v35.Position - v38).Magnitude
-                                    if not v36 or magnitude < v36 then
-                                        v36 = magnitude
-                                        v37 = descendant
-                                        continue
-                                    end
-                                end
-                            end
-                        end
-                        if v37 then
-                            local pickPos = fn70_money(v37)
-                            if pickPos then
-                                local pickDist = (v35.Position - pickPos).Magnitude
-                                if pickDist > 8 then
-                                    fn72_money(pickPos)
-                                    task.wait(0.3)
-                                else
-                                    fn71_money(v37)
-                                end
-                            end
-                        end
+                        arg13 = (v35 - arg12).Unit * arg13.Magnitude
                     end
                 end
-                task.wait(0.3)
             end
+            return raycast(arg11, arg12, arg13, arg14)
         end)
-    end
+    end)
 
-    local function fn80_money()
-        task.spawn(function()
-            local v32 = nil
-            while true do
-                if Settings.taxi then
-                    local gameplay = Workspace:FindFirstChild("Gameplay")
-                    gameplay = gameplay and gameplay:FindFirstChild("Entities")
-                    gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
-                    if gameplay and gameplay:IsA("Model") then
-                        local primaryPart = gameplay.PrimaryPart or gameplay:FindFirstChildWhichIsA("BasePart")
-                        local v33, v34, v35 = fn40_money(player)
-                        if primaryPart and v35 then
-                            local position = primaryPart.Position
-                            if v32 == nil or (position - v32).Magnitude > 5 then
-                                if tbl10.taxiSafe and tbl10.taxiOrigin then
-                                    v35.CFrame = CFrame.new(tbl10.taxiOrigin)
-                                    local magnitude = (tbl10.taxiOrigin - position).Magnitude
-                                    local n11
-                                    if tbl10.taxiDelayMode == "距离测算" then
-                                        n11 = math.clamp(15 + (math.clamp(magnitude, 2000, 6000) - 2000) / 4000 * 30 + math.random() * 2 - 1, 15, 45)
-                                    else
-                                        n11 = magnitude > 2000 and math.random(15, 45) or 15
-                                    end
-                                    task.wait(n11)
-                                end
-                                v35.CFrame = CFrame.new(position)
-                                v32 = position
-                            end
-                        end
-                    end
-                end
-                task.wait(0.5)
-            end
-        end)
-    end
+    local bulletCircle = Drawing.new("Circle")
+    bulletCircle.Filled = false
+    bulletCircle.NumSides = 64
+    bulletCircle.Visible = false
 
-    local function fn81_money()
-        local gameplay = Workspace:FindFirstChild("Gameplay")
-        gameplay = gameplay and gameplay:FindFirstChild("Entities")
-        gameplay = gameplay and gameplay:FindFirstChild("ClientContent")
-        gameplay = gameplay and gameplay:GetChildren()[1]
-        return gameplay and gameplay:FindFirstChild("Area")
-    end
+    RunService.RenderStepped:Connect(function()
+        local currentCamera = Workspace.CurrentCamera
+        if not currentCamera then return end
+        bulletCircle.Position = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
+        bulletCircle.Radius = bulletCfg.bulletFov
+        bulletCircle.Thickness = 2
+        bulletCircle.Color = fn38_bullet(5)
+        bulletCircle.Visible = bulletCfg.bulletEnabled and bulletCfg.bulletShowFov
+    end)
 
-    local function fn82_money()
-        task.spawn(function()
-            while true do
-                if Settings.bus then
-                    local v32 = fn81_money()
-                    local v33, v34, v35 = fn40_money(player)
-                    if v32 and v34 and v35 then
-                        local seatPart = v34.SeatPart
-                        if seatPart then
-                            local cFrame = v35.CFrame
-                            seatPart.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0) * cFrame:ToObjectSpace(seatPart.CFrame)
-                            seatPart.AssemblyLinearVelocity = Vector3.zero
-                            seatPart.AssemblyAngularVelocity = Vector3.zero
-                            task.wait(0.1)
-                            v34.Sit = false
-                        else
-                            v35.CFrame = v32.CFrame * CFrame.new(17.5, 3, 6.5) * CFrame.Angles(0, 4.7123889803846897, 0)
-                        end
-                        task.wait(5)
-                    end
-                end
-                task.wait(1)
-            end
-        end)
-    end
-
-    local function fn83_money()
-        task.spawn(function()
-            local function cloneFunc4(arg11)
-                local v32 = Workspace
-                for _, v33 in ipairs(arg11) do
-                    v32 = v32 and v32:FindFirstChild(v33)
-                    if not v32 then return end
-                end
-                return v32
-            end
-            while true do
-                if Settings.golf and playerFunc then
-                    pcall(function()
-                        playerFunc:InvokeServer("miniGolf", "createLobby")
-                        task.wait(0.1)
-                        playerFunc:InvokeServer("miniGolf", "setLobbyBid", { bid = 500 })
-                        task.wait(0.1)
-                        playerFunc:InvokeServer("miniGolf", "setLobbyReady")
-                        task.wait(4)
-                        playerFunc:InvokeServer("miniGolf", "shot")
-                        task.wait(0.5)
-                        local v32 = cloneFunc4({ "Gameplay", "Entities", "Content", player.Name })
-                        local v33 = cloneFunc4({ "Gameplay", "Entities", "Content", "_Flag", "FlagPole", "Part" })
-                        if v32 and v33 and v32:IsA("BasePart") then
-                            v32.Position = v33.Position
-                        end
-                    end)
-                end
-                task.wait(Settings.golf and 5 or 1)
-            end
-        end)
-    end
-
-    pcall(fn77_money)
-    pcall(fn79_money)
-    pcall(fn80_money)
-    pcall(fn82_money)
-    pcall(fn83_money)
-
-    G:Toggle({
-        Title = "自动接取任务",
+    BulletTrackTab:Toggle({
+        Title = "子弹追踪",
         Default = false,
-        Callback = function(autoMission)
-            Settings.autoMission = autoMission
+        Callback = function(bulletEnabled)
+            bulletCfg.bulletEnabled = bulletEnabled
         end,
     })
 
-    G:Toggle({
-        Title = "优先高收益任务",
+    BulletTrackTab:Toggle({
+        Title = "只追踪警察",
         Default = false,
-        Callback = function(priorityHighReward)
-            tbl10.priorityHighReward = priorityHighReward
-        end,
-    })
-
-    G:Input({
-        Title = "接取间隔",
-        Value = "2",
-        PlaceholderText = "输入间隔秒数",
-        ClearTextOnFocus = false,
-        Callback = function(arg11)
-            local missionInterval = tonumber(arg11)
-            if missionInterval and missionInterval > 0 then
-                tbl10.missionInterval = missionInterval
+        Callback = function(bulletOnlyPolice)
+            bulletCfg.bulletOnlyPolice = bulletOnlyPolice
+            if bulletOnlyPolice then
+                bulletCfg.bulletOnlyCivilian = false
             end
         end,
     })
 
-    G:Toggle({
-        Title = "安全模式(出租车)",
+    BulletTrackTab:Toggle({
+        Title = "只追踪平民",
         Default = false,
-        Callback = function(taxiSafe)
-            tbl10.taxiSafe = taxiSafe
-            if taxiSafe then
-                local _, _, v44 = fn40_money(player)
-                if v44 then
-                    tbl10.taxiOrigin = v44.Position
-                end
+        Callback = function(bulletOnlyCivilian)
+            bulletCfg.bulletOnlyCivilian = bulletOnlyCivilian
+            if bulletOnlyCivilian then
+                bulletCfg.bulletOnlyPolice = false
             end
         end,
     })
 
-    G:Dropdown({
-        Title = "出租车延迟模式",
-        Values = { "随机时间", "距离测算" },
-        Value = "随机时间",
-        Callback = function(taxiDelayMode)
-            tbl10.taxiDelayMode = taxiDelayMode
+    BulletTrackTab:Toggle({
+        Title = "战斗检测",
+        Default = false,
+        Callback = function(bulletCombatCheck)
+            bulletCfg.bulletCombatCheck = bulletCombatCheck
         end,
     })
 
-    G:Toggle({
-        Title = "出租车刷钱",
-        Default = false,
-        Callback = function(taxi)
-            Settings.taxi = taxi
+    BulletTrackTab:Slider({
+        Title = "追踪FOV",
+        Value = { Min = 10, Max = 1000, Default = 360 },
+        Callback = function(bulletFov)
+            bulletCfg.bulletFov = bulletFov
         end,
     })
 
-    G:Toggle({
-        Title = "公交车刷钱",
-        Default = false,
-        Callback = function(bus)
-            Settings.bus = bus
+    BulletTrackTab:Slider({
+        Title = "追踪距离",
+        Value = { Min = 50, Max = 1000, Default = 300 },
+        Callback = function(bulletDistance)
+            bulletCfg.bulletDistance = bulletDistance
         end,
     })
 
-    G:Toggle({
-        Title = "农民刷钱",
-        Default = false,
-        Callback = function(farmer)
-            Settings.farmer = farmer
+    BulletTrackTab:Dropdown({
+        Title = "追踪部位",
+        Values = { "Head", "Torso", "UpperTorso", "HumanoidRootPart" },
+        Value = "Head",
+        Callback = function(bulletPart)
+            bulletCfg.bulletPart = bulletPart
         end,
     })
 
-    G:Toggle({
-        Title = "高尔夫刷钱",
-        Default = false,
-        Callback = function(golf)
-            Settings.golf = golf
+    BulletTrackTab:Toggle({
+        Title = "显示FOV圈",
+        Default = true,
+        Callback = function(bulletShowFov)
+            bulletCfg.bulletShowFov = bulletShowFov
         end,
     })
 
@@ -1105,70 +940,63 @@ function createUI()
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
 
-VehicleTab:Button({
-    Title = "生成车辆",
-    Callback = function()
-        local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then
-            WindUI:Notify({ Title = "生成车辆", Content = "角色尚未加载", Duration = 3 })
-            return
-        end
-
-        local carModel = ReplicatedStorage:FindFirstChild("Stuff") 
-            and ReplicatedStorage.Stuff:FindFirstChild("Vehicles") 
-            and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian") 
-            and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1") 
-            and ReplicatedStorage.Stuff.Vehicles.Civilian["1"]:FindFirstChild("Lincoln LS 2002")
-        
-        local spawnPoint = workspace:FindFirstChild("World")
-            and workspace.World:FindFirstChild("Interactive")
-            and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn")
-            and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns")
-            and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
-
-        if not carModel or not spawnPoint then
-            WindUI:Notify({ Title = "失败", Content = "sz服务器都不对你开你风", Duration = 3 })
-            return
-        end
-
-        local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
-
-        local success = pcall(function()
-            local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
-            ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-        end)
-
-        if success then
-            WindUI:Notify({ Title = "成功", Content = "正在生成...", Duration = 2 })
-            task.spawn(function()
-                task.wait(0.8)
-                local myCar = nil
-                if vehiclesFolder then
-                    for _, v in ipairs(vehiclesFolder:GetChildren()) do
-                        if v.Name == "Lincoln LS 2002" then
-                            myCar = v
+    VehicleTab:Button({
+        Title = "生成车辆",
+        Callback = function()
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then
+                WindUI:Notify({ Title = "生成车辆", Content = "角色尚未加载", Duration = 3 })
+                return
+            end
+            local carModel = ReplicatedStorage:FindFirstChild("Stuff")
+                and ReplicatedStorage.Stuff:FindFirstChild("Vehicles")
+                and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian")
+                and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1")
+                and ReplicatedStorage.Stuff.Vehicles.Civilian["1"]:FindFirstChild("Lincoln LS 2002")
+            local spawnPoint = workspace:FindFirstChild("World")
+                and workspace.World:FindFirstChild("Interactive")
+                and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn")
+                and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns")
+                and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
+            if not carModel or not spawnPoint then
+                WindUI:Notify({ Title = "失败", Content = "sz服务器都不对你开你风", Duration = 3 })
+                return
+            end
+            local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
+            local success = pcall(function()
+                local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
+                ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+            end)
+            if success then
+                WindUI:Notify({ Title = "成功", Content = "正在生成...", Duration = 2 })
+                task.spawn(function()
+                    task.wait(0.8)
+                    local myCar = nil
+                    if vehiclesFolder then
+                        for _, v in ipairs(vehiclesFolder:GetChildren()) do
+                            if v.Name == "Lincoln LS 2002" then
+                                myCar = v
+                            end
                         end
                     end
-                end
-
-                if myCar then
-                    local targetPos = root.CFrame * CFrame.new(0, 3, 0)
-                    if myCar:IsA("Model") then
-                        myCar:PivotTo(targetPos)
-                    elseif myCar:IsA("BasePart") then
-                        myCar.CFrame = targetPos
+                    if myCar then
+                        local targetPos = root.CFrame * CFrame.new(0, 3, 0)
+                        if myCar:IsA("Model") then
+                            myCar:PivotTo(targetPos)
+                        elseif myCar:IsA("BasePart") then
+                            myCar.CFrame = targetPos
+                        end
+                        WindUI:Notify({ Title = "成功", Content = "已将车辆传送到自身位置", Duration = 3 })
+                    else
+                        WindUI:Notify({ Title = "失败", Content = "请检查是否拥有第一个1500的车辆", Duration = 3 })
                     end
-                    WindUI:Notify({ Title = "成功", Content = "已将车辆传送到自身位置", Duration = 3 })
-                else
-                    WindUI:Notify({ Title = "失败", Content = "请检查是否拥有第一个1500的车辆", Duration = 3 })
-                end
-            end)
-        else
-            WindUI:Notify({ Title = "失败", Content = "生成失败", Duration = 3 })
+                end)
+            else
+                WindUI:Notify({ Title = "失败", Content = "生成失败", Duration = 3 })
+            end
         end
-    end
-})
+    })
 
     VehicleTab:Toggle({
         Title = "车辆加速",
@@ -2057,6 +1885,245 @@ VehicleTab:Button({
             end
         end
     })
+
+    -- ==================== 飞车功能 ====================
+    local flyCarState = {
+        enabled = false,
+        speed = 100,
+        noclip = false,
+        forward = 0,
+        strafe = 0,
+        vertical = 0,
+        conn = nil,
+        bv = nil,
+        noclipParts = {},
+        oldAutoRotate = true,
+    }
+
+    local function flyCarGetControlPart()
+        local char = player.Character
+        if not char then return nil end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.SeatPart then
+            local seat = hum.SeatPart
+            local vehicle = seat.Parent
+            while vehicle and vehicle.ClassName ~= "Model" do
+                vehicle = vehicle.Parent
+            end
+            if vehicle then
+                return vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart") or seat
+            end
+            return seat
+        end
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function flyCarApplyNoclip()
+        local char = player.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local target = (hum and hum.SeatPart and hum.SeatPart.Parent) or char
+        while target and target.ClassName ~= "Model" do
+            target = target.Parent
+        end
+        if not target then target = char end
+        for _, part in ipairs(target:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                table.insert(flyCarState.noclipParts, part)
+                part.CanCollide = false
+            end
+        end
+    end
+
+    local function flyCarRestoreNoclip()
+        for _, part in ipairs(flyCarState.noclipParts) do
+            if part and part.Parent then
+                pcall(function() part.CanCollide = true end)
+            end
+        end
+        flyCarState.noclipParts = {}
+    end
+
+    local function flyCarStart()
+        if flyCarState.conn then return end
+        local part = flyCarGetControlPart()
+        if not part then return end
+
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            flyCarState.oldAutoRotate = hum.AutoRotate
+            hum.AutoRotate = false
+        end
+
+        local oldBV = part:FindFirstChild("FlyCarBV")
+        if oldBV then oldBV:Destroy() end
+
+        local bv = Instance.new("BodyVelocity")
+        bv.Name = "FlyCarBV"
+        bv.Parent = part
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.zero
+        flyCarState.bv = bv
+
+        flyCarState.conn = RunService.Heartbeat:Connect(function()
+            if not flyCarState.enabled then return end
+            local p = flyCarGetControlPart()
+            if not p then return end
+            local cam = Workspace.CurrentCamera
+            if not cam then return end
+
+            pcall(function()
+                p.CFrame = CFrame.new(p.Position) * cam.CFrame.Rotation
+            end)
+
+            local look = cam.CFrame.LookVector
+            local right = cam.CFrame.RightVector
+            local moveDir = Vector3.zero
+
+            if flyCarState.forward ~= 0 then moveDir = moveDir + look * flyCarState.forward end
+            if flyCarState.strafe ~= 0 then moveDir = moveDir + right * flyCarState.strafe end
+            if flyCarState.vertical ~= 0 then moveDir = moveDir + Vector3.new(0, flyCarState.vertical, 0) end
+
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit * flyCarState.speed
+            end
+
+            bv.Velocity = moveDir
+        end)
+    end
+
+    local function flyCarStop()
+        if flyCarState.conn then
+            flyCarState.conn:Disconnect()
+            flyCarState.conn = nil
+        end
+        if flyCarState.bv then
+            flyCarState.bv:Destroy()
+            flyCarState.bv = nil
+        end
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.AutoRotate = flyCarState.oldAutoRotate end
+    end
+
+    -- UI 按钮创建
+    local BTN_SIZE = 80
+    local GAP = 15
+    local MARGIN = 50
+
+    local flyCarBtnGui = Instance.new("ScreenGui")
+    flyCarBtnGui.Name = "FlyCarButtons"
+    flyCarBtnGui.ResetOnSpawn = false
+    flyCarBtnGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    flyCarBtnGui.DisplayOrder = 99999
+    flyCarBtnGui.IgnoreGuiInset = true
+    flyCarBtnGui.Enabled = false
+
+    local successBtn = pcall(function()
+        if gethui then
+            flyCarBtnGui.Parent = gethui()
+        else
+            flyCarBtnGui.Parent = game:GetService("CoreGui")
+        end
+    end)
+    if not successBtn then
+        flyCarBtnGui.Parent = player:WaitForChild("PlayerGui")
+    end
+
+    local function flyCarMakeButton(text, pos)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, BTN_SIZE, 0, BTN_SIZE)
+        btn.Position = pos
+        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        btn.BackgroundTransparency = 0.15
+        btn.BorderSizePixel = 0
+        btn.Text = text
+        btn.TextColor3 = Color3.fromRGB(0, 245, 212)
+        btn.TextSize = 24
+        btn.Font = Enum.Font.GothamBold
+        btn.AutoButtonColor = false
+        btn.Parent = flyCarBtnGui
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 16)
+        corner.Parent = btn
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromHSV(0.5, 1, 1)
+        stroke.Thickness = 3
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = btn
+        return btn
+    end
+
+    local fcFwdBtn = flyCarMakeButton("前", UDim2.new(0, MARGIN, 1, -(MARGIN + BTN_SIZE * 2 + GAP)))
+    local fcBackBtn = flyCarMakeButton("后", UDim2.new(0, MARGIN, 1, -(MARGIN + BTN_SIZE)))
+    local fcUpBtn = flyCarMakeButton("升", UDim2.new(1, -(MARGIN + BTN_SIZE * 2 + GAP), 1, -(MARGIN + BTN_SIZE * 2 + GAP * 2)))
+    local fcDownBtn = flyCarMakeButton("降", UDim2.new(1, -(MARGIN + BTN_SIZE), 1, -(MARGIN + BTN_SIZE * 2 + GAP * 2)))
+    local fcLeftBtn = flyCarMakeButton("左", UDim2.new(1, -(MARGIN + BTN_SIZE * 2 + GAP), 1, -(MARGIN + BTN_SIZE)))
+    local fcRightBtn = flyCarMakeButton("右", UDim2.new(1, -(MARGIN + BTN_SIZE), 1, -(MARGIN + BTN_SIZE)))
+
+    local function flyCarBindButton(btn, onPress, onRelease)
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                onPress()
+            end
+        end)
+        btn.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                onRelease()
+            end
+        end)
+        btn.MouseLeave:Connect(function() onRelease() end)
+    end
+
+    flyCarBindButton(fcFwdBtn, function() flyCarState.forward = 1 end, function() if flyCarState.forward == 1 then flyCarState.forward = 0 end end)
+    flyCarBindButton(fcBackBtn, function() flyCarState.forward = -1 end, function() if flyCarState.forward == -1 then flyCarState.forward = 0 end end)
+    flyCarBindButton(fcLeftBtn, function() flyCarState.strafe = -1 end, function() if flyCarState.strafe == -1 then flyCarState.strafe = 0 end end)
+    flyCarBindButton(fcRightBtn, function() flyCarState.strafe = 1 end, function() if flyCarState.strafe == 1 then flyCarState.strafe = 0 end end)
+    flyCarBindButton(fcUpBtn, function() flyCarState.vertical = 1 end, function() if flyCarState.vertical == 1 then flyCarState.vertical = 0 end end)
+    flyCarBindButton(fcDownBtn, function() flyCarState.vertical = -1 end, function() if flyCarState.vertical == -1 then flyCarState.vertical = 0 end end)
+
+    VehicleTab:Divider({ Text = "飞车" })
+
+    VehicleTab:Input({
+        Title = "输入飞行速度",
+        Value = "100",
+        Placeholder = "输入数字",
+        ClearTextOnFocus = false,
+        Callback = function(value)
+            flyCarState.speed = tonumber(value) or 100
+        end,
+    })
+
+    VehicleTab:Toggle({
+        Title = "启用飞车",
+        Default = false,
+        Callback = function(value)
+            flyCarState.enabled = value
+            if value then
+                flyCarStart()
+                flyCarBtnGui.Enabled = true
+            else
+                flyCarStop()
+                flyCarBtnGui.Enabled = false
+            end
+        end,
+    })
+
+    VehicleTab:Toggle({
+        Title = "车辆穿墙",
+        Default = false,
+        Callback = function(value)
+            flyCarState.noclip = value
+            if value then
+                flyCarApplyNoclip()
+            else
+                flyCarRestoreNoclip()
+            end
+        end,
+    })
+    -- ==================== 飞车功能结束 ====================
+
     RemoteBuyTab:Divider({ Text = "黑市购买" })
     local toolItems = {
         { name = "解密电路", id = "1", itemName = "Decryption Circuit" },
@@ -2217,7 +2284,7 @@ VehicleTab:Button({
         if fastInteractEnabled then prompt.HoldDuration = 0 end
     end)
     InteractTab:Divider({ Text = "互动功能" })
-    
+
     -- 自动黑客小游戏
     local tbl24 = {}
     local function fn50(autoHack)
@@ -2226,26 +2293,21 @@ VehicleTab:Button({
             local framework = player.PlayerScripts:FindFirstChild("Framework")
             framework = framework and require(framework:FindFirstChild("Character"))
             local GameRules = require(ReplicatedStorage.Modules.GameRules)
-
             if GameRules then
                 GameRules.disableHacking = autoHack
                 GameRules.disableMinigames = autoHack
             end
-
             if framework then
                 if not tbl24.hackingMinigame then
                     tbl24.hackingMinigame = framework.hackingMinigame
                 end
-
                 if not tbl24.startMinigame then
                     tbl24.startMinigame = framework.startMinigame
                 end
-
                 if autoHack then
                     framework.hackingMinigame = function()
                         return true
                     end
-
                     framework.startMinigame = function()
                         return true
                     end
@@ -2253,7 +2315,6 @@ VehicleTab:Button({
                     if tbl24.hackingMinigame then
                         framework.hackingMinigame = tbl24.hackingMinigame
                     end
-
                     if tbl24.startMinigame then
                         framework.startMinigame = tbl24.startMinigame
                     end
@@ -2262,16 +2323,16 @@ VehicleTab:Button({
         end)
     end
 
-    InteractTab:Toggle({ 
-        Title = "自动黑客小游戏", 
-        Value = false, 
-        Callback = function(value) 
-            fn50(value) 
-        end 
+    InteractTab:Toggle({
+        Title = "自动黑客小游戏",
+        Value = false,
+        Callback = function(value)
+            fn50(value)
+        end
     })
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
-    
+
     -- 自动捡钱（保留传送逻辑，替换拾取函数为 fn71）
     local function fn40_interact(arg11)
         arg11 = arg11 or player
@@ -2392,7 +2453,7 @@ VehicleTab:Button({
             Settings.autoMoney = autoMoney
         end,
     })
-    
+
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
     local interactDistance = 30
@@ -2428,7 +2489,7 @@ VehicleTab:Button({
         Value = false,
         Callback = function(value) autoCuffEnabled = value end
     })
-     PoliceTab:Toggle({
+    PoliceTab:Toggle({
         Title = "自动点护送",
         Value = false,
         Callback = function(value) autoEscortEnabled = value end
@@ -2678,30 +2739,31 @@ VehicleTab:Button({
             task.wait(0.05)
         end
     end)
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if autoEscortEnabled then
-            local char = player.Character
-            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= player and p.Character then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local head = p.Character:FindFirstChild("Head")
-                        if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
-                            local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-                            if event then
-                                task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
-                                task.wait(0.1)
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            if autoEscortEnabled then
+                local char = player.Character
+                local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        if p ~= player and p.Character then
+                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                            local head = p.Character:FindFirstChild("Head")
+                            if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
+                                local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
+                                if event then
+                                    task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
+                                    task.wait(0.1)
+                                end
                             end
                         end
                     end
                 end
             end
         end
-    end
-end)
+    end)
+
     local FlySpeed = 35
     local flyState = { enabled = false, hrp = nil, hum = nil, microThread = nil, healthThread = nil, diedConn = nil, targetPos = nil, lastTime = 0 }
     local flyAnchor = { active = false, head = nil, hrp = nil, hum = nil, rayLength = 3.5, rayCount = 4, verticalLayers = 2 }
@@ -2951,37 +3013,8 @@ end)
             RunService.Heartbeat:Wait()
         end
     end)
-    B:Divider({ Text = "子弹追踪" })
-    local bulletTrackLoaded = false
-    B:Toggle({
-        Title = "子弹追踪",
-        Value = false,
-        Callback = function(value)
-            if value then
-                if bulletTrackLoaded then return end
-                bulletTrackLoaded = true
-                task.spawn(function()
-                    pcall(function()
-                        loadstring(game:HttpGet("https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua", true))()
-                    end)
-                end)
-            else
-                bulletTrackLoaded = false
-                pcall(function()
-                    local lib = getgenv().Library
-                    if lib and lib.Unload then
-                        lib:Unload()
-                    end
-                end)
-                pcall(function()
-                    local env = getgenv()
-                    if env and env.SilentAimSettings then
-                        env.SilentAimSettings.Enabled = false
-                    end
-                end)
-            end
-        end
-    })
+    -- 已删除原有枪械功能里的子弹追踪，现在使用独立的子弹追踪分类
+
     B:Divider({ Text = "自瞄" })
     local aimOn, aimFOV, aimNoTeam, aimWall, aimGui, aimCircle = false, 150, true, true, nil, nil
     local function aimEnsureCircle()
@@ -3046,11 +3079,7 @@ end)
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
     -- 杀戮光环
-    local tbl12 = { targetPart = "Head" }
-    local tbl21 = {}
-    local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
-
-    local tbl11 = {
+    local auraCfg = {
         auraEnabled = false,
         auraRange = 50,
         auraDamage = 5,
@@ -3058,16 +3087,11 @@ end)
         auraOnlyPolice = false,
         auraOnlyCivilian = false,
         auraCombatCheck = false,
-        bulletEnabled = false,
-        bulletFov = 360,
-        bulletDistance = 300,
-        bulletPart = "Head",
-        bulletShowFov = true,
-        bulletColor = "红色",
-        bulletCombatCheck = false,
-        bulletOnlyPolice = false,
-        bulletOnlyCivilian = false,
     }
+
+    local tbl12 = { targetPart = "Head" }
+    local tbl21 = {}
+    local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
 
     fn38 = function(arg11)
         local n11 = arg11 or 5
@@ -3154,11 +3178,11 @@ end)
     n10 = 0
 
     RunService.Heartbeat:Connect(function()
-        if not tbl11.auraEnabled or not playerEvent then
+        if not auraCfg.auraEnabled or not playerEvent then
             return
         end
         local now = tick()
-        if now - n10 < tbl11.auraInterval then
+        if now - n10 < auraCfg.auraInterval then
             return
         end
         local v32, v33, v34 = fn40(player)
@@ -3169,14 +3193,14 @@ end)
         local v36 = nil
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian)
+            if fn84(plr, auraCfg.auraOnlyPolice, auraCfg.auraOnlyCivilian)
                 and fn62(plr)
-                and fn85(plr, tbl11.auraCombatCheck) then
+                and fn85(plr, auraCfg.auraCombatCheck) then
                 local char = plr.Character
                 local v39 = char and fn87(char)
                 if v39 then
                     local magnitude = (v39.Position - v34.Position).Magnitude
-                    if magnitude <= tbl11.auraRange and (not v36 or magnitude < v36) then
+                    if magnitude <= auraCfg.auraRange and (not v36 or magnitude < v36) then
                         v35 = plr
                         v36 = magnitude
                     end
@@ -3198,7 +3222,7 @@ end)
                     shotCode = { position, (v39.Position - position).Unit },
                     pos = v39.Position,
                     target = v35,
-                    damageFactor = tbl11.auraDamage,
+                    damageFactor = auraCfg.auraDamage,
                     bulletProofTool = false,
                 })
             end)
@@ -3207,82 +3231,11 @@ end)
         end
     end)
 
-    circle = Drawing.new("Circle")
-    circle.Filled = false
-    circle.NumSides = 64
-    circle.Visible = false
-
-    fn86 = function()
-        local currentCamera = Workspace.CurrentCamera
-        if not currentCamera then
-            return
-        end
-        local vector2 = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
-        local bulletFov = tbl11.bulletFov
-        local position = nil
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if fn84(plr, tbl11.bulletOnlyPolice, tbl11.bulletOnlyCivilian)
-                and fn62(plr)
-                and fn85(plr, tbl11.bulletCombatCheck) then
-                local character = plr.Character
-                if character then
-                    character = character:FindFirstChild(tbl11.bulletPart)
-                        or character:FindFirstChild("HumanoidRootPart")
-                end
-                if character then
-                    if (character.Position - currentCamera.CFrame.Position).Magnitude <= tbl11.bulletDistance then
-                        local v32, v33 = currentCamera:WorldToScreenPoint(character.Position)
-                        if v33 and v32.Z > 0 then
-                            local magnitude = (Vector2.new(v32.X, v32.Y) - vector2).Magnitude
-                            if magnitude < bulletFov then
-                                position = character.Position
-                                bulletFov = magnitude
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        return position
-    end
-
-    pcall(function()
-        local raycast = Workspace.Raycast
-
-        hookfunction(Workspace.Raycast, function(arg11, arg12, arg13, arg14)
-            if tbl11.bulletEnabled and arg12 and arg13 then
-                local _, _, v34 = fn40(player)
-                if v34 and (arg12 - v34.Position).Magnitude < 15 then
-                    local v35 = fn86()
-                    if v35 then
-                        arg13 = (v35 - arg12).Unit * arg13.Magnitude
-                    end
-                end
-            end
-
-            return raycast(arg11, arg12, arg13, arg14)
-        end)
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        local currentCamera = Workspace.CurrentCamera
-        if not currentCamera then
-            return
-        end
-        circle.Position = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
-        circle.Radius = tbl11.bulletFov
-        circle.Thickness = 2
-        circle.Color = fn38(5)
-        circle.Visible = tbl11.bulletEnabled and tbl11.bulletShowFov
-    end)
-
     C:Toggle({
         Title = "杀戮光环",
         Default = false,
         Callback = function(auraEnabled)
-            tbl11.auraEnabled = auraEnabled
+            auraCfg.auraEnabled = auraEnabled
         end,
     })
 
@@ -3290,9 +3243,9 @@ end)
         Title = "只攻击警察",
         Default = false,
         Callback = function(auraOnlyPolice)
-            tbl11.auraOnlyPolice = auraOnlyPolice
+            auraCfg.auraOnlyPolice = auraOnlyPolice
             if auraOnlyPolice then
-                tbl11.auraOnlyCivilian = false
+                auraCfg.auraOnlyCivilian = false
             end
         end,
     })
@@ -3301,9 +3254,9 @@ end)
         Title = "只攻击平民",
         Default = false,
         Callback = function(auraOnlyCivilian)
-            tbl11.auraOnlyCivilian = auraOnlyCivilian
+            auraCfg.auraOnlyCivilian = auraOnlyCivilian
             if auraOnlyCivilian then
-                tbl11.auraOnlyPolice = false
+                auraCfg.auraOnlyPolice = false
             end
         end,
     })
@@ -3312,7 +3265,7 @@ end)
         Title = "战斗检测",
         Default = false,
         Callback = function(auraCombatCheck)
-            tbl11.auraCombatCheck = auraCombatCheck
+            auraCfg.auraCombatCheck = auraCombatCheck
         end,
     })
 
@@ -3320,7 +3273,7 @@ end)
         Title = "攻击范围",
         Value = { Min = 10, Max = 500, Default = 50 },
         Callback = function(auraRange)
-            tbl11.auraRange = auraRange
+            auraCfg.auraRange = auraRange
         end,
     })
 
@@ -3328,7 +3281,7 @@ end)
         Title = "伤害倍率",
         Value = { Min = 1, Max = 100, Default = 5 },
         Callback = function(auraDamage)
-            tbl11.auraDamage = auraDamage
+            auraCfg.auraDamage = auraDamage
         end,
     })
 
@@ -3786,7 +3739,6 @@ end)
                 elseif p:GetAttribute("IsWanted") then
                     isWanted = true
                 end
-                
                 if p.Character then
                     for _, child in pairs(p.Character:GetChildren()) do
                         if child:IsA("ObjectValue") then
@@ -3796,7 +3748,6 @@ end)
                         end
                     end
                 end
-
                 local l = Instance.new("TextLabel")
                 l.Size = UDim2.new(1, 0, 0, 18)
                 l.Position = UDim2.new(0, 0, 0, y)
@@ -3807,7 +3758,6 @@ end)
                 l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
                 l.TextXAlignment = Enum.TextXAlignment.Center
                 l.Parent = f
-                
                 if isWanted then
                     l.Text = "[通缉]"
                     l.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -3815,7 +3765,6 @@ end)
                     l.Text = "[" .. team .. "]"
                     l.TextColor3 = color
                 end
-                
                 y = y + 20
                 lines = lines + 1
             end
