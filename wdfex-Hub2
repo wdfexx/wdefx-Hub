@@ -210,7 +210,7 @@ function createUI()
     })
 
     Window:EditOpenButton({
-        Title = 'wdfex<font color="rgb(255, 215, 0)">Hub</font>',
+        Title = 'wdfex-<font color="rgb(255, 215, 0)">Hub</font>',
         RichText = true,
         Icon = "crown",
         CornerRadius = UDim.new(0, 16),
