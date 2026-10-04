@@ -153,7 +153,7 @@ for i = 1, #username do
     end
 end
 
-local version = "v4.8"
+local version = "v5.3"
 local coloredVersion = ""
 for i = 1, #version do
     local colorIndex = (i - 1) % #gradientColors + 1
@@ -640,25 +640,76 @@ function createUI()
     AuthorTab:Paragraph({ Title = "作者QQ：1687426335", Desc = "" })
     AuthorTab:Paragraph({ Title = "此脚本仅 wdfex 一人开发", Desc = "" })
 
-    AuthorTab:Toggle({
-        Title = "降低卡顿",
-        Value = false,
-        Callback = function(value)
-            local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
-            if mainGui then
-                local mainFrame = mainGui:FindFirstChildOfClass("Frame")
-                if mainFrame then
-                    for _, child in ipairs(mainFrame:GetDescendants()) do
-                        if child:IsA("ImageLabel") then child.Visible = not value end
-                    end
-                    if value then
-                        mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                        mainFrame.BackgroundTransparency = 0
-                    else
-                        mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-                        mainFrame.BackgroundTransparency = 0
-                    end
+    -- =================== 管理员检测系统 ===================
+    local AdminDetectEnabled = true
+    local flaggedAdmins = {}
+
+    local function CheckAdmin(player)
+        if not AdminDetectEnabled then return end
+        if flaggedAdmins[player] then return end
+        if not player or not player.Parent then return end
+
+        local suspicious = false
+        local reason = ""
+
+        -- 1️⃣ Group检测
+        pcall(function()
+            for _, g in ipairs(player:GetGroups()) do
+                if g.Rank >= 200 then
+                    suspicious = true
+                    reason = "高Rank玩家"
                 end
+            end
+        end)
+
+        -- ===== 触发 =====
+        if suspicious then
+            flaggedAdmins[player] = true
+            WindUI:Notify({ Title = "⚠️ 管理员警告", Content = player.Name .. " - " .. reason, Duration = 5 })
+        end
+    end
+
+    -- 玩家加入检测
+    Players.PlayerAdded:Connect(function(p)
+        task.wait(1)
+        CheckAdmin(p)
+    end)
+
+    -- 初始化检测
+    for _, p in ipairs(Players:GetPlayers()) do
+        task.spawn(function()
+            CheckAdmin(p)
+        end)
+    end
+
+    -- 循环检测
+    task.spawn(function()
+        while true do
+            if AdminDetectEnabled then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    CheckAdmin(p)
+                end
+            end
+            task.wait(2)
+        end
+    end)
+
+    -- 清理缓存
+    Players.PlayerRemoving:Connect(function(p)
+        flaggedAdmins[p] = nil
+    end)
+
+    local adminToggle
+    adminToggle = AuthorTab:Toggle({
+        Title = "管理员检测",
+        Value = true,
+        Callback = function(value)
+            if not value then
+                WindUI:Notify({ Title = "提示", Content = "管理员检测无法关闭", Duration = 2 })
+                task.spawn(function()
+                    task.wait(0.1)
+                    adminToggle:SetValue(true)
+                end)
             end
         end
     })
