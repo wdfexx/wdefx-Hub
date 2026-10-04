@@ -1,7 +1,6 @@
 local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/tfcygvunbind/557/main/😭😭😭😭'))()
 
 local bgIds = {
-    "rbxassetid://77134245733232",
     "rbxassetid://86231208323692",
     "rbxassetid://120259800200854",
     "rbxassetid://137106311236242"
@@ -206,7 +205,7 @@ function createUI()
         ScrollBarEnabled = true,
         Resizable = true,
         Background = currentBg,
-        BackgroundImageTransparency = 0,
+        BackgroundImageTransparency = 0.01,
         User = {
             Enabled = true,
             Callback = function()
