@@ -1,4 +1,13 @@
 local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/tfcygvunbind/557/main/😭😭😭😭'))()
+
+local bgIds = {
+    "rbxassetid://77134245733232",
+    "rbxassetid://86231208323692",
+    "rbxassetid://120259800200854",
+    "rbxassetid://137106311236242"
+}
+local currentBg = bgIds[math.random(1, #bgIds)]
+
 WindUI.TransparencyValue = 0.1
 WindUI:SetTheme("MonokaiPro")
 
@@ -196,8 +205,8 @@ function createUI()
         HideSearchBar = false,
         ScrollBarEnabled = true,
         Resizable = true,
-        Background = "rbxassetid://80621723309719",
-        BackgroundImageTransparency = 0.50,
+        Background = currentBg,
+        BackgroundImageTransparency = 0,
         User = {
             Enabled = true,
             Callback = function()
