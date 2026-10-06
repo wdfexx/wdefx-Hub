@@ -2961,6 +2961,24 @@ function createUI()
     local targetDisplayGui = nil
     local targetDisplayLabel = nil
 
+    local auraTeamMap = {
+        ["Police"] = "警察", ["Fire"] = "火焰", ["Medical"] = "医疗", ["Road"] = "道路",
+        ["Civilian"] = "平民", ["Citizen"] = "平民", ["Criminal"] = "匪徒", ["Gang"] = "黑帮",
+        ["Military"] = "军人", ["Delivery"] = "送货", ["Farmer"] = "农民", ["Banker"] = "银行家",
+        ["Mayor"] = "市长", ["Journalist"] = "记者", ["Lawyer"] = "律师", ["Prisoner"] = "囚犯",
+        ["Guard"] = "狱警", ["Driver"] = "司机", ["Chef"] = "厨师", ["Builder"] = "建筑工",
+        ["Miner"] = "矿工", ["Fisherman"] = "渔夫", ["Merchant"] = "商人", ["Student"] = "学生",
+        ["Teacher"] = "老师", ["Engineer"] = "工程师", ["Scientist"] = "科学家", ["Pilot"] = "飞行员",
+        ["Courier"] = "快递员", ["BusDriver"] = "公交车司机"
+    }
+
+    local function GetAuraTeamName(plr)
+        if plr and plr.Team then
+            return auraTeamMap[plr.Team.Name] or plr.Team.Name
+        end
+        return "平民"
+    end
+
     local function CreateTargetDisplay()
         if targetDisplayGui then return end
         targetDisplayGui = Instance.new("ScreenGui")
@@ -2970,8 +2988,8 @@ function createUI()
         targetDisplayGui.Parent = player:WaitForChild("PlayerGui")
 
         targetDisplayLabel = Instance.new("TextLabel")
-        targetDisplayLabel.Size = UDim2.new(0, 220, 0, 30)
-        targetDisplayLabel.Position = UDim2.new(1, -230, 1, -50)
+        targetDisplayLabel.Size = UDim2.new(0, 320, 0, 30)
+        targetDisplayLabel.Position = UDim2.new(1, -330, 1, -50)
         targetDisplayLabel.BackgroundTransparency = 1
         targetDisplayLabel.Text = "未检测到目标"
         targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3000,7 +3018,7 @@ function createUI()
         targetDisplayGui.Enabled = true
 
         if currentTarget then
-            targetDisplayLabel.Text = "当前目标: " .. currentTarget.Name
+            targetDisplayLabel.Text = "当前目标: " .. currentTarget.Name .. "（" .. GetAuraTeamName(currentTarget) .. "）"
             targetDisplayLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
         else
             targetDisplayLabel.Text = "未检测到目标"
