@@ -1972,6 +1972,54 @@ function createUI()
         end
     })
 
+    -- =================== 删除车辆碰撞伤害 ===================
+    VehicleTab:Divider({ Text = "删除车辆碰撞伤害" })
+
+    local disableCarCollision = false
+
+    VehicleTab:Toggle({
+        Title = "删除车辆碰撞伤害",
+        Value = false,
+        Callback = function(value)
+            disableCarCollision = value
+            if value then
+                WindUI:Notify({ Title = "删除车辆碰撞伤害", Content = "开启成功👍", Duration = 3 })
+                task.spawn(function()
+                    while disableCarCollision and not isDestroyed do
+                        pcall(function()
+                            local char = player.Character
+                            local hum = char and char:FindFirstChildOfClass("Humanoid")
+                            local seatPart = hum and hum.SeatPart
+                            if seatPart then
+                                local current = seatPart
+                                while current and current ~= workspace do
+                                    local collisions = current:FindFirstChild("Collisions")
+                                    if collisions then
+                                        local colObj = collisions:FindFirstChild("_Collision")
+                                        if colObj then
+                                            local args = {
+                                                [1] = "vehicle",
+                                                [2] = "collision",
+                                                [3] = { colObj, colObj, colObj },
+                                                [4] = 0
+                                            }
+                                            ReplicatedStorage.Remote.PlayerEvent:FireServer(unpack(args))
+                                        end
+                                        break
+                                    end
+                                    current = current.Parent
+                                end
+                            end
+                        end)
+                        task.wait(0.1)
+                    end
+                end)
+            else
+                WindUI:Notify({ Title = "删除车辆碰撞伤害", Content = "已关闭", Duration = 3 })
+            end
+        end
+    })
+
     RemoteBuyTab:Divider({ Text = "黑市购买" })
 
     local toolItems = {
@@ -3015,22 +3063,21 @@ function createUI()
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
+    -- =================== 杀戮光环（新版结构 + 保留攻击NPC） ===================
     local tbl12 = { targetPart = "Head" }
     local tbl21 = {}
     local tbl26 = { Head = { "Head", "HumanoidRootPart" } }
 
     local tbl11 = {
-        auraEnabled = false, auraRange = 50, auraDamage = 5, auraInterval = 0.05,
-        auraOnlyPolice = false, auraOnlyCivilian = false, auraCombatCheck = false,
-        affectNPC = false, bulletEnabled = false, bulletFov = 360, bulletDistance = 300,
-        bulletPart = "Head", bulletShowFov = true, bulletColor = "红色",
-        bulletCombatCheck = false, bulletOnlyPolice = false, bulletOnlyCivilian = false,
+        auraEnabled = false,
+        auraRange = 50,
+        auraDamage = 5,
+        auraInterval = 0.05,
+        auraOnlyPolice = false,
+        auraOnlyCivilian = false,
+        auraCombatCheck = false,
+        affectNPC = false,
     }
-
-    local function fn38color(arg11)
-        local n11 = arg11 or 5
-        return Color3.fromHSV(tick() % n11 / n11, 1, 1)
-    end
 
     local fn40_common = function(arg11)
         arg11 = arg11 or player
@@ -3133,7 +3180,8 @@ function createUI()
             lastNPCCheckAura = now
             local playerPos = v34.Position
             local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
-            local nearestNPCHead, nearestNPCDist = nil, nil
+            local nearestNPCHead = nil
+            local nearestNPCDist = nil
             for _, part in ipairs(nearbyParts) do
                 local model = part:FindFirstAncestorOfClass("Model")
                 if model and not Players:GetPlayerFromCharacter(model) then
@@ -3163,67 +3211,6 @@ function createUI()
                 end)
             end
         end
-    end)
-
-    local circle = Drawing.new("Circle")
-    circle.Filled = false
-    circle.NumSides = 64
-    circle.Visible = false
-
-    local function fn86()
-        local currentCamera = Workspace.CurrentCamera
-        if not currentCamera then return nil end
-        local vector2 = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
-        local bulletFov = tbl11.bulletFov
-        local position = nil
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if fn84(plr, tbl11.bulletOnlyPolice, tbl11.bulletOnlyCivilian)
-                and fn62(plr)
-                and fn85(plr, tbl11.bulletCombatCheck) then
-                local character = plr.Character
-                if character then
-                    character = character:FindFirstChild(tbl11.bulletPart) or character:FindFirstChild("HumanoidRootPart")
-                end
-                if character then
-                    if (character.Position - currentCamera.CFrame.Position).Magnitude <= tbl11.bulletDistance then
-                        local v32, v33 = currentCamera:WorldToScreenPoint(character.Position)
-                        if v33 and v32.Z > 0 then
-                            local magnitude = (Vector2.new(v32.X, v32.Y) - vector2).Magnitude
-                            if magnitude < bulletFov then
-                                position = character.Position
-                                bulletFov = magnitude
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        return position
-    end
-
-    pcall(function()
-        local raycast = Workspace.Raycast
-        hookfunction(Workspace.Raycast, function(arg11, arg12, arg13, arg14)
-            if tbl11.bulletEnabled and arg12 and arg13 then
-                local _, _, v34 = fn40_common(player)
-                if v34 and (arg12 - v34.Position).Magnitude < 15 then
-                    local v35 = fn86()
-                    if v35 then arg13 = (v35 - arg12).Unit * arg13.Magnitude end
-                end
-            end
-            return raycast(arg11, arg12, arg13, arg14)
-        end)
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        local currentCamera = Workspace.CurrentCamera
-        if not currentCamera then return end
-        circle.Position = Vector2.new(currentCamera.ViewportSize.X / 2, currentCamera.ViewportSize.Y / 2)
-        circle.Radius = tbl11.bulletFov
-        circle.Thickness = 2
-        circle.Color = fn38color(5)
-        circle.Visible = tbl11.bulletEnabled and tbl11.bulletShowFov
     end)
 
     C:Toggle({ Title = "杀戮光环", Default = false, Callback = function(v) tbl11.auraEnabled = v end })
