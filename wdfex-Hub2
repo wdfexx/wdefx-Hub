@@ -206,7 +206,7 @@ function createUI()
         ScrollBarEnabled = true,
         Resizable = true,
         Background = currentBg,
-        BackgroundImageTransparency = 0,
+        BackgroundImageTransparency = 0.07,
         User = {
             Enabled = true,
             Callback = function()
@@ -635,13 +635,11 @@ function createUI()
         end)
     end
 
-    -- =================== 作者信息 ===================
     local AuthorTab = Window:Tab({ Title = "作者信息" })
     AuthorTab:Paragraph({ Title = "作者：wdfex", Desc = "" })
     AuthorTab:Paragraph({ Title = "作者QQ：1687426335", Desc = "" })
     AuthorTab:Paragraph({ Title = "此脚本仅 wdfex 一人开发", Desc = "" })
 
-    -- =================== 管理员检测系统 ===================
     local AdminDetectEnabled = true
     local flaggedAdmins = {}
 
@@ -1972,7 +1970,6 @@ function createUI()
         end
     })
 
-    -- =================== 删除车辆碰撞伤害 ===================
     VehicleTab:Divider({ Text = "删除车辆碰撞伤害" })
 
     local disableCarCollision = false
@@ -2237,125 +2234,6 @@ function createUI()
 
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
 
-    local function fn40_interact(arg11)
-        arg11 = arg11 or player
-        local seen = {}
-        local list = {}
-        local function add(model)
-            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
-                seen[model] = true
-                table.insert(list, model)
-            end
-        end
-        pcall(function() add(arg11.Character) end)
-        pcall(function()
-            local charactersFolder = Workspace:FindFirstChild("Characters")
-            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
-        end)
-        for _, character in ipairs(list) do
-            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-                or character:FindFirstChild("Torso")
-                or character:FindFirstChild("UpperTorso")
-                or (humanoid and humanoid.RootPart)
-            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
-            if humanoidRootPart then return character, humanoid, humanoidRootPart end
-        end
-    end
-
-    local function fn70_interact(arg11)
-        if not arg11 or not arg11.Parent then return end
-        local parent = arg11.Parent
-        if parent:IsA("BasePart") then return parent.Position end
-        if parent:IsA("Attachment") then return parent.WorldPosition end
-        if parent:IsA("Model") then
-            local primaryPart = parent.PrimaryPart or parent:FindFirstChildWhichIsA("BasePart")
-            if primaryPart then return primaryPart.Position end
-        end
-    end
-
-    local fn71 = function(arg11)
-        if not arg11 then return end
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(arg11, 0)
-            else
-                arg11.HoldDuration = 0
-                arg11:InputHoldBegin()
-                task.wait(0.1)
-                arg11:InputHoldEnd()
-            end
-        end)
-    end
-
-    local function fn72_interact(arg11)
-        local v32, v33, v34 = fn40_interact(player)
-        if not v32 or not v34 or not arg11 then return end
-        local cframe = CFrame.new(arg11 + Vector3.new(0, 3, 0))
-        v32:PivotTo(cframe)
-        pcall(function()
-            if playerEvent then
-                local n11 = ((v32:GetAttribute("CharPivotToId") or 0) + 1) % 100
-                v32:SetAttribute("CharPivotToId", n11)
-                playerEvent:FireServer("charPivotTo", cframe, v32, n11)
-            end
-        end)
-    end
-
-    task.spawn(function()
-        while true do
-            if Settings.autoMoney then
-                local v32, v33, v34 = fn40_interact(player)
-                if v34 then
-                    local v35, v36 = nil, nil
-                    local count = 0
-                    for _, descendant in ipairs(Workspace:GetDescendants()) do
-                        count = count + 1
-                        if count % 100 == 0 then task.wait() end
-                        local isProximityPrompt = descendant:IsA("ProximityPrompt")
-                        local flag12
-                        if isProximityPrompt then
-                            local promptName = descendant.Name
-                            local actionText = string.lower(tostring(descendant.ActionText or ""))
-                            local objectText = string.lower(tostring(descendant.ObjectText or ""))
-                            flag12 = promptName == "CashDrop" or promptName == "GetItem" or promptName == "Money"
-                                or actionText:find("pick", 1, true) or actionText:find("cash", 1, true)
-                                or actionText:find("collect", 1, true) or actionText:find("grab", 1, true)
-                                or objectText:find("cash", 1, true) or objectText:find("money", 1, true)
-                        else
-                            flag12 = isProximityPrompt
-                        end
-                        if flag12 then
-                            local v37 = fn70_interact(descendant)
-                            if v37 then
-                                local magnitude = (v34.Position - v37).Magnitude
-                                if not v35 or magnitude < v35 then
-                                    v35 = magnitude
-                                    v36 = descendant
-                                    continue
-                                end
-                            end
-                        end
-                    end
-                    if v36 and v35 and v35 < 120 then
-                        if v35 > 8 then
-                            fn72_interact(fn70_interact(v36))
-                            task.wait(0.3)
-                        end
-                        fn71(v36)
-                    end
-                end
-            end
-            task.wait(1)
-        end
-    end)
-
-    InteractTab:Toggle({
-        Title = "自动捡钱",
-        Default = false,
-        Callback = function(autoMoney) Settings.autoMoney = autoMoney end,
-    })
-
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
     local interactDistance = 30
@@ -2406,13 +2284,13 @@ function createUI()
     task.spawn(function()
         while true do
             if PoliceSettings.teleport then
-                local _, _, myRoot = fn40_interact(player)
+                local _, _, myRoot = fn40_common(player)
                 if myRoot then
                     local closest, closestDist = nil, nil
                     for _, plr in ipairs(Players:GetPlayers()) do
                         if plr ~= player and plr.Team and plr.Team.Name == "Civilian"
                             and (plr:GetAttribute("WantedLevel") or 0) > 0 then
-                            local _, _, targetRoot = fn40_interact(plr)
+                            local _, _, targetRoot = fn40_common(plr)
                             if targetRoot then
                                 local dist = (targetRoot.Position - myRoot.Position).Magnitude
                                 if dist <= PoliceSettings.range and (not closestDist or dist < closestDist) then
@@ -3063,7 +2941,6 @@ function createUI()
     B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
     B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
-    -- =================== 杀戮光环（新版结构 + 保留攻击NPC） ===================
     local tbl12 = { targetPart = "Head" }
     local tbl21 = {}
     local tbl26 = { Head = { "Head", "HumanoidRootPart" } }
@@ -3079,7 +2956,109 @@ function createUI()
         affectNPC = false,
     }
 
-    local fn40_common = function(arg11)
+    local showTarget = true
+    local currentTarget = nil
+    local targetDisplayGui = nil
+    local targetDisplayLabel = nil
+
+    local auraTeamMap = {
+        ["Police"] = "警察",
+        ["Fire"] = "火焰",
+        ["Medical"] = "医疗",
+        ["Road"] = "道路",
+        ["Civilian"] = "平民",
+        ["Citizen"] = "平民",
+        ["Criminal"] = "匪徒",
+        ["Gang"] = "黑帮",
+        ["Military"] = "军人",
+        ["Delivery"] = "送货",
+        ["Farmer"] = "农民",
+        ["Banker"] = "银行家",
+        ["Mayor"] = "市长",
+        ["Journalist"] = "记者",
+        ["Lawyer"] = "律师",
+        ["Prisoner"] = "囚犯",
+        ["Guard"] = "狱警",
+        ["Driver"] = "司机",
+        ["Chef"] = "厨师",
+        ["Builder"] = "建筑工",
+        ["Miner"] = "矿工",
+        ["Fisherman"] = "渔夫",
+        ["Merchant"] = "商人",
+        ["Student"] = "学生",
+        ["Teacher"] = "老师",
+        ["Engineer"] = "工程师",
+        ["Scientist"] = "科学家",
+        ["Pilot"] = "飞行员",
+        ["Courier"] = "快递员",
+        ["BusDriver"] = "公交车司机"
+    }
+
+    local function GetAuraTeamName(plr)
+        if plr and plr.Team then
+            return auraTeamMap[plr.Team.Name] or plr.Team.Name
+        end
+        return "平民"
+    end
+
+    local function GetAuraTeamColor(plr)
+        if plr and plr.Team then
+            local tn = plr.Team.Name
+            if tn == "Police" then
+                return Color3.fromRGB(0, 150, 255)
+            end
+        end
+        return Color3.fromRGB(255, 255, 255)
+    end
+
+    local function CreateTargetDisplay()
+        if targetDisplayGui then return end
+        targetDisplayGui = Instance.new("ScreenGui")
+        targetDisplayGui.Name = "KillAuraTargetDisplay"
+        targetDisplayGui.ResetOnSpawn = false
+        targetDisplayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        targetDisplayGui.Parent = player:WaitForChild("PlayerGui")
+
+        targetDisplayLabel = Instance.new("TextLabel")
+        targetDisplayLabel.Size = UDim2.new(0, 260, 0, 30)
+        targetDisplayLabel.Position = UDim2.new(1, -270, 1, -50)
+        targetDisplayLabel.BackgroundTransparency = 1
+        targetDisplayLabel.Text = "未检测到目标"
+        targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        targetDisplayLabel.TextSize = 18
+        targetDisplayLabel.Font = Enum.Font.GothamBold
+        targetDisplayLabel.TextStrokeTransparency = 0.2
+        targetDisplayLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        targetDisplayLabel.TextXAlignment = Enum.TextXAlignment.Right
+        targetDisplayLabel.Parent = targetDisplayGui
+    end
+
+    local function DestroyTargetDisplay()
+        if targetDisplayGui then
+            targetDisplayGui:Destroy()
+            targetDisplayGui = nil
+            targetDisplayLabel = nil
+        end
+    end
+
+    local function UpdateTargetDisplay()
+        if not showTarget or not tbl11.auraEnabled then
+            if targetDisplayGui then targetDisplayGui.Enabled = false end
+            return
+        end
+        if not targetDisplayGui then CreateTargetDisplay() end
+        targetDisplayGui.Enabled = true
+
+        if currentTarget then
+            targetDisplayLabel.Text = currentTarget.Name .. "（" .. GetAuraTeamName(currentTarget) .. "）"
+            targetDisplayLabel.TextColor3 = GetAuraTeamColor(currentTarget)
+        else
+            targetDisplayLabel.Text = "未检测到目标"
+            targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+        end
+    end
+
+    local fn40_aura = function(arg11)
         arg11 = arg11 or player
         local seen = {}
         local list = {}
@@ -3105,24 +3084,24 @@ function createUI()
         end
     end
 
-    local fn62 = function(arg11)
-        local _, v33 = fn40_common(arg11)
+    local fn62_aura = function(arg11)
+        local _, v33 = fn40_aura(arg11)
         return v33 ~= nil and v33.Health > 0
     end
 
-    local fn84 = function(arg11, arg12, arg13)
+    local fn84_aura = function(arg11, arg12, arg13)
         if not arg11 or arg11 == player then return false end
         if arg12 then return arg11.Team and arg11.Team.Name == "Police" end
         if arg13 then return arg11.Team and arg11.Team.Name == "Civilian" end
         return true
     end
 
-    local fn85 = function(arg11, arg12)
+    local fn85_aura = function(arg11, arg12)
         if not arg12 then return true end
         return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
     end
 
-    local fn87 = function(arg11)
+    local fn87_aura = function(arg11)
         local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
         for _, v33 in ipairs(tbl29) do
             local v34 = arg11:FindFirstChild(v33)
@@ -3135,19 +3114,28 @@ function createUI()
     local lastNPCCheckAura = 0
 
     RunService.Heartbeat:Connect(function()
-        if not tbl11.auraEnabled or not playerEvent then return end
+        if not tbl11.auraEnabled or not playerEvent then
+            currentTarget = nil
+            UpdateTargetDisplay()
+            return
+        end
+
         local now = tick()
-        if now - n10 < tbl11.auraInterval then return end
-        local v32, v33, v34 = fn40_common(player)
-        if not v34 then return end
+        local v32, v33, v34 = fn40_aura(player)
+        if not v34 then
+            currentTarget = nil
+            UpdateTargetDisplay()
+            return
+        end
+
         local v35, v36 = nil, nil
 
         for _, plr in ipairs(Players:GetPlayers()) do
-            if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian)
-                and fn62(plr)
-                and fn85(plr, tbl11.auraCombatCheck) then
+            if fn84_aura(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian)
+                and fn62_aura(plr)
+                and fn85_aura(plr, tbl11.auraCombatCheck) then
                 local char = plr.Character
-                local v39 = char and fn87(char)
+                local v39 = char and fn87_aura(char)
                 if v39 then
                     local magnitude = (v39.Position - v34.Position).Magnitude
                     if magnitude <= tbl11.auraRange and (not v36 or magnitude < v36) then
@@ -3158,22 +3146,28 @@ function createUI()
             end
         end
 
+        currentTarget = v35
+        UpdateTargetDisplay()
+
+        if now - n10 < tbl11.auraInterval then return end
+
         if v35 then
             local targetChar = v35.Character
-            local v39 = targetChar and fn87(targetChar)
+            local v39 = targetChar and fn87_aura(targetChar)
             local position = v34.Position
-            if not v39 then return end
-            pcall(function()
-                playerEvent:FireServer("damage", {
-                    bodyParts = { { "Head", 1 } },
-                    shotCode = { position, (v39.Position - position).Unit },
-                    pos = v39.Position,
-                    target = v35,
-                    damageFactor = tbl11.auraDamage,
-                    bulletProofTool = false,
-                })
-            end)
-            n10 = now
+            if v39 then
+                pcall(function()
+                    playerEvent:FireServer("damage", {
+                        bodyParts = { { "Head", 1 } },
+                        shotCode = { position, (v39.Position - position).Unit },
+                        pos = v39.Position,
+                        target = v35,
+                        damageFactor = tbl11.auraDamage,
+                        bulletProofTool = false,
+                    })
+                end)
+                n10 = now
+            end
         end
 
         if tbl11.affectNPC and now - lastNPCCheckAura >= 0.5 then
@@ -3213,9 +3207,39 @@ function createUI()
         end
     end)
 
-    C:Toggle({ Title = "杀戮光环", Default = false, Callback = function(v) tbl11.auraEnabled = v end })
+    C:Toggle({
+        Title = "杀戮光环",
+        Default = false,
+        Callback = function(v)
+            tbl11.auraEnabled = v
+            if not v then
+                currentTarget = nil
+                if targetDisplayGui then targetDisplayGui.Enabled = false end
+            else
+                if showTarget then
+                    CreateTargetDisplay()
+                    UpdateTargetDisplay()
+                end
+            end
+        end
+    })
     C:Toggle({ Title = "只攻击警察", Default = false, Callback = function(v) tbl11.auraOnlyPolice = v; if v then tbl11.auraOnlyCivilian = false end end })
     C:Toggle({ Title = "只攻击平民", Default = false, Callback = function(v) tbl11.auraOnlyCivilian = v; if v then tbl11.auraOnlyPolice = false end end })
+    C:Toggle({
+        Title = "显示攻击目标",
+        Value = true,
+        Callback = function(value)
+            showTarget = value
+            if value then
+                if tbl11.auraEnabled then
+                    CreateTargetDisplay()
+                    UpdateTargetDisplay()
+                end
+            else
+                DestroyTargetDisplay()
+            end
+        end
+    })
     C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
     C:Toggle({ Title = "战斗检测", Default = false, Callback = function(v) tbl11.auraCombatCheck = v end })
     C:Slider({ Title = "攻击范围", Value = { Min = 10, Max = 500, Default = 50 }, Callback = function(v) tbl11.auraRange = v end })
@@ -3237,7 +3261,7 @@ function createUI()
     }
 
     local function fn40_rage(arg11)
-        return fn40_common(arg11)
+        return fn40_aura(arg11)
     end
 
     local function fn63(arg11)
@@ -3289,10 +3313,10 @@ function createUI()
 
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= player
-                and fn84(plr, tbl13.policeLock, tbl13.civilianLock)
-                and fn85(plr, tbl13.combatCheck) then
+                and fn84_aura(plr, tbl13.policeLock, tbl13.civilianLock)
+                and fn85_aura(plr, tbl13.combatCheck) then
                 local v36, v37 = fn40_rage(plr)
-                local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87(v36))
+                local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87_aura(v36))
                 if v36 and v37 and v38 and v37.Health > 0 then
                     if tbl13.jobCheck and fn63(plr) == v35 then continue end
                     if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then continue end
