@@ -2374,7 +2374,7 @@ function createUI()
     end })
     C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
     C:Toggle({ Title = "战斗检测", Default = false, Callback = function(v) tbl11.auraCombatCheck = v end })
-    C:Slider({ Title = "攻击范围", Value = { Min = 10, Max = 500, Default = 50 }, Callback = function(v) tbl11.auraRange = v end })
+    C:Slider({ Title = "攻击范围", Value = { Min = 10, Max = 600, Default = 50 }, Callback = function(v) tbl11.auraRange = v end })
     C:Slider({ Title = "伤害倍率", Value = { Min = 1, Max = 100, Default = 5 }, Callback = function(v) tbl11.auraDamage = v end })
 
     -- =================== 自动卸车胎 ===================
