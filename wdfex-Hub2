@@ -11,7 +11,7 @@ for i = 1, #username do
     local colorIndex = (i - 1) % #gradientColors + 1
     coloredUsername = coloredUsername .. '<font color="' .. gradientColors[colorIndex] .. '">' .. username:sub(i, i) .. '</font>'
 end
-local version = "v5.4"
+local version = "v5.5"
 local coloredVersion = ""
 for i = 1, #version do
     local colorIndex = (i - 1) % #gradientColors + 1
@@ -536,6 +536,57 @@ function createUI()
             end
         end
     end)
+
+    -- =================== 人物旋转 ===================
+    A:Divider({ Text = "人物旋转" })
+    local FL_SPIN = FL_SPIN or {}
+    FL_SPIN.Enabled = false
+    FL_SPIN.Speed   = 1111 -- 固定速度，不可调节
+    FL_SPIN.Random  = false
+    FL_SPIN._angle  = 0
+    FL_SPIN._conn   = nil
+
+    local function getRootPart()
+        local char = player.Character
+        if char then
+            return char:FindFirstChild("HumanoidRootPart")
+        end
+        return nil
+    end
+
+    function FL_SPIN.Step(dt)
+        if not FL_SPIN.Enabled then return end
+        if FL_SPIN.Random then
+            FL_SPIN._angle = math.random() * math.pi * 2
+        else
+            FL_SPIN._angle = (FL_SPIN._angle + math.rad(tonumber(FL_SPIN.Speed) or 1111) * dt) % (math.pi * 2)
+        end
+        local r = getRootPart()
+        if r then
+            pcall(function()
+                r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, FL_SPIN._angle, 0)
+            end)
+        end
+    end
+
+    RunService.Heartbeat:Connect(function(dt)
+        FL_SPIN.Step(dt)
+    end)
+
+    A:Toggle({ Title = "人物旋转", Value = false, Callback = function(value)
+        FL_SPIN.Enabled = value
+        if not value then
+            FL_SPIN._angle = 0
+            pcall(function()
+                local r = getRootPart()
+                if r then
+                    r.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, 0, 0)
+                end
+            end)
+        end
+    end })
+    -- =================== 人物旋转结束 ===================
+
     A:Divider({ Text = "碰飞" })
     A:Button({ Title = "碰飞", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/0Ben1/fe./main/Fling%20GUI"))() end })
 
@@ -587,6 +638,7 @@ function createUI()
     local InteractTab = AddTab(MainSection, "互动", "hand")
     local PoliceTab = AddTab(MainSection, "警察功能", "shield")
     local DoctorTab = AddTab(MainSection, "医生功能", "heart-pulse")
+    local TeamChangeTab = AddTab(MainSection, "远程更换队伍", "users")
     local VehicleTab = AddTab(MainSection, "车辆功能", "car")
     local B = AddTab(MainSection, "枪械功能", "target")
     local C = AddTab(MainSection, "杀戮光环", "skull")
@@ -596,6 +648,190 @@ function createUI()
     local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
     local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
 
+    -- =================== 远程更换队伍 ===================
+    local teamConfigs = {
+        ["警察"] = {
+            pos = Vector3.new(3376.82, -337.46, -485.25),
+            execute = function()
+                local dept = workspace.Gameplay:FindFirstChild("Police Department")
+                if dept and dept:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = dept._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 警察局抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["医生"] = {
+            pos = Vector3.new(3915.84, -337.12, -140.36),
+            execute = function()
+                local hospital = workspace.Gameplay:FindFirstChild("Hospital")
+                if hospital and hospital:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = hospital._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 医院抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["火焰"] = {
+            pos = Vector3.new(3582.20, -314.66, 609.29),
+            execute = function()
+                local fireDept = workspace.Gameplay:FindFirstChild("Fire Department")
+                if fireDept and fireDept:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = fireDept._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 消防局抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["转运"] = {
+            pos = Vector3.new(4163.80, -337.50, 906.93),
+            execute = function()
+                local transit = workspace.Gameplay:FindFirstChild("Transit Center")
+                if transit and transit:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = transit._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 转运中心抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["配送"] = {
+            pos = Vector3.new(4398.52, 3.04, 1608.58),
+            execute = function()
+                local delivery = workspace.World.Important:FindFirstChild("Delivery Center")
+                if delivery and delivery:FindFirstChild("ScriptedPersistent") and delivery.ScriptedPersistent:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = delivery.ScriptedPersistent._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 配送中心抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["道路服务"] = {
+            pos = Vector3.new(4257.18, -337.44, 1189.34),
+            execute = function()
+                local road = workspace.Gameplay:FindFirstChild("Road Service")
+                if road and road:FindFirstChild("_TeamChangeWithEntrance") then
+                    local args = {
+                        [1] = "selectTeam",
+                        [2] = road._TeamChangeWithEntrance._Interaction.TeamChange
+                    }
+                    ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+                else
+                    warn("[wdfex-Hub] 道路服务抓包对象未找到，可能服务器未加载或距离过远")
+                end
+            end
+        },
+        ["退出队伍"] = {
+            pos = Vector3.new(3743.60, 3.72, -437.37),
+            execute = function()
+                local args = {
+                    [1] = "selectTeam",
+                    [2] = "LeaveTeam"
+                }
+                ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
+            end
+        }
+    }
+
+    TeamChangeTab:Divider({ Text = "更换队伍" })
+    local selectedTeamChange = "警察"
+    TeamChangeTab:Dropdown({
+        Title = "选择要更换的队伍",
+        Values = {"警察", "医生", "火焰", "转运", "配送", "道路服务"},
+        Value = selectedTeamChange,
+        Callback = function(value) selectedTeamChange = value end
+    })
+    local isChanging = false
+    TeamChangeTab:Button({
+        Title = "更换指定队伍",
+        Callback = function()
+            if isChanging then return end
+            isChanging = true
+            
+            local config = teamConfigs[selectedTeamChange]
+            if not config then isChanging = false; return end
+            
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then isChanging = false; return end
+            
+            local originalCFrame = root.CFrame
+            root.CFrame = CFrame.new(config.pos)
+            task.wait(0.5)
+            
+            local success, err = pcall(config.execute)
+            if not success then
+                warn("[wdfex-Hub] 抓包执行失败: " .. tostring(err))
+            end
+            
+            task.wait(0.9)
+            
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = originalCFrame
+            end
+            isChanging = false
+        end
+    })
+
+    TeamChangeTab:Divider({ Text = "退出队伍" })
+    local selectedQuit = "退出队伍"
+    TeamChangeTab:Dropdown({
+        Title = "选择操作",
+        Values = {"退出队伍"},
+        Value = selectedQuit,
+        Callback = function(value) selectedQuit = value end
+    })
+    local isQuitting = false
+    TeamChangeTab:Button({
+        Title = "退出队伍",
+        Callback = function()
+            if isQuitting then return end
+            isQuitting = true
+            
+            local config = teamConfigs[selectedQuit]
+            if not config then isQuitting = false; return end
+            
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then isQuitting = false; return end
+            
+            local originalCFrame = root.CFrame
+            root.CFrame = CFrame.new(config.pos)
+            task.wait(0.5)
+            
+            local success, err = pcall(config.execute)
+            if not success then
+                warn("[wdfex-Hub] 抓包执行失败: " .. tostring(err))
+            end
+            
+            task.wait(0.9)
+            
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = originalCFrame
+            end
+            isQuitting = false
+        end
+    })
+
     -- =================== 车辆功能 ===================
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
@@ -604,17 +840,16 @@ function createUI()
         Callback = function()
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
-            if not root then WindUI:Notify({ Title = "生成车辆", Content = "角色尚未加载", Duration = 3 }); return end
+            if not root then return end
             local carModel = ReplicatedStorage:FindFirstChild("Stuff") and ReplicatedStorage.Stuff:FindFirstChild("Vehicles") and ReplicatedStorage.Stuff.Vehicles:FindFirstChild("Civilian") and ReplicatedStorage.Stuff.Vehicles.Civilian:FindFirstChild("1") and ReplicatedStorage.Stuff.Vehicles.Civilian["1"]:FindFirstChild("Lincoln LS 2002")
             local spawnPoint = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Interactive") and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn") and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns") and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
-            if not carModel or not spawnPoint then WindUI:Notify({ Title = "失败", Content = "sz服务器都不对你开你风", Duration = 3 }); return end
+            if not carModel or not spawnPoint then return end
             local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
             local success = pcall(function()
                 local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
                 ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
             end)
             if success then
-                WindUI:Notify({ Title = "成功", Content = "正在生成...", Duration = 2 })
                 task.spawn(function()
                     task.wait(0.8)
                     local myCar = nil
@@ -626,13 +861,8 @@ function createUI()
                     if myCar then
                         local targetPos = root.CFrame * CFrame.new(0, 3, 0)
                         if myCar:IsA("Model") then myCar:PivotTo(targetPos) elseif myCar:IsA("BasePart") then myCar.CFrame = targetPos end
-                        WindUI:Notify({ Title = "成功", Content = "已将车辆传送到自身位置", Duration = 3 })
-                    else
-                        WindUI:Notify({ Title = "失败", Content = "请检查是否拥有第一个1500的车辆", Duration = 3 })
                     end
                 end)
-            else
-                WindUI:Notify({ Title = "失败", Content = "生成失败", Duration = 3 })
             end
         end
     })
@@ -1776,96 +2006,857 @@ function createUI()
         end
     end)
 
-    -- =================== 远程更换队伍 (位于医生功能正下方) ===================
-    local TeamChangeTab = AddTab(MainSection, "远程更换队伍", "users")
-    local isChangingTeam = false
-
-    local TeamData = {
-        ["警察"] = { pos = Vector3.new(3376.82, -337.46, -485.25), path = function() return workspace.Gameplay:FindFirstChild("Police Department")._TeamChangeWithEntrance._Interaction.TeamChange end },
-        ["医生"] = { pos = Vector3.new(3915.84, -337.12, -140.36), path = function() return workspace.Gameplay.Hospital._TeamChangeWithEntrance._Interaction.TeamChange end },
-        ["火焰"] = { pos = Vector3.new(3582.20, -314.66, 609.29), path = function() return workspace.Gameplay:FindFirstChild("Fire Department")._TeamChangeWithEntrance._Interaction.TeamChange end },
-        ["转运"] = { pos = Vector3.new(4163.80, -337.50, 906.93), path = function() return workspace.Gameplay:FindFirstChild("Transit Center")._TeamChangeWithEntrance._Interaction.TeamChange end },
-        ["配送"] = { pos = Vector3.new(4398.52, 3.04, 1608.58), path = function() return workspace.World.Important:FindFirstChild("Delivery Center").ScriptedPersistent._TeamChangeWithEntrance._Interaction.TeamChange end },
-        ["道路服务"] = { pos = Vector3.new(4257.18, -337.44, 1189.34), path = function() return workspace.Gameplay:FindFirstChild("Road Service")._TeamChangeWithEntrance._Interaction.TeamChange end }
-    }
-
-    local function executeTeamChange(targetPos, isLeaveTeam, teamPath)
-        if isChangingTeam then return end
-        isChangingTeam = true
-
+    local FlySpeed = 35
+    local flyState = { enabled = false, hrp = nil, hum = nil, microThread = nil, healthThread = nil, diedConn = nil, targetPos = nil, lastTime = 0 }
+    local flyAnchor = { active = false, head = nil, hrp = nil, hum = nil, rayLength = 3.5, rayCount = 4, verticalLayers = 2 }
+    local FlyControl
+    task.spawn(function() pcall(function() local pm = player.PlayerScripts:FindFirstChild("PlayerModule"); if pm then FlyControl = require(pm):GetControls() end end) end)
+    local function flyRefreshParts()
         local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then isChangingTeam = false; return end
-
-        local originalCFrame = root.CFrame
-        root.CFrame = CFrame.new(targetPos)
-        task.wait(0.5)
-
-        pcall(function()
-            local args
-            if isLeaveTeam then
-                args = { [1] = "selectTeam", [2] = "LeaveTeam" }
+        if not char then flyState.hrp = nil; flyState.hum = nil; flyAnchor.hrp = nil; flyAnchor.head = nil; flyAnchor.hum = nil; return end
+        flyState.hrp = char:FindFirstChild("HumanoidRootPart")
+        flyState.hum = char:FindFirstChildOfClass("Humanoid")
+        flyAnchor.hrp = flyState.hrp
+        flyAnchor.head = char:FindFirstChild("Head")
+        flyAnchor.hum = flyState.hum
+    end
+    local function flyDetectWall()
+        local hrp = flyAnchor.hrp
+        if not hrp then return false end
+        local pos = hrp.Position
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Blacklist
+        params.FilterDescendantsInstances = { player.Character }
+        for i = 1, flyAnchor.rayCount do
+            local angle = (i / flyAnchor.rayCount) * 2 * math.pi
+            local dx, dz = math.cos(angle), math.sin(angle)
+            for j = -(flyAnchor.verticalLayers - 1) // 2, (flyAnchor.verticalLayers - 1) // 2 do
+                local dir = Vector3.new(dx, j * 0.5, dz).Unit
+                local result = workspace:Raycast(pos, dir * flyAnchor.rayLength, params)
+                if result and result.Instance and result.Instance.CanCollide and result.Instance.Transparency < 0.9 then return true end
+            end
+        end
+        return false
+    end
+    local function flyEnterAnchor()
+        if flyAnchor.active then return end
+        if not flyAnchor.head or not flyAnchor.hrp or not flyAnchor.hum then return end
+        flyAnchor.head.Anchored = true; flyAnchor.hum.PlatformStand = true; flyAnchor.active = true
+    end
+    local function flyExitAnchor()
+        if not flyAnchor.active then return end
+        if flyAnchor.head and flyAnchor.hum then flyAnchor.head.Anchored = false; flyAnchor.hum.PlatformStand = false end
+        flyAnchor.active = false
+    end
+    local function flyMicroStepLoop()
+        flyState.targetPos = flyState.hrp.Position
+        flyState.lastTime = tick()
+        while flyState.enabled do
+            local now = tick()
+            local dt = now - flyState.lastTime
+            flyState.lastTime = now
+            if not flyState.hrp or not flyState.hrp.Parent then break end
+            local inWall = flyDetectWall()
+            if inWall and not flyAnchor.active then flyEnterAnchor() elseif not inWall and flyAnchor.active then flyExitAnchor() end
+            local moveDir
+            if FlyControl then
+                local mv = FlyControl:GetMoveVector()
+                local cf = workspace.CurrentCamera.CFrame
+                moveDir = (cf.LookVector * -mv.Z) + (cf.RightVector * mv.X)
+            else moveDir = (flyState.hum and flyState.hum.MoveDirection) or Vector3.zero end
+            local vertical = 0
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vertical = 1
+            elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then vertical = -1 end
+            flyState.targetPos = flyState.targetPos + (moveDir + Vector3.new(0, vertical, 0)) * FlySpeed * dt
+            local currentPos = flyState.hrp.Position
+            local remaining = flyState.targetPos - currentPos
+            local distance = remaining.Magnitude
+            if distance > 0 then
+                local steps = math.ceil(distance / 10)
+                local stepVec = remaining / steps
+                for i = 1, steps do
+                    if not flyState.enabled then break end
+                    currentPos = currentPos + stepVec
+                    flyState.hrp.CFrame = CFrame.new(currentPos) * flyState.hrp.CFrame.Rotation
+                    flyState.hrp.Velocity = Vector3.zero
+                end
             else
-                local changeObj = teamPath()
-                if changeObj then
-                    args = { [1] = "selectTeam", [2] = changeObj }
-                else
-                    return
+                flyState.hrp.CFrame = CFrame.new(flyState.targetPos) * flyState.hrp.CFrame.Rotation
+                flyState.hrp.Velocity = Vector3.zero
+            end
+            if flyState.hum then flyState.hum:ChangeState(Enum.HumanoidStateType.Climbing) end
+            RunService.Heartbeat:Wait()
+        end
+    end
+    local function flyHealthLockLoop()
+        while flyState.enabled do
+            if flyState.hum and flyState.hum.Health <= 0 then flyState.hum.Health = flyState.hum.MaxHealth end
+            task.wait(0.1)
+        end
+    end
+    local function startFly()
+        if flyState.enabled then return end
+        flyRefreshParts()
+        if not flyState.hrp or not flyState.hum then return end
+        flyState.enabled = true
+        flyState.hum:ChangeState(Enum.HumanoidStateType.Climbing)
+        flyState.microThread = task.spawn(flyMicroStepLoop)
+        flyState.healthThread = task.spawn(flyHealthLockLoop)
+        flyState.diedConn = flyState.hum.Died:Connect(function() if flyState.hum and flyState.enabled then flyState.hum.Health = flyState.hum.MaxHealth; flyState.hum:ChangeState(Enum.HumanoidStateType.Running) end end)
+    end
+    local function stopFly()
+        flyState.enabled = false
+        flyExitAnchor()
+        if flyState.microThread then task.cancel(flyState.microThread); flyState.microThread = nil end
+        if flyState.healthThread then task.cancel(flyState.healthThread); flyState.healthThread = nil end
+        if flyState.diedConn then flyState.diedConn:Disconnect(); flyState.diedConn = nil end
+        if flyState.hum then flyState.hum:ChangeState(Enum.HumanoidStateType.Running) end
+    end
+    player.CharacterAdded:Connect(function() if flyState.enabled then stopFly(); task.wait(0.2); startFly() end end)
+    FlyTab:Divider({ Text = "飞行" })
+    FlyTab:Toggle({ Title = "飞行（绕过）", Value = false, Callback = function(value) if value then startFly() else stopFly() end end })
+    FlyTab:Slider({ Title = "飞行速度", Step = 1, Value = { Min = 10, Max = 620, Default = 35 }, Callback = function(value) FlySpeed = value end })
+    local flyQuickToggle, flyQuickScreenGui, flyQuickButton = false, nil, nil
+    local flyDragging, flyDragStart, flyStartPos = false, nil, nil
+    local flyStrokeConn = nil
+    local lockFlyBtn = false
+    local function DestroyFlyQuickToggle()
+        if flyStrokeConn then flyStrokeConn:Disconnect(); flyStrokeConn = nil end
+        if flyQuickScreenGui then flyQuickScreenGui:Destroy(); flyQuickScreenGui = nil; flyQuickButton = nil end
+    end
+    local function CreateFlyQuickToggle()
+        if flyQuickButton then return end
+        flyQuickScreenGui = Instance.new("ScreenGui")
+        flyQuickScreenGui.Name = "FlyQuickToggle"
+        flyQuickScreenGui.ResetOnSpawn = false
+        flyQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        flyQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(0, 115, 0, 46)
+        button.Position = UDim2.new(0.5, -58, 0.2, 0)
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        button.BackgroundTransparency = 0.15
+        button.BorderSizePixel = 0
+        button.Text = "飞天: 关"
+        button.TextColor3 = Color3.fromHSV(0, 1, 1)
+        button.TextSize = 14
+        button.Font = Enum.Font.GothamBold
+        button.Parent = flyQuickScreenGui
+        flyQuickButton = button
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+        local flyStroke = Instance.new("UIStroke")
+        flyStroke.Thickness = 2
+        flyStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        flyStroke.Color = Color3.fromHSV(0, 1, 1)
+        flyStroke.Parent = button
+        flyStrokeConn = RunService.Heartbeat:Connect(function()
+            if flyQuickButton and flyQuickButton.Parent then
+                local hue = (tick() * 0.15) % 1
+                flyStroke.Color = Color3.fromHSV(hue, 1, 1)
+                flyQuickButton.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+            end
+        end)
+        local function updateFlyStatus()
+            if flyQuickButton then flyQuickButton.Text = flyState.enabled and "飞天: 开" or "飞天: 关" end
+        end
+        button.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if not lockFlyBtn then flyDragging = true; flyDragStart = input.Position; flyStartPos = button.Position end
+            end
+        end)
+        button.InputChanged:Connect(function(input)
+            if flyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - flyDragStart
+                button.Position = UDim2.new(flyStartPos.X.Scale, flyStartPos.X.Offset + delta.X, flyStartPos.Y.Scale, flyStartPos.Y.Offset + delta.Y)
+            end
+        end)
+        button.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then flyDragging = false end
+        end)
+        button.MouseButton1Click:Connect(function()
+            if flyState.enabled then stopFly() else startFly() end
+            updateFlyStatus()
+        end)
+        updateFlyStatus()
+        task.spawn(function()
+            while flyQuickScreenGui and flyQuickScreenGui.Parent do task.wait(0.3); updateFlyStatus() end
+        end)
+    end
+    FlyTab:Toggle({ Title = "飞天快捷开关", Value = false, Callback = function(value) flyQuickToggle = value; if value then CreateFlyQuickToggle() else DestroyFlyQuickToggle() end end })
+    FlyTab:Toggle({ Title = "锁定飞天快捷开关", Value = false, Callback = function(value) lockFlyBtn = value end })
+    FlyTab:Divider({ Text = "移速" })
+    local speedBypassOn, speedBypassValue = false, 20
+    FlyTab:Toggle({ Title = "修改移速（绕过）", Value = false, Callback = function(value) speedBypassOn = value end })
+    FlyTab:Slider({ Title = "移速", Step = 1, Value = { Min = 5, Max = 150, Default = 20 }, Callback = function(value) speedBypassValue = value end })
+    RunService.Heartbeat:Connect(function(dt)
+        if not speedBypassOn then return end
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if hum and root and hum.MoveDirection.Magnitude > 0 then root.CFrame = root.CFrame + hum.MoveDirection * speedBypassValue * dt end
+    end)
+
+    B:Divider({ Text = "枪械功能" })
+    B:Toggle({ Title = "超快射速", Value = false, Callback = function(value)
+        if not value then return end
+        local function ModifyWeaponStats()
+            for _, tbl in pairs(getgc(true)) do
+                if type(tbl) == "table" then
+                    if rawget(tbl, "SHOOT_MODE") then rawset(tbl, "SHOOT_MODE", 2) end
+                    if rawget(tbl, "RPM") then rawset(tbl, "RPM", math.huge) end
+                    if rawget(tbl, "DAMAGE") then rawset(tbl, "DAMAGE", math.huge) end
                 end
             end
-            ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-        end)
-
-        task.wait(0.9)
-
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            player.Character.HumanoidRootPart.CFrame = originalCFrame
         end
-        isChangingTeam = false
+        ModifyWeaponStats()
+        local char = player.Character
+        if char then local humanoid = char:FindFirstChildOfClass("Humanoid"); if humanoid then humanoid.Died:Connect(ModifyWeaponStats) end end
+        WindUI:Notify({ Title = "武器功能", Content = "超快射速已生效", Duration = 3 })
+    end })
+    local infAmmoEnabled = false
+    B:Toggle({ Title = "无限子弹", Value = false, Callback = function(value) infAmmoEnabled = value end })
+    task.spawn(function()
+        while not isDestroyed do
+            if infAmmoEnabled then
+                local characterFolder = Workspace:FindFirstChild("Characters") and Workspace.Characters:FindFirstChild(player.Name)
+                if characterFolder then
+                    for _, gun in ipairs(characterFolder:GetChildren()) do
+                        local config = gun:FindFirstChild("Config")
+                        if config then
+                            local ammo = config:FindFirstChild("Ammo")
+                            local totalAmmo = config:FindFirstChild("TotalAmmo")
+                            if ammo then ammo.Value = math.huge end
+                            if totalAmmo then totalAmmo.Value = math.huge end
+                        end
+                    end
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+    B:Divider({ Text = "子弹追踪" })
+    local bulletTrackLoaded = false
+    B:Toggle({ Title = "子弹追踪", Value = false, Callback = function(value)
+        if value then
+            if bulletTrackLoaded then return end
+            bulletTrackLoaded = true
+            task.spawn(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua", true))() end) end)
+        else
+            bulletTrackLoaded = false
+            pcall(function() local lib = getgenv().Library; if lib and lib.Unload then lib:Unload() end end)
+            pcall(function() local env = getgenv(); if env and env.SilentAimSettings then env.SilentAimSettings.Enabled = false end end)
+        end
+    end })
+    B:Divider({ Text = "自瞄" })
+    local aimOn, aimFOV, aimNoTeam, aimWall, aimGui, aimCircle = false, 150, true, true, nil, nil
+    local function aimEnsureCircle()
+        if aimGui then return end
+        aimGui = Instance.new("ScreenGui")
+        aimGui.Name = "SA_AimFOV"
+        aimGui.ResetOnSpawn = false
+        aimGui.IgnoreGuiInset = true
+        aimGui.Parent = player:WaitForChild("PlayerGui")
+        aimCircle = Instance.new("Frame")
+        aimCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+        aimCircle.Position = UDim2.fromScale(0.5, 0.5)
+        aimCircle.BackgroundTransparency = 1
+        aimCircle.Parent = aimGui
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.5
+        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Transparency = 0.4
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = aimCircle
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = aimCircle
     end
-
-    TeamChangeTab:Divider({ Text = "更换队伍" })
-    local teamOptions = { "警察", "医生", "火焰", "转运", "配送", "道路服务" }
-    local selectedTeam = teamOptions[1]
-    TeamChangeTab:Dropdown({
-        Title = "选择要更换的队伍",
-        Values = teamOptions,
-        Value = selectedTeam,
-        Callback = function(value) selectedTeam = value end
-    })
-    TeamChangeTab:Button({
-        Title = "更换指定队伍",
-        Callback = function()
-            local data = TeamData[selectedTeam]
-            if data then
-                executeTeamChange(data.pos, false, data.path)
+    RunService.RenderStepped:Connect(function()
+        if not aimOn then if aimGui then aimGui.Enabled = false end; return end
+        aimEnsureCircle()
+        aimGui.Enabled = true
+        aimCircle.Size = UDim2.fromOffset(aimFOV * 2, aimFOV * 2)
+        local camera = workspace.CurrentCamera
+        if not camera then return end
+        local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+        local best, bestDist = nil, aimFOV
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                local head = p.Character:FindFirstChild("Head")
+                if hum and hum.Health > 0 and head and not (aimNoTeam and p.Team and player.Team and p.Team == player.Team) then
+                    local sp, onScreen = camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if d < bestDist then
+                            local visible = true
+                            if aimWall then
+                                local rp = RaycastParams.new()
+                                rp.FilterType = Enum.RaycastFilterType.Exclude
+                                rp.FilterDescendantsInstances = { player.Character }
+                                local res = Workspace:Raycast(camera.CFrame.Position, (head.Position - camera.CFrame.Position).Unit * 500, rp)
+                                visible = (not res) or res.Instance:IsDescendantOf(p.Character)
+                            end
+                            if visible then bestDist = d; best = head end
+                        end
+                    end
+                end
             end
         end
-    })
+        if best then camera.CFrame = CFrame.lookAt(camera.CFrame.Position, best.Position) end
+    end)
+    B:Toggle({ Title = "自瞄", Value = false, Callback = function(value) aimOn = value end })
+    B:Slider({ Title = "FOV圈大小", Step = 1, Value = { Min = 30, Max = 400, Default = 150 }, Callback = function(value) aimFOV = value end })
+    B:Toggle({ Title = "不瞄准队友", Value = true, Callback = function(value) aimNoTeam = value end })
+    B:Toggle({ Title = "墙壁检测", Value = true, Callback = function(value) aimWall = value end })
 
-    TeamChangeTab:Divider({ Text = "退出队伍" })
-    local leaveOptions = { "退出队伍" }
-    local selectedLeave = leaveOptions[1]
-    TeamChangeTab:Dropdown({
-        Title = "选择退出队伍",
-        Values = leaveOptions,
-        Value = selectedLeave,
-        Callback = function(value) selectedLeave = value end
-    })
-    TeamChangeTab:Button({
-        Title = "退出队伍",
-        Callback = function()
-            executeTeamChange(Vector3.new(3743.60, 3.72, -437.37), true, nil)
+    local tbl12 = { targetPart = "Head" }
+    local tbl21 = {}
+    local tbl26 = { Head = {"Head", "HumanoidRootPart"} }
+    local tbl11 = {
+        auraEnabled = false, auraRange = 50, auraDamage = 5, auraInterval = 0.05,
+        auraOnlyPolice = false, auraOnlyCivilian = false, auraCombatCheck = false,
+        affectNPC = false, bulletEnabled = false, bulletFov = 360, bulletDistance = 300,
+        bulletPart = "Head", bulletShowFov = true, bulletColor = "红色",
+        bulletCombatCheck = false, bulletOnlyPolice = false, bulletOnlyCivilian = false,
+    }
+    local showTarget = true
+    local currentTarget = nil
+    local targetDisplayGui = nil
+    local targetDisplayLabel = nil
+    local auraTeamMap = {
+        ["Police"] = "警察", ["Fire"] = "火焰", ["Medical"] = "医疗", ["Road"] = "道路",
+        ["Civilian"] = "平民", ["Citizen"] = "平民", ["Criminal"] = "匪徒", ["Gang"] = "黑帮",
+        ["Military"] = "军人", ["Delivery"] = "送货", ["Farmer"] = "农民", ["Banker"] = "银行家",
+        ["Mayor"] = "市长", ["Journalist"] = "记者", ["Lawyer"] = "律师", ["Prisoner"] = "囚犯",
+        ["Guard"] = "狱警", ["Driver"] = "司机", ["Chef"] = "厨师", ["Builder"] = "建筑工",
+        ["Miner"] = "矿工", ["Fisherman"] = "渔夫", ["Merchant"] = "商人", ["Student"] = "学生",
+        ["Teacher"] = "老师", ["Engineer"] = "工程师", ["Scientist"] = "科学家", ["Pilot"] = "飞行员",
+        ["Courier"] = "快递员", ["BusDriver"] = "公交车司机"
+    }
+    local function GetAuraTeamName(plr)
+        if plr and plr.Team then return auraTeamMap[plr.Team.Name] or plr.Team.Name end
+        return "平民"
+    end
+    local function GetAuraTeamColor(plr)
+        if plr and plr.Team then
+            if plr.Team.Name == "Police" then return Color3.fromRGB(0, 150, 255) end
+        end
+        return Color3.fromRGB(255, 255, 255)
+    end
+    local function CreateTargetDisplay()
+        if targetDisplayGui then return end
+        targetDisplayGui = Instance.new("ScreenGui")
+        targetDisplayGui.Name = "KillAuraTargetDisplay"
+        targetDisplayGui.ResetOnSpawn = false
+        targetDisplayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        targetDisplayGui.Parent = player:WaitForChild("PlayerGui")
+        targetDisplayLabel = Instance.new("TextLabel")
+        targetDisplayLabel.Size = UDim2.new(0, 260, 0, 30)
+        targetDisplayLabel.Position = UDim2.new(1, -270, 1, -50)
+        targetDisplayLabel.BackgroundTransparency = 1
+        targetDisplayLabel.Text = "未检测到目标"
+        targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        targetDisplayLabel.TextSize = 18
+        targetDisplayLabel.Font = Enum.Font.GothamBold
+        targetDisplayLabel.TextStrokeTransparency = 0.2
+        targetDisplayLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        targetDisplayLabel.TextXAlignment = Enum.TextXAlignment.Right
+        targetDisplayLabel.Parent = targetDisplayGui
+    end
+    local function DestroyTargetDisplay()
+        if targetDisplayGui then targetDisplayGui:Destroy(); targetDisplayGui = nil; targetDisplayLabel = nil end
+    end
+    local function UpdateTargetDisplay()
+        if not showTarget or not tbl11.auraEnabled then
+            if targetDisplayGui then targetDisplayGui.Enabled = false end
+            return
+        end
+        if not targetDisplayGui then CreateTargetDisplay() end
+        targetDisplayGui.Enabled = true
+        if currentTarget then
+            targetDisplayLabel.Text = currentTarget.Name .. "（" .. GetAuraTeamName(currentTarget) .. "）"
+            targetDisplayLabel.TextColor3 = GetAuraTeamColor(currentTarget)
+        else
+            targetDisplayLabel.Text = "未检测到目标"
+            targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+        end
+    end
+    fn40 = function(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then seen[model] = true; table.insert(list, model) end
+        end
+        pcall(function() add(arg11.Character) end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
+            if humanoidRootPart then return character, humanoid, humanoidRootPart end
+        end
+    end
+    fn62 = function(arg11) local _, v33 = fn40(arg11); return v33 ~= nil and v33.Health > 0 end
+    fn84 = function(arg11, arg12, arg13)
+        if not arg11 or arg11 == player then return false end
+        if arg12 then return arg11.Team and arg11.Team.Name == "Police" end
+        if arg13 then return arg11.Team and arg11.Team.Name == "Civilian" end
+        return true
+    end
+    fn85 = function(arg11, arg12)
+        if not arg12 then return true end
+        return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
+    end
+    fn87 = function(arg11)
+        local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
+        for _, v33 in ipairs(tbl29) do
+            local v34 = arg11:FindFirstChild(v33)
+            if v34 then return v34 end
+        end
+        return arg11:FindFirstChild("HumanoidRootPart")
+    end
+    n10 = 0
+    local lastNPCCheckAura = 0
+    RunService.Heartbeat:Connect(function()
+        if not tbl11.auraEnabled or not playerEvent then
+            currentTarget = nil
+            UpdateTargetDisplay()
+            return
+        end
+        local now = tick()
+        local v32, v33, v34 = fn40(player)
+        if not v34 then currentTarget = nil; UpdateTargetDisplay(); return end
+        local v35 = nil; local v36 = nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian) and fn62(plr) and fn85(plr, tbl11.auraCombatCheck) then
+                local char = plr.Character
+                local v39 = char and fn87(char)
+                if v39 then
+                    local magnitude = (v39.Position - v34.Position).Magnitude
+                    if magnitude <= tbl11.auraRange and (not v36 or magnitude < v36) then v35 = plr; v36 = magnitude end
+                end
+            end
+        end
+        currentTarget = v35
+        UpdateTargetDisplay()
+        if now - n10 < tbl11.auraInterval then return end
+        if v35 then
+            local targetChar = v35.Character
+            local v39 = targetChar and fn87(targetChar)
+            local position = v34.Position
+            if v39 then
+                pcall(function()
+                    playerEvent:FireServer("damage", {
+                        bodyParts = { { "Head", 1 } },
+                        shotCode = { position, (v39.Position - position).Unit },
+                        pos = v39.Position,
+                        target = v35,
+                        damageFactor = tbl11.auraDamage,
+                        bulletProofTool = false,
+                    })
+                end)
+                n10 = now
+            end
+        end
+        if tbl11.affectNPC and now - lastNPCCheckAura >= 0.5 then
+            lastNPCCheckAura = now
+            local playerPos = v34.Position
+            local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
+            local nearestNPC, nearestNPCHead, nearestNPCDist = nil, nil, nil
+            for _, part in ipairs(nearbyParts) do
+                local model = part:FindFirstAncestorOfClass("Model")
+                if model and not Players:GetPlayerFromCharacter(model) then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                        if head then
+                            local dist = (head.Position - playerPos).Magnitude
+                            if dist <= 20 and (not nearestNPCDist or dist < nearestNPCDist) then
+                                nearestNPC = model; nearestNPCHead = head; nearestNPCDist = dist
+                            end
+                        end
+                    end
+                end
+            end
+            if nearestNPC and nearestNPCHead then
+                pcall(function()
+                    playerEvent:FireServer("damage", {
+                        bodyParts = { { "Head", 1 } },
+                        shotCode = { playerPos, (nearestNPCHead.Position - playerPos).Unit },
+                        pos = nearestNPCHead.Position,
+                        target = nearestNPC,
+                        damageFactor = tbl11.auraDamage,
+                        bulletProofTool = false,
+                    })
+                end)
+            end
+        end
+    end)
+    C:Toggle({ Title = "杀戮光环", Default = false, Callback = function(v)
+        tbl11.auraEnabled = v
+        if not v then currentTarget = nil; if targetDisplayGui then targetDisplayGui.Enabled = false end
+        else if showTarget then CreateTargetDisplay(); UpdateTargetDisplay() end end
+    end })
+    C:Toggle({ Title = "只攻击警察", Default = false, Callback = function(v) tbl11.auraOnlyPolice = v; if v then tbl11.auraOnlyCivilian = false end end })
+    C:Toggle({ Title = "只攻击平民", Default = false, Callback = function(v) tbl11.auraOnlyCivilian = v; if v then tbl11.auraOnlyPolice = false end end })
+    C:Toggle({ Title = "显示攻击目标", Value = true, Callback = function(value)
+        showTarget = value
+        if value then if tbl11.auraEnabled then CreateTargetDisplay(); UpdateTargetDisplay() end
+        else DestroyTargetDisplay() end
+    end })
+    C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
+    C:Toggle({ Title = "战斗检测", Default = false, Callback = function(v) tbl11.auraCombatCheck = v end })
+    C:Slider({ Title = "攻击范围", Value = { Min = 10, Max = 600, Default = 50 }, Callback = function(v) tbl11.auraRange = v end })
+    C:Slider({ Title = "伤害倍率", Value = { Min = 1, Max = 100, Default = 5 }, Callback = function(v) tbl11.auraDamage = v end })
+
+    -- =================== 自动卸车胎 ===================
+    do
+        local RS = game:GetService("ReplicatedStorage")
+        local LocalPlayer = player
+
+        FL_TIRE = FL_TIRE or {}
+        FL_TIRE.Enabled   = false
+        FL_TIRE.Range     = 400
+        FL_TIRE.Interval  = 0.15
+        FL_TIRE.RayMode   = "near"
+        FL_TIRE.ShotInterval = 0.06
+        FL_TIRE.SendBullet   = true
+        FL_TIRE.Queue        = {}
+        FL_TIRE.Count        = 0
+        FL_TIRE.LastHit   = nil
+        FL_TIRE.LastErr   = nil
+        FL_TIRE.Conn      = nil
+        FL_TIRE.LastFire  = 0
+
+        local function playerEventTire()
+            local r = RS:FindFirstChild("Remote")
+            local ev = r and r:FindFirstChild("PlayerEvent")
+            if ev and ev:IsA("RemoteEvent") then return ev end
+            return nil
+        end
+        FL_TIRE.Event = playerEventTire
+
+        local function vehicleTeam(veh)
+            local cfg = veh:FindFirstChild("Config")
+            local t = cfg and cfg:FindFirstChild("Type")
+            local v = t and t.Value
+            if v == "Special" then v = "Civilian" end
+            return v
+        end
+        FL_TIRE.VehicleTeam = vehicleTeam
+
+        local function vehicleDriver(veh)
+            local cfg = veh:FindFirstChild("Config")
+            local d = cfg and cfg:FindFirstChild("LastDrove")
+            local p = d and d.Value
+            if typeof(p) == "Instance" and p:IsA("Player") then return p end
+            return nil
+        end
+        FL_TIRE.VehicleDriver = vehicleDriver
+
+        local function isTarget(veh)
+            if vehicleTeam(veh) == "Police" then return true end
+            local d = vehicleDriver(veh)
+            if d then
+                if d.Team and d.Team.Name == "Police" then return true end
+                if d:GetAttribute("CombatMode") == true then return true end
+            end
+            return false
+        end
+        FL_TIRE.IsTarget = isTarget
+
+        local function collectTires(veh)
+            local out = {}
+            local thrusters = veh:FindFirstChild("Thrusters")
+            if not thrusters then return out end
+            for _, th in ipairs(thrusters:GetChildren()) do
+                local wheel = th:FindFirstChild("Wheel")
+                local tire  = wheel and wheel:FindFirstChild("Tire")
+                local col   = tire and tire:FindFirstChild("WheelCollision")
+                if col and col:IsA("BasePart") and col.Parent then
+                    if not col:GetAttribute("DontPuncture") then
+                        local dur = col:GetAttribute("Durability")
+                        if dur == nil or dur ~= 0 then table.insert(out, col) end
+                    end
+                end
+            end
+            return out
+        end
+        FL_TIRE.CollectTires = collectTires
+
+        local function selfEye()
+            local cam = workspace.CurrentCamera
+            if cam then return cam.CFrame.Position end
+            local c = LocalPlayer.Character
+            local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+            return r and r.Position or nil
+        end
+
+        local function selfPos()
+            local c = LocalPlayer.Character
+            local r = c and (c:FindFirstChild("HumanoidRootPart") or c.PrimaryPart)
+            return r and r.Position or nil
+        end
+
+        function FL_TIRE.Puncture(col)
+            local rem = playerEventTire()
+            if not rem then FL_TIRE.LastErr = "没有 PlayerEvent" return false end
+            if not col or not col.Parent then return false end
+            local pos = col.Position
+            local eye = selfEye()
+            local dir
+            if eye then
+                local d = pos - eye
+                if d.Magnitude > 0.01 then dir = d.Unit end
+            end
+            if not dir then dir = Vector3.new(0, 0, -1) end
+            local origin
+            if FL_TIRE.RayMode == "self" and eye then origin = eye
+            else origin = pos - dir * 1.5 end
+            local ok = pcall(function()
+                if FL_TIRE.SendBullet and FL_TIRE._wname then
+                    rem:FireServer("bullet", { pos = pos, posDestroyX = pos.X, weaponName = FL_TIRE._wname })
+                end
+                rem:FireServer("damage", { shotCode = { origin, dir }, pos = pos, targetTire = col })
+            end)
+            if not ok then FL_TIRE.LastErr = "FireServer 失败" return false end
+            FL_TIRE.Count = FL_TIRE.Count + 1
+            FL_TIRE.LastErr = nil
+            return true
+        end
+
+        function FL_TIRE.Sweep()
+            local myPos = selfPos()
+            if not myPos then return 0 end
+            local gameplay = workspace:FindFirstChild("Gameplay")
+            local vehicles = gameplay and gameplay:FindFirstChild("Vehicles")
+            if not vehicles then FL_TIRE.LastErr = "找不到 Gameplay.Vehicles" return 0 end
+
+            local list = {}
+            for _, veh in ipairs(vehicles:GetChildren()) do
+                if veh:IsA("Model") and isTarget(veh) then
+                    local root = veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart")
+                    local dist = root and (root.Position - myPos).Magnitude or 0
+                    if (not root) or dist <= FL_TIRE.Range then
+                        local police = (vehicleTeam(veh) == "Police")
+                        local d = vehicleDriver(veh)
+                        if d and d.Team and d.Team.Name == "Police" then police = true end
+                        table.insert(list, { veh = veh, police = police, dist = dist })
+                    end
+                end
+            end
+            table.sort(list, function(a, b)
+                if a.police ~= b.police then return a.police end
+                return a.dist < b.dist
+            end)
+
+            local queue = {}
+            for _, it in ipairs(list) do
+                for _, col in ipairs(collectTires(it.veh)) do queue[#queue + 1] = col end
+            end
+            FL_TIRE.Queue = queue
+            return #queue
+        end
+
+        function FL_TIRE.Step()
+            local q = FL_TIRE.Queue
+            if not q or #q == 0 then return end
+            local col = table.remove(q, 1)
+            if col and col.Parent and (col:GetAttribute("Durability") or 1) ~= 0 then
+                if FL_TIRE.Puncture(col) then FL_TIRE.LastHit = (FL_TIRE.LastHit or 0) + 1 end
+            end
+        end
+
+        function FL_TIRE.Set(on)
+            FL_TIRE.Enabled = on and true or false
+            if FL_TIRE.Conn then FL_TIRE.Conn:Disconnect(); FL_TIRE.Conn = nil end
+            if FL_TIRE.SweepThread then FL_TIRE.SweepThread = nil end
+            if not FL_TIRE.Enabled then FL_TIRE.Queue = {}; return end
+
+            local RunService = game:GetService("RunService")
+            FL_TIRE._wname = nil
+            pcall(function()
+                local w = FL_DMG and FL_DMG.Equipped and FL_DMG.Equipped()
+                FL_TIRE._wname = w and w.Name
+            end)
+
+            FL_TIRE.SweepThread = task.spawn(function()
+                while FL_TIRE.Enabled do
+                    pcall(FL_TIRE.Sweep)
+                    task.wait(FL_TIRE.Interval)
+                end
+            end)
+            local acc = 0
+            FL_TIRE.Conn = RunService.Heartbeat:Connect(function(dt)
+                if not FL_TIRE.Enabled then return end
+                acc = acc + dt
+                if acc < FL_TIRE.ShotInterval then return end
+                acc = 0
+                pcall(FL_TIRE.Step)
+            end)
+        end
+
+        function FL_TIRE.Status()
+            return {
+                Enabled  = FL_TIRE.Enabled,
+                Count    = FL_TIRE.Count,
+                Range    = FL_TIRE.Range,
+                Interval = FL_TIRE.Interval,
+                RayMode  = FL_TIRE.RayMode,
+                LastHit  = FL_TIRE.LastHit,
+                LastErr  = FL_TIRE.LastErr,
+            }
+        end
+    end
+
+    C:Divider({ Text = "自动卸车胎" })
+    C:Toggle({
+        Title = "自动卸车胎",
+        Desc = "",
+        Default = false,
+        Callback = function(value)
+            if FL_TIRE and FL_TIRE.Set then FL_TIRE.Set(value) end
         end
     })
+    C:Slider({
+        Title = "卸胎范围",
+        Value = { Min = 50, Max = 800, Default = 400 },
+        Step = 10,
+        Callback = function(v) if FL_TIRE then FL_TIRE.Range = v end end
+    })
+    C:Slider({
+        Title = "发射间隔",
+        Value = { Min = 0.02, Max = 0.5, Default = 0.06 },
+        Step = 0.01,
+        Callback = function(v) if FL_TIRE then FL_TIRE.ShotInterval = v end end
+    })
 
-    -- =================== 传送 ===================
+    local tbl13 = {
+        enabled = false, range = 150, interval = 0.05, bodyPart = "Head",
+        jobCheck = false, wallCheck = false, aliveCheck = false, combatCheck = false,
+        policeLock = false, civilianLock = false, beam = false, affectNPC = false,
+    }
+    local tbl14 = {
+        ["头部"] = "Head", ["躯干"] = "Torso", ["左臂"] = "LeftArm",
+        ["右臂"] = "RightArm", ["左腿"] = "LeftLeg", ["右腿"] = "RightLeg",
+    }
+    local function fn40_rage(arg11) return fn40(arg11) end
+    local function fn63(arg11) return arg11 and arg11.Team and arg11.Team.Name or "Civilian" end
+    local function fn90(position, position2)
+        local part = Instance.new("Part")
+        local part2 = Instance.new("Part")
+        for _, v32 in ipairs({ part, part2 }) do
+            v32.Anchored = true; v32.CanCollide = false; v32.Transparency = 1
+            v32.Size = Vector3.new(0.1, 0.1, 0.1); v32.Parent = Workspace
+        end
+        part.Position = position; part2.Position = position2
+        local attachment = Instance.new("Attachment", part)
+        local attachment2 = Instance.new("Attachment", part2)
+        local beam = Instance.new("Beam", part)
+        beam.Attachment0 = attachment; beam.Attachment1 = attachment2
+        beam.Width0 = 0.15; beam.Width1 = 0.15
+        beam.Color = ColorSequence.new(Color3.fromRGB(180, 200, 255))
+        task.delay(0.8, function() pcall(function() part:Destroy(); part2:Destroy() end) end)
+    end
+    local lastRageAttack = 0
+    local lastNPCCheckRage = 0
+    RunService.Heartbeat:Connect(function()
+        if not tbl13.enabled or not playerEvent then return end
+        local now = tick()
+        if now - lastRageAttack < tbl13.interval then return end
+        local v32, v33, v34 = fn40_rage(player)
+        if not v34 then return end
+        local position = v34.Position
+        local v35 = fn63(player)
+        local bestTarget, bestTargetPart, bestDist = nil, nil, nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and fn84(plr, tbl13.policeLock, tbl13.civilianLock) and fn85(plr, tbl13.combatCheck) then
+                local v36, v37 = fn40_rage(plr)
+                local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87(v36))
+                if v36 and v37 and v38 and v37.Health > 0 then
+                    if tbl13.jobCheck and fn63(plr) == v35 then continue end
+                    if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then continue end
+                    local dist = (v38.Position - position).Magnitude
+                    if dist <= tbl13.range then
+                        if tbl13.wallCheck then
+                            local raycastParams = RaycastParams.new()
+                            raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                            local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                            if hit and not hit.Instance:IsDescendantOf(v36) then continue end
+                        end
+                        if not bestDist or dist < bestDist then bestDist = dist; bestTarget = plr; bestTargetPart = v38 end
+                    end
+                end
+            end
+        end
+        if tbl13.affectNPC and now - lastNPCCheckRage >= 0.5 then
+            lastNPCCheckRage = now
+            local nearbyParts = Workspace:GetPartBoundsInRadius(position, 20)
+            for _, part in ipairs(nearbyParts) do
+                local model = part:FindFirstAncestorOfClass("Model")
+                if model and not Players:GetPlayerFromCharacter(model) then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local head = model:FindFirstChild(tbl13.bodyPart) or model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+                        if head then
+                            local dist = (head.Position - position).Magnitude
+                            if dist <= 20 then
+                                if tbl13.wallCheck then
+                                    local raycastParams = RaycastParams.new()
+                                    raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                                    local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, head.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                                    if hit and not hit.Instance:IsDescendantOf(model) then continue end
+                                end
+                                if not bestDist or dist < bestDist then bestDist = dist; bestTarget = model; bestTargetPart = head end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if bestTarget and bestTargetPart then
+            pcall(function()
+                playerEvent:FireServer("damage", {
+                    bodyParts = { { tbl13.bodyPart, 1 } },
+                    shotCode = { position, (bestTargetPart.Position - position).Unit },
+                    pos = bestTargetPart.Position,
+                    target = bestTarget,
+                    damageFactor = 1.5,
+                    bulletProofTool = false,
+                })
+                if tbl13.beam then fn90(position, bestTargetPart.Position) end
+            end)
+            lastRageAttack = now
+        end
+    end)
+    F:Toggle({ Title = "Ragebot", Default = false, Callback = function(v) tbl13.enabled = v end })
+    F:Slider({ Title = "攻击距离", Value = { Min = 10, Max = 500, Default = 150 }, Step = 1, Callback = function(v) tbl13.range = v end })
+    F:Slider({ Title = "攻击间隔", Value = { Min = 0.01, Max = 1, Default = 0.05 }, Step = 0.01, Callback = function(v) tbl13.interval = v end })
+    F:Dropdown({ Title = "攻击部位", Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" }, Value = "头部", Callback = function(arg11) tbl13.bodyPart = tbl14[arg11] or "Head" end })
+    F:Toggle({ Title = "职业检测", Default = false, Callback = function(v) tbl13.jobCheck = v end })
+    F:Toggle({ Title = "墙壁检测", Default = false, Callback = function(v) tbl13.wallCheck = v end })
+    F:Toggle({ Title = "活体检测", Default = false, Callback = function(v) tbl13.aliveCheck = v end })
+    F:Toggle({ Title = "战斗状态检测", Default = false, Callback = function(v) tbl13.combatCheck = v end })
+    F:Toggle({ Title = "锁定警察", Default = false, Callback = function(v) tbl13.policeLock = v; if v then tbl13.civilianLock = false end end })
+    F:Toggle({ Title = "锁定平民", Default = false, Callback = function(v) tbl13.civilianLock = v; if v then tbl13.policeLock = false end end })
+    F:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl13.affectNPC = v end })
+    F:Toggle({ Title = "弹道显示", Default = false, Callback = function(v) tbl13.beam = v end })
+
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
-        if not Settings.TeleportEnabled then WindUI:Notify({ Title = "传送", Content = "请先开启传送开关", Duration = 3 }); return end
+        if not Settings.TeleportEnabled then return end
         local char = player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then root.CFrame = CFrame.new(pos); WindUI:Notify({ Title = "传送", Content = "正在传送至: " .. name, Duration = 2 }) end
+        if root then root.CFrame = CFrame.new(pos) end
     end
     local FIXED_TELEPORTS = {
         {n = "车辆经销商", p = Vector3.new(3719.9501953125, 3.018573522567749, -333.3118591308594)},
@@ -1907,7 +2898,6 @@ function createUI()
     D:Dropdown({ Title = "常规传送", Values = teleNames, Value = teleNames[1], Callback = function(value) selectedTeleport = value end })
     D:Button({ Title = "传送到选定地点", Callback = function()
         for _, data in ipairs(FIXED_TELEPORTS) do if data.n == selectedTeleport then doTeleport(data.p, data.n); return end end
-        WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 })
     end })
     local VENDING_TELEPORTS = { {n = "游戏厅售货机", p = Vector3.new(2905.10, -337.11, 1733.39)}, {n = "警察局售货机", p = Vector3.new(3372.79, -337.46, -476.88)}, {n = "医院售货机", p = Vector3.new(3943.85, -337.12, -201.67)}, {n = "当铺售货机", p = Vector3.new(-208.57, -337.05, -97.18)} }
     local vendingNames = {}
@@ -1915,49 +2905,49 @@ function createUI()
     local selectedVending = vendingNames[1] or ""
     D:Divider({ Text = "售货机传送" })
     D:Dropdown({ Title = "售货机传送", Values = vendingNames, Value = vendingNames[1], Callback = function(value) selectedVending = value end })
-    D:Button({ Title = "传送到选定售货机", Callback = function() for _, data in ipairs(VENDING_TELEPORTS) do if data.n == selectedVending then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定售货机", Callback = function() for _, data in ipairs(VENDING_TELEPORTS) do if data.n == selectedVending then doTeleport(data.p, data.n); return end end end })
     local BANK_TELEPORTS = { {n = "小银行", p = Vector3.new(-678.77, -337.12, -104.65)}, {n = "大银行", p = Vector3.new(3134.90, -321.84, -270.04)} }
     local bankNames = {}
     for _, data in ipairs(BANK_TELEPORTS) do table.insert(bankNames, data.n) end
     local selectedBank = bankNames[1] or ""
     D:Divider({ Text = "银行传送" })
     D:Dropdown({ Title = "银行传送", Values = bankNames, Value = bankNames[1], Callback = function(value) selectedBank = value end })
-    D:Button({ Title = "传送到选定银行", Callback = function() for _, data in ipairs(BANK_TELEPORTS) do if data.n == selectedBank then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定银行", Callback = function() for _, data in ipairs(BANK_TELEPORTS) do if data.n == selectedBank then doTeleport(data.p, data.n); return end end end })
     local TEAM_TELEPORTS = { {n = "警察局", p = Vector3.new(3315.72, 3.02, -481.83)}, {n = "医院", p = Vector3.new(3895.47, 3.02, -179.65)}, {n = "火焰", p = Vector3.new(3579.31, 8.41, 579.73)}, {n = "转运", p = Vector3.new(4150.27, 2.63, 942.63)}, {n = "送货", p = Vector3.new(4401.01, 3.04, 1607.59)}, {n = "道路服务", p = Vector3.new(4274.56, 2.63, 1200.60)}, {n = "圣奥里平民重生点", p = Vector3.new(3744.05, 2.63, -403.97)}, {n = "约克镇平民重生点", p = Vector3.new(-250.24, 2.63, -82.67)} }
     local teamNames = {}
     for _, data in ipairs(TEAM_TELEPORTS) do table.insert(teamNames, data.n) end
     local selectedTeam = teamNames[1] or ""
     D:Divider({ Text = "队伍传送" })
     D:Dropdown({ Title = "队伍传送", Values = teamNames, Value = teamNames[1], Callback = function(value) selectedTeam = value end })
-    D:Button({ Title = "传送到选定队伍点", Callback = function() for _, data in ipairs(TEAM_TELEPORTS) do if data.n == selectedTeam then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定队伍点", Callback = function() for _, data in ipairs(TEAM_TELEPORTS) do if data.n == selectedTeam then doTeleport(data.p, data.n); return end end end })
     local GAS_TELEPORTS = { {n = "加油站1", p = Vector3.new(4517.21, -24.83, 111.44)}, {n = "加油站2", p = Vector3.new(-918.75, 2.63, 1110.16)}, {n = "加油站3", p = Vector3.new(2252.20, 2.63, 92.21)}, {n = "加油站4", p = Vector3.new(1150.41, 2.63, -841.89)}, {n = "加油站5", p = Vector3.new(-1620.28, 2.63, 1795.99)} }
     local gasNames = {}
     for _, data in ipairs(GAS_TELEPORTS) do table.insert(gasNames, data.n) end
     local selectedGas = gasNames[1] or ""
     D:Divider({ Text = "加油站传送" })
     D:Dropdown({ Title = "加油站传送", Values = gasNames, Value = gasNames[1], Callback = function(value) selectedGas = value end })
-    D:Button({ Title = "传送到选定加油站", Callback = function() for _, data in ipairs(GAS_TELEPORTS) do if data.n == selectedGas then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定加油站", Callback = function() for _, data in ipairs(GAS_TELEPORTS) do if data.n == selectedGas then doTeleport(data.p, data.n); return end end end })
     local REPAIR_TELEPORTS = { {n = "船艇维修店", p = Vector3.new(4091.92, -17.28, 2861.75)}, {n = "圣奥里车辆维修", p = Vector3.new(2783.67, 2.63, -413.05)}, {n = "约克镇车辆维修", p = Vector3.new(-399.23, 2.63, -8.15)} }
     local repairNames = {}
     for _, data in ipairs(REPAIR_TELEPORTS) do table.insert(repairNames, data.n) end
     local selectedRepair = repairNames[1] or ""
     D:Divider({ Text = "载具维修类传送" })
     D:Dropdown({ Title = "载具维修类传送", Values = repairNames, Value = repairNames[1], Callback = function(value) selectedRepair = value end })
-    D:Button({ Title = "传送到选定维修点", Callback = function() for _, data in ipairs(REPAIR_TELEPORTS) do if data.n == selectedRepair then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定维修点", Callback = function() for _, data in ipairs(REPAIR_TELEPORTS) do if data.n == selectedRepair then doTeleport(data.p, data.n); return end end end })
     local CAR_TELEPORTS = { {n = "拆车的地方", p = Vector3.new(3440.26, 43.30, 2680.51)} }
     local carTeleNames = {}
     for _, data in ipairs(CAR_TELEPORTS) do table.insert(carTeleNames, data.n) end
     local selectedCarTeleport = carTeleNames[1] or ""
     D:Divider({ Text = "偷车能用到的传送地点" })
     D:Dropdown({ Title = "偷车能用到的传送地点", Values = carTeleNames, Value = carTeleNames[1], Callback = function(value) selectedCarTeleport = value end })
-    D:Button({ Title = "传送到选定地点", Callback = function() for _, data in ipairs(CAR_TELEPORTS) do if data.n == selectedCarTeleport then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定地点", Callback = function() for _, data in ipairs(CAR_TELEPORTS) do if data.n == selectedCarTeleport then doTeleport(data.p, data.n); return end end end })
     local DELIVERY_TELEPORTS = { {n = "圣奥里取餐点", p = Vector3.new(3072.51, 3.02, 450.72)}, {n = "大景取餐点", p = Vector3.new(4537.18, 2.57, 912.38)}, {n = "莱斯维尔取餐点", p = Vector3.new(755.83, 3.04, 1005.67)} }
     local deliveryNames = {}
     for _, data in ipairs(DELIVERY_TELEPORTS) do table.insert(deliveryNames, data.n) end
     local selectedDelivery = deliveryNames[1] or ""
     D:Divider({ Text = "送货能用到的传送" })
     D:Dropdown({ Title = "送货能用到的传送", Values = deliveryNames, Value = deliveryNames[1], Callback = function(value) selectedDelivery = value end })
-    D:Button({ Title = "传送到选定地点", Callback = function() for _, data in ipairs(DELIVERY_TELEPORTS) do if data.n == selectedDelivery then doTeleport(data.p, data.n); return end end; WindUI:Notify({ Title = "传送", Content = "未找到该地点", Duration = 2 }) end })
+    D:Button({ Title = "传送到选定地点", Callback = function() for _, data in ipairs(DELIVERY_TELEPORTS) do if data.n == selectedDelivery then doTeleport(data.p, data.n); return end end end })
 
     local ESP_ENABLED, ESP_SHOW_NAME, ESP_SHOW_TEAM, ESP_SHOW_HEALTH, ESP_SHOW_DIST, ESP_SHOW_SELF, ESP_SHOW_PEERS, ESP_LIST, ESP_REFRESH_COUNT = false, true, true, true, true, false, true, {}, 0
     local function GetTeam(p)
