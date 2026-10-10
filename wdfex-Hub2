@@ -1867,6 +1867,7 @@ function createUI()
     DoctorTab:Divider({ Text = "循环传送低血量玩家" })
     local loopTeleportLowHpEnabled = false
     local skipPoliceTeleport = false
+    local skipCivilianTeleport = false
     local onlyNearbyTeleport = false
     local nearbyDistance = 25
     DoctorTab:Toggle({
@@ -1884,11 +1885,13 @@ function createUI()
                                 for _, p in ipairs(Players:GetPlayers()) do
                                     if p ~= player and p.Character then
                                         local isPolice = false
+                                        local isCivilian = false
                                         if p.Team then
                                             local tn = p.Team.Name
                                             if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
+                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
                                         end
-                                        if not (skipPoliceTeleport and isPolice) then
+                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
                                             local hum = p.Character:FindFirstChildOfClass("Humanoid")
                                             local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
                                             if hum and hum.Health < 100 and targetRoot then
@@ -1903,11 +1906,13 @@ function createUI()
                                 for _, p in ipairs(Players:GetPlayers()) do
                                     if p ~= player and p.Character then
                                         local isPolice = false
+                                        local isCivilian = false
                                         if p.Team then
                                             local tn = p.Team.Name
                                             if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
+                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
                                         end
-                                        if not (skipPoliceTeleport and isPolice) then
+                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
                                             local hum = p.Character:FindFirstChildOfClass("Humanoid")
                                             local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
                                             if hum and hum.Health < 100 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
@@ -1924,6 +1929,7 @@ function createUI()
         end
     })
     DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
+    DoctorTab:Toggle({ Title = "不传送平民队伍的玩家", Value = false, Callback = function(value) skipCivilianTeleport = value end })
     DoctorTab:Toggle({ Title = "只传送附近的玩家", Value = false, Callback = function(value) onlyNearbyTeleport = value end })
     game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
         if autoHealEnabled then pcall(function() prompt.HoldDuration = 0 end) end
