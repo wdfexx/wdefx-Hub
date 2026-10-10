@@ -11,7 +11,7 @@ for i = 1, #username do
     local colorIndex = (i - 1) % #gradientColors + 1
     coloredUsername = coloredUsername .. '<font color="' .. gradientColors[colorIndex] .. '">' .. username:sub(i, i) .. '</font>'
 end
-local version = "v5.5"
+local version = "v5.7"
 local coloredVersion = ""
 for i = 1, #version do
     local colorIndex = (i - 1) % #gradientColors + 1
@@ -1632,10 +1632,28 @@ function createUI()
         { name = "大砍刀", id = "4", itemName = "Machete" },
         { name = "小刀", id = "1", itemName = "Knife" }
     }
+    local supermarketItems = {
+        { name = "望远镜", itemName = "Binoculars" },
+        { name = "金属探测器", itemName = "Metal Detector" },
+        { name = "铲子", itemName = "Trowel" },
+        { name = "新闻摄像头", itemName = "News Camera" },
+        { name = "新闻麦克风", itemName = "News Microphone" },
+        { name = "雨伞", itemName = "Blue Umbrella" },
+        { name = "钓鱼杆", itemName = "Fishing Rod" }
+    }
+
+    -- 黑市购买
     local toolNameOptions = {}
     for _, v in ipairs(toolItems) do table.insert(toolNameOptions, v.name) end
     local selectedToolItem = toolNameOptions[1]
+    local blackMarketQuantity = 1
     RemoteBuyTab:Dropdown({ Title = "工具", Values = toolNameOptions, Value = toolNameOptions[1], Callback = function(value) selectedToolItem = value end })
+    RemoteBuyTab:Slider({
+        Title = "购买数量",
+        Step = 1,
+        Value = { Min = 1, Max = 99, Default = 1 },
+        Callback = function(value) blackMarketQuantity = value end
+    })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
         local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
         local stuff = ReplicatedStorage:FindFirstChild("Stuff")
@@ -1652,16 +1670,25 @@ function createUI()
                 end
             end
             if targetItem then
-                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, item = targetItem }) end)
+                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, quantity = blackMarketQuantity, item = targetItem }) end)
                 if success then showBuySuccess(displayName) end
-            else WindUI:Notify({ Title = "购买失败", Content = "没找到" .. selectedToolItem, Duration = 3 }) end
-        else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
+            else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
+        else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
     end })
+
+    -- 武器
     RemoteBuyTab:Divider({ Text = "武器" })
     local weaponNameOptions = {}
     for _, v in ipairs(weaponItems) do table.insert(weaponNameOptions, v.name) end
     local selectedWeaponItem = weaponNameOptions[1]
+    local weaponQuantity = 1
     RemoteBuyTab:Dropdown({ Title = "武器", Values = weaponNameOptions, Value = weaponNameOptions[1], Callback = function(value) selectedWeaponItem = value end })
+    RemoteBuyTab:Slider({
+        Title = "购买数量",
+        Step = 1,
+        Value = { Min = 1, Max = 99, Default = 1 },
+        Callback = function(value) weaponQuantity = value end
+    })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
         local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
         local stuff = ReplicatedStorage:FindFirstChild("Stuff")
@@ -1678,25 +1705,25 @@ function createUI()
                 end
             end
             if targetItem then
-                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, item = targetItem }) end)
+                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, quantity = weaponQuantity, item = targetItem }) end)
                 if success then showBuySuccess(displayName) end
-            else WindUI:Notify({ Title = "购买失败", Content = "没找到" .. selectedWeaponItem, Duration = 3 }) end
-        else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
+            else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
+        else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
     end })
+
+    -- 超市物品
     RemoteBuyTab:Divider({ Text = "超市物品" })
-    local supermarketItems = {
-        { name = "望远镜", itemName = "Binoculars" },
-        { name = "金属探测器", itemName = "Metal Detector" },
-        { name = "铲子", itemName = "Trowel" },
-        { name = "新闻摄像头", itemName = "News Camera" },
-        { name = "新闻麦克风", itemName = "News Microphone" },
-        { name = "雨伞", itemName = "Blue Umbrella" },
-        { name = "钓鱼杆", itemName = "Fishing Rod" }
-    }
     local supermarketNames = {}
     for _, v in ipairs(supermarketItems) do table.insert(supermarketNames, v.name) end
     local selectedSupermarketItem = supermarketNames[1]
+    local supermarketQuantity = 1
     RemoteBuyTab:Dropdown({ Title = "超市物品", Values = supermarketNames, Value = supermarketNames[1], Callback = function(value) selectedSupermarketItem = value end })
+    RemoteBuyTab:Slider({
+        Title = "购买数量",
+        Step = 1,
+        Value = { Min = 1, Max = 99, Default = 1 },
+        Callback = function(value) supermarketQuantity = value end
+    })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
         local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
         local stuff = ReplicatedStorage:FindFirstChild("Stuff")
@@ -1713,52 +1740,90 @@ function createUI()
                 end
             end
             if targetItem then
-                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, item = targetItem }) end)
+                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = false, quantity = supermarketQuantity, item = targetItem }) end)
                 if success then showBuySuccess(displayName) end
-            else WindUI:Notify({ Title = "购买失败", Content = "没找到" .. selectedSupermarketItem, Duration = 3 }) end
-        else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
+            else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
+        else WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 }) end
     end })
-    RemoteBuyTab:Divider({ Text = "食物" })
-    local foodItems = {
-        { name = "培根和鸡蛋", itemName = "Bacon And Eggs" },
-        { name = "面条", itemName = "Spaghetti" },
-        { name = "鸡肉和薯条", itemName = "Chicken And Fries" },
-        { name = "沙拉", itemName = "Salad" },
-        { name = "豆汁", itemName = "Bean Soup" },
-        { name = "松饼卷", itemName = "Croissant" },
-        { name = "煎饼", itemName = "Pancake" },
-        { name = "冰茶", itemName = "Iced Tea" },
-        { name = "一盒牛奶", itemName = "Box Of Milk" }
-    }
-    local foodNames = {}
-    for _, v in ipairs(foodItems) do table.insert(foodNames, v.name) end
-    local selectedFoodItem = foodNames[1]
-    RemoteBuyTab:Dropdown({ Title = "食物", Values = foodNames, Value = foodNames[1], Callback = function(value) selectedFoodItem = value end })
-    RemoteBuyTab:Button({ Title = "购买", Callback = function()
+
+    -- 多选购买
+    RemoteBuyTab:Divider({ Text = "多选购买" })
+    local allItems = {}
+    local allNames = {}
+    for _, v in ipairs(toolItems) do table.insert(allItems, v); table.insert(allNames, v.name) end
+    for _, v in ipairs(weaponItems) do table.insert(allItems, v); table.insert(allNames, v.name) end
+    for _, v in ipairs(supermarketItems) do table.insert(allItems, v); table.insert(allNames, v.name) end
+
+    local multiSelectedItems = {}
+    RemoteBuyTab:Dropdown({
+        Title = "远程购买（多选）",
+        Values = allNames,
+        Value = {},
+        Multi = true,
+        Callback = function(selected)
+            multiSelectedItems = selected
+        end
+    })
+    RemoteBuyTab:Button({ Title = "购买选中物品", Callback = function()
+        if not multiSelectedItems or #multiSelectedItems == 0 then
+            WindUI:Notify({ Title = "多选购买", Content = "请先在下拉菜单选择至少一个物品", Duration = 3 })
+            return
+        end
         local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
         local stuff = ReplicatedStorage:FindFirstChild("Stuff")
-        if event and stuff then
-            local foodFolder = stuff:FindFirstChild("Food")
+        if not event or not stuff then
+            WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 3 })
+            return
+        end
+
+        for _, selectedName in ipairs(multiSelectedItems) do
             local targetItem, displayName = nil, ""
-            if foodFolder then
-                for _, itemInfo in ipairs(foodItems) do
-                    if itemInfo.name == selectedFoodItem then
-                        targetItem = foodFolder:FindFirstChild(itemInfo.itemName)
-                        displayName = itemInfo.name
+            local blackMarket = stuff:FindFirstChild("Black Market")
+            local weaponsFolder = stuff:FindFirstChild("Weapons")
+            local itemsFolder = stuff:FindFirstChild("Items")
+
+            for _, itemInfo in ipairs(toolItems) do
+                if itemInfo.name == selectedName and blackMarket then
+                    local slot = blackMarket:FindFirstChild(itemInfo.id)
+                    if slot then targetItem = slot:FindFirstChild(itemInfo.itemName) end
+                    break
+                end
+            end
+            if not targetItem then
+                for _, itemInfo in ipairs(weaponItems) do
+                    if itemInfo.name == selectedName and weaponsFolder then
+                        local slot = weaponsFolder:FindFirstChild(itemInfo.id)
+                        if slot then targetItem = slot:FindFirstChild(itemInfo.itemName) end
                         break
                     end
                 end
             end
+            if not targetItem then
+                for _, itemInfo in ipairs(supermarketItems) do
+                    if itemInfo.name == selectedName and itemsFolder then
+                        targetItem = itemsFolder:FindFirstChild(itemInfo.itemName)
+                        break
+                    end
+                end
+            end
+
             if targetItem then
-                local success = pcall(function() event:InvokeServer("purchase", { isRestaurant = true, quantity = 1, item = targetItem }) end)
-                if success then showBuySuccess(displayName) end
-            else WindUI:Notify({ Title = "购买失败", Content = "没找到" .. selectedFoodItem, Duration = 3 }) end
-        else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
+                pcall(function() event:InvokeServer("purchase", { isRestaurant = false, quantity = 1, item = targetItem }) end)
+                task.wait(0.1)
+            else
+                WindUI:Notify({ Title = "购买失败", Content = "服务器都不对你点你老风", Duration = 2 })
+            end
+        end
+        showBuySuccess("已购买全部选中物品")
     end })
 
+    -- =================== 互动功能 ===================
     local fastInteractEnabled, autoCuffEnabled = false, false
     game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-        if fastInteractEnabled then prompt.HoldDuration = 0 end
+        if fastInteractEnabled then
+            prompt.HoldDuration = 0
+            pcall(function() fireproximityprompt(prompt) end)
+        end
     end)
     InteractTab:Divider({ Text = "互动功能" })
     local tbl24 = {}
@@ -1782,7 +1847,7 @@ function createUI()
             end
         end)
     end
-    InteractTab:Toggle({ Title = "自动黑客小游戏", Value = false, Callback = function(value) fn50(value) end })
+    InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
     InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) fastInteractEnabled = value end })
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
