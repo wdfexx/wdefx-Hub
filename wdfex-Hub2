@@ -11,7 +11,7 @@ for i = 1, #username do
     local colorIndex = (i - 1) % #gradientColors + 1
     coloredUsername = coloredUsername .. '<font color="' .. gradientColors[colorIndex] .. '">' .. username:sub(i, i) .. '</font>'
 end
-local version = "v5.7"
+local version = "v5.8"
 local coloredVersion = ""
 for i = 1, #version do
     local colorIndex = (i - 1) % #gradientColors + 1
@@ -541,7 +541,7 @@ function createUI()
     A:Divider({ Text = "人物旋转" })
     local FL_SPIN = FL_SPIN or {}
     FL_SPIN.Enabled = false
-    FL_SPIN.Speed   = 1111 -- 固定速度，不可调节
+    FL_SPIN.Speed   = 1111
     FL_SPIN.Random  = false
     FL_SPIN._angle  = 0
     FL_SPIN._conn   = nil
@@ -1651,7 +1651,7 @@ function createUI()
     RemoteBuyTab:Slider({
         Title = "购买数量",
         Step = 1,
-        Value = { Min = 1, Max = 99, Default = 1 },
+        Value = { Min = 1, Max = 10, Default = 1 },
         Callback = function(value) blackMarketQuantity = value end
     })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
@@ -1686,7 +1686,7 @@ function createUI()
     RemoteBuyTab:Slider({
         Title = "购买数量",
         Step = 1,
-        Value = { Min = 1, Max = 99, Default = 1 },
+        Value = { Min = 1, Max = 10, Default = 1 },
         Callback = function(value) weaponQuantity = value end
     })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
@@ -1721,7 +1721,7 @@ function createUI()
     RemoteBuyTab:Slider({
         Title = "购买数量",
         Step = 1,
-        Value = { Min = 1, Max = 99, Default = 1 },
+        Value = { Min = 1, Max = 10, Default = 1 },
         Callback = function(value) supermarketQuantity = value end
     })
     RemoteBuyTab:Button({ Title = "购买", Callback = function()
@@ -1764,7 +1764,7 @@ function createUI()
             multiSelectedItems = selected
         end
     })
-    RemoteBuyTab:Button({ Title = "购买选中物品", Callback = function()
+    RemoteBuyTab:Button({ Title = "购买", Callback = function()
         if not multiSelectedItems or #multiSelectedItems == 0 then
             WindUI:Notify({ Title = "多选购买", Content = "请先在下拉菜单选择至少一个物品", Duration = 3 })
             return
