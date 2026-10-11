@@ -629,7 +629,12 @@ function createUI()
         ["警察"] = {
             pos = Vector3.new(3376.82, -337.46, -485.25),
             execute = function()
-                local dept = workspace.Gameplay:FindFirstChild("Police Department")
+                local dept
+                for i = 1, 20 do
+                    dept = workspace.Gameplay:FindFirstChild("Police Department")
+                    if dept and dept:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if dept and dept:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -644,7 +649,12 @@ function createUI()
         ["医生"] = {
             pos = Vector3.new(3915.84, -337.12, -140.36),
             execute = function()
-                local hospital = workspace.Gameplay:FindFirstChild("Hospital")
+                local hospital
+                for i = 1, 20 do
+                    hospital = workspace.Gameplay:FindFirstChild("Hospital")
+                    if hospital and hospital:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if hospital and hospital:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -659,7 +669,12 @@ function createUI()
         ["火焰"] = {
             pos = Vector3.new(3582.20, -314.66, 609.29),
             execute = function()
-                local fireDept = workspace.Gameplay:FindFirstChild("Fire Department")
+                local fireDept
+                for i = 1, 20 do
+                    fireDept = workspace.Gameplay:FindFirstChild("Fire Department")
+                    if fireDept and fireDept:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if fireDept and fireDept:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -674,7 +689,12 @@ function createUI()
         ["转运"] = {
             pos = Vector3.new(4163.80, -337.50, 906.93),
             execute = function()
-                local transit = workspace.Gameplay:FindFirstChild("Transit Center")
+                local transit
+                for i = 1, 20 do
+                    transit = workspace.Gameplay:FindFirstChild("Transit Center")
+                    if transit and transit:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if transit and transit:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -689,7 +709,12 @@ function createUI()
         ["配送"] = {
             pos = Vector3.new(4398.52, 3.04, 1608.58),
             execute = function()
-                local delivery = workspace.World.Important:FindFirstChild("Delivery Center")
+                local delivery
+                for i = 1, 20 do
+                    delivery = workspace.World.Important:FindFirstChild("Delivery Center")
+                    if delivery and delivery:FindFirstChild("ScriptedPersistent") and delivery.ScriptedPersistent:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if delivery and delivery:FindFirstChild("ScriptedPersistent") and delivery.ScriptedPersistent:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -704,7 +729,12 @@ function createUI()
         ["道路服务"] = {
             pos = Vector3.new(4257.18, -337.44, 1189.34),
             execute = function()
-                local road = workspace.Gameplay:FindFirstChild("Road Service")
+                local road
+                for i = 1, 20 do
+                    road = workspace.Gameplay:FindFirstChild("Road Service")
+                    if road and road:FindFirstChild("_TeamChangeWithEntrance") then break end
+                    task.wait(0.03)
+                end
                 if road and road:FindFirstChild("_TeamChangeWithEntrance") then
                     local args = {
                         [1] = "selectTeam",
@@ -736,23 +766,19 @@ function createUI()
         Value = selectedTeamChange,
         Callback = function(value) selectedTeamChange = value end
     })
-    local isChanging = false
     TeamChangeTab:Button({
         Title = "更换指定队伍",
         Callback = function()
-            if isChanging then return end
-            isChanging = true
-            
             local config = teamConfigs[selectedTeamChange]
-            if not config then isChanging = false; return end
+            if not config then return end
             
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
-            if not root then isChanging = false; return end
+            if not root then return end
             
             local originalCFrame = root.CFrame
             root.CFrame = CFrame.new(config.pos)
-            task.wait(0.5)
+            task.wait(0.2)
             
             local success, err = pcall(config.execute)
             if not success then
@@ -764,7 +790,6 @@ function createUI()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 player.Character.HumanoidRootPart.CFrame = originalCFrame
             end
-            isChanging = false
         end
     })
 
@@ -776,23 +801,19 @@ function createUI()
         Value = selectedQuit,
         Callback = function(value) selectedQuit = value end
     })
-    local isQuitting = false
     TeamChangeTab:Button({
         Title = "退出队伍",
         Callback = function()
-            if isQuitting then return end
-            isQuitting = true
-            
             local config = teamConfigs[selectedQuit]
-            if not config then isQuitting = false; return end
+            if not config then return end
             
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
-            if not root then isQuitting = false; return end
+            if not root then return end
             
             local originalCFrame = root.CFrame
             root.CFrame = CFrame.new(config.pos)
-            task.wait(0.5)
+            task.wait(0.2)
             
             local success, err = pcall(config.execute)
             if not success then
@@ -804,7 +825,6 @@ function createUI()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 player.Character.HumanoidRootPart.CFrame = originalCFrame
             end
-            isQuitting = false
         end
     })
 
@@ -1773,7 +1793,6 @@ function createUI()
             if fastInteractConn then fastInteractConn:Disconnect() end
             fastInteractConn = RunService.Heartbeat:Connect(function()
                 if not fastInteractEnabled then return end
-                -- 叠加强制快速互动逻辑，防止被自动黑客覆盖
                 for _, obj in ipairs(workspace:GetDescendants()) do
                     if obj:IsA("ProximityPrompt") then
                         obj.HoldDuration = 0
@@ -1866,6 +1885,7 @@ function createUI()
     })
     DoctorTab:Divider({ Text = "循环传送低血量玩家" })
     local loopTeleportLowHpEnabled = false
+    local loopTeleportZeroHpEnabled = false
     local skipPoliceTeleport = false
     local skipCivilianTeleport = false
     local onlyNearbyTeleport = false
@@ -1926,6 +1946,64 @@ function createUI()
                 end)
                 WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送低血量玩家", Duration = 2 })
             else WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送低血量玩家", Duration = 2 }) end
+        end
+    })
+    DoctorTab:Toggle({
+        Title = "循环传送血量为0的玩家",
+        Value = false,
+        Callback = function(enabled)
+            loopTeleportZeroHpEnabled = enabled
+            if enabled then
+                task.spawn(function()
+                    while loopTeleportZeroHpEnabled and not isDestroyed do
+                        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot then
+                            if onlyNearbyTeleport then
+                                local nearest, nearestDist = nil, nearbyDistance
+                                for _, p in ipairs(Players:GetPlayers()) do
+                                    if p ~= player and p.Character then
+                                        local isPolice = false
+                                        local isCivilian = false
+                                        if p.Team then
+                                            local tn = p.Team.Name
+                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
+                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
+                                        end
+                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
+                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
+                                            if hum and hum.Health <= 0 and targetRoot then
+                                                local d = (targetRoot.Position - myRoot.Position).Magnitude
+                                                if d < nearestDist then nearestDist = d; nearest = targetRoot end
+                                            end
+                                        end
+                                    end
+                                end
+                                if nearest then myRoot.CFrame = nearest.CFrame + Vector3.new(0, 3, 0) end
+                            else
+                                for _, p in ipairs(Players:GetPlayers()) do
+                                    if p ~= player and p.Character then
+                                        local isPolice = false
+                                        local isCivilian = false
+                                        if p.Team then
+                                            local tn = p.Team.Name
+                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
+                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
+                                        end
+                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
+                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
+                                            if hum and hum.Health <= 0 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        task.wait(0.1)
+                    end
+                end)
+                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送血量为0的玩家", Duration = 2 })
+            else WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送血量为0的玩家", Duration = 2 }) end
         end
     })
     DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
