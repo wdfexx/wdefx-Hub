@@ -1752,18 +1752,6 @@ function createUI()
         else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
     end })
 
-    local fastInteractEnabled, autoCuffEnabled = false, false
-    local fastInteractConn = nil
-    game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-        if fastInteractEnabled then 
-            prompt.HoldDuration = 0 
-            task.spawn(function()
-                prompt.HoldDuration = 0
-                task.wait()
-                prompt.HoldDuration = 0
-            end)
-        end
-    end)
     InteractTab:Divider({ Text = "互动功能" })
     local tbl24 = {}
     local function fn50(autoHack)
@@ -1787,22 +1775,43 @@ function createUI()
         end)
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
-    InteractTab:Toggle({ Title = "快速互动", Value = false, Callback = function(value) 
-        fastInteractEnabled = value 
-        if value then
-            if fastInteractConn then fastInteractConn:Disconnect() end
-            fastInteractConn = RunService.Heartbeat:Connect(function()
-                if not fastInteractEnabled then return end
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("ProximityPrompt") then
-                        obj.HoldDuration = 0
-                    end
+    
+    -- 快速互动 (替换为逻辑)
+    do
+        local tbl2 = tbl2 or {}
+        tbl2.HoldTime = 0
+        tbl2.Enabled = false
+        tbl2.Conn = nil
+
+        local function apply()
+            for _, descendant in ipairs(workspace:GetDescendants()) do
+                if descendant:IsA("ProximityPrompt") then
+                    descendant.HoldDuration = tbl2.HoldTime
                 end
-            end)
-        else
-            if fastInteractConn then fastInteractConn:Disconnect(); fastInteractConn = nil end
+            end
         end
-    end })
+
+        InteractTab:Toggle({
+            Title = "快速互动",
+            Value = false,
+            Callback = function(value)
+                tbl2.Enabled = value
+                if value then
+                    tbl2.HoldTime = 0
+                    apply()
+                    if tbl2.Conn then tbl2.Conn:Disconnect() end
+                    tbl2.Conn = workspace.DescendantAdded:Connect(function(descendant)
+                        if descendant:IsA("ProximityPrompt") then
+                            descendant.HoldDuration = tbl2.HoldTime
+                        end
+                    end)
+                else
+                    if tbl2.Conn then tbl2.Conn:Disconnect(); tbl2.Conn = nil end
+                end
+            end
+        })
+    end
+
     InteractTab:Divider({ Text = "增加互动距离" })
     local interactDistanceEnabled = false
     local interactDistance = 30
@@ -1825,6 +1834,7 @@ function createUI()
     PoliceTab:Divider({ Text = "自动手铐" })
     PoliceTab:Divider({ Text = "自动点护送" })
     local autoEscortEnabled = false
+    local autoCuffEnabled = false
     PoliceTab:Toggle({ Title = "自动手铐", Value = false, Callback = function(value) autoCuffEnabled = value end })
     PoliceTab:Toggle({ Title = "自动点护送", Value = false, Callback = function(value) autoEscortEnabled = value end })
     PoliceTab:Button({
