@@ -2622,7 +2622,7 @@ function createUI()
         if value then if tbl11.auraEnabled then CreateTargetDisplay(); UpdateTargetDisplay() end
         else DestroyTargetDisplay() end
     end })
-    C:Toggle({ Title = "光环弹道显示", Value = false, Callback = function(value)
+    C:Toggle({ Title = "弹道显示", Value = false, Callback = function(value)
         tbl11.auraBeam = value
     end })
     C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
