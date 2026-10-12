@@ -2425,6 +2425,7 @@ function createUI()
         affectNPC = false, bulletEnabled = false, bulletFov = 360, bulletDistance = 300,
         bulletPart = "Head", bulletShowFov = true, bulletColor = "红色",
         bulletCombatCheck = false, bulletOnlyPolice = false, bulletOnlyCivilian = false,
+        auraBeam = false,
     }
     local showTarget = true
     local currentTarget = nil
@@ -2565,7 +2566,7 @@ function createUI()
                         damageFactor = tbl11.auraDamage,
                         bulletProofTool = false,
                     })
-                    if fn90 then
+                    if tbl11.auraBeam and fn90 then
                         fn90(position, v39.Position)
                     end
                 end)
@@ -2602,7 +2603,7 @@ function createUI()
                         damageFactor = tbl11.auraDamage,
                         bulletProofTool = false,
                     })
-                    if fn90 then
+                    if tbl11.auraBeam and fn90 then
                         fn90(playerPos, nearestNPCHead.Position)
                     end
                 end)
@@ -2620,6 +2621,9 @@ function createUI()
         showTarget = value
         if value then if tbl11.auraEnabled then CreateTargetDisplay(); UpdateTargetDisplay() end
         else DestroyTargetDisplay() end
+    end })
+    C:Toggle({ Title = "光环弹道显示", Value = false, Callback = function(value)
+        tbl11.auraBeam = value
     end })
     C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
     C:Toggle({ Title = "战斗检测", Default = false, Callback = function(v) tbl11.auraCombatCheck = v end })
