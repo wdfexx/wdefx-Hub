@@ -2019,7 +2019,6 @@ function createUI()
     DoctorTab:Toggle({ Title = "不传送平民队伍的玩家", Value = false, Callback = function(value) skipCivilianTeleport = value end })
     DoctorTab:Toggle({ Title = "只传送附近的玩家", Value = false, Callback = function(value) onlyNearbyTeleport = value end })
 
-    -- 修复：自动治疗循环，每次循环里把 HoldDuration 直接设置为 0 再触发
     task.spawn(function()
         while not isDestroyed do
             task.wait(healInterval)
@@ -2056,7 +2055,6 @@ function createUI()
         end
     end)
 
-    -- 修复：自动手铐循环，每次循环里把 HoldDuration 直接设置为 0 再触发
     task.spawn(function()
         while not isDestroyed do
             if autoCuffEnabled then
@@ -2567,6 +2565,9 @@ function createUI()
                         damageFactor = tbl11.auraDamage,
                         bulletProofTool = false,
                     })
+                    if fn90 then
+                        fn90(position, v39.Position)
+                    end
                 end)
                 n10 = now
             end
@@ -2601,6 +2602,9 @@ function createUI()
                         damageFactor = tbl11.auraDamage,
                         bulletProofTool = false,
                     })
+                    if fn90 then
+                        fn90(playerPos, nearestNPCHead.Position)
+                    end
                 end)
             end
         end
