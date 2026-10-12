@@ -1776,7 +1776,6 @@ function createUI()
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
     
-    -- 快速互动 (替换为逻辑)
     do
         local tbl2 = tbl2 or {}
         tbl2.HoldTime = 0
@@ -1835,7 +1834,27 @@ function createUI()
     PoliceTab:Divider({ Text = "自动点护送" })
     local autoEscortEnabled = false
     local autoCuffEnabled = false
-    PoliceTab:Toggle({ Title = "自动手铐", Value = false, Callback = function(value) autoCuffEnabled = value end })
+    local autoCuffPromptConn = nil
+    PoliceTab:Toggle({
+        Title = "自动手铐",
+        Value = false,
+        Callback = function(value)
+            autoCuffEnabled = value
+            if value then
+                for _, desc in ipairs(workspace:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") then desc.HoldDuration = 0 end
+                end
+                if autoCuffPromptConn then autoCuffPromptConn:Disconnect() end
+                autoCuffPromptConn = workspace.DescendantAdded:Connect(function(desc)
+                    if desc:IsA("ProximityPrompt") and autoCuffEnabled then
+                        desc.HoldDuration = 0
+                    end
+                end)
+            else
+                if autoCuffPromptConn then autoCuffPromptConn:Disconnect(); autoCuffPromptConn = nil end
+            end
+        end
+    })
     PoliceTab:Toggle({ Title = "自动点护送", Value = false, Callback = function(value) autoEscortEnabled = value end })
     PoliceTab:Button({
         Title = "传送至监狱内部",
@@ -1879,8 +1898,28 @@ function createUI()
     local autoHealEnabled = false
     local healRadius = 30
     local healInterval = 0.1
+    local autoHealPromptConn = nil
     DoctorTab:Divider({ Text = "自动治疗" })
-    DoctorTab:Toggle({ Title = "自动治疗", Value = false, Callback = function(value) autoHealEnabled = value end })
+    DoctorTab:Toggle({
+        Title = "自动治疗",
+        Value = false,
+        Callback = function(value)
+            autoHealEnabled = value
+            if value then
+                for _, desc in ipairs(workspace:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") then desc.HoldDuration = 0 end
+                end
+                if autoHealPromptConn then autoHealPromptConn:Disconnect() end
+                autoHealPromptConn = workspace.DescendantAdded:Connect(function(desc)
+                    if desc:IsA("ProximityPrompt") and autoHealEnabled then
+                        desc.HoldDuration = 0
+                    end
+                end)
+            else
+                if autoHealPromptConn then autoHealPromptConn:Disconnect(); autoHealPromptConn = nil end
+            end
+        end
+    })
     DoctorTab:Divider({ Text = "修复物品" })
     DoctorTab:Button({
         Title = "修复MT急救包",
@@ -2019,9 +2058,6 @@ function createUI()
     DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
     DoctorTab:Toggle({ Title = "不传送平民队伍的玩家", Value = false, Callback = function(value) skipCivilianTeleport = value end })
     DoctorTab:Toggle({ Title = "只传送附近的玩家", Value = false, Callback = function(value) onlyNearbyTeleport = value end })
-    game.ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-        if autoHealEnabled then pcall(function() prompt.HoldDuration = 0 end) end
-    end)
     task.spawn(function()
         while not isDestroyed do
             task.wait(healInterval)
@@ -2038,10 +2074,10 @@ function createUI()
                                 local dist = (targetRoot.Position - myRoot.Position).Magnitude
                                 if dist <= healRadius then
                                     for _, obj in ipairs(p.Character:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end) end
+                                        if obj:IsA("ProximityPrompt") then pcall(function() fireproximityprompt(obj) end) end
                                     end
                                     for _, obj in ipairs(char:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then pcall(function() obj.HoldDuration = 0; fireproximityprompt(obj) end) end
+                                        if obj:IsA("ProximityPrompt") then pcall(function() fireproximityprompt(obj) end) end
                                     end
                                 end
                             end
@@ -2832,118 +2868,313 @@ function createUI()
         Callback = function(v) if FL_TIRE then FL_TIRE.ShotInterval = v end end
     })
 
-    local tbl13 = {
-        enabled = false, range = 150, interval = 0.05, bodyPart = "Head",
-        jobCheck = false, wallCheck = false, aliveCheck = false, combatCheck = false,
-        policeLock = false, civilianLock = false, beam = false, affectNPC = false,
+    -- =================== Ragebot ===================
+    tbl13 = {
+        enabled = false,
+        range = 150,
+        interval = 0.05,
+        bodyPart = "Head",
+        jobCheck = false,
+        wallCheck = false,
+        aliveCheck = false,
+        combatCheck = false,
+        policeLock = false,
+        civilianLock = false,
+        beam = false,
+        affectNPC = false,
     }
-    local tbl14 = {
-        ["头部"] = "Head", ["躯干"] = "Torso", ["左臂"] = "LeftArm",
-        ["右臂"] = "RightArm", ["左腿"] = "LeftLeg", ["右腿"] = "RightLeg",
+
+    tbl14 = {
+        ["头部"] = "Head",
+        ["躯干"] = "Torso",
+        ["左臂"] = "LeftArm",
+        ["右臂"] = "RightArm",
+        ["左腿"] = "LeftLeg",
+        ["右腿"] = "RightLeg",
     }
-    local function fn40_rage(arg11) return fn40(arg11) end
-    local function fn63(arg11) return arg11 and arg11.Team and arg11.Team.Name or "Civilian" end
-    local function fn90(position, position2)
+
+    fn40 = function(arg11)
+        arg11 = arg11 or player
+        local seen = {}
+        local list = {}
+        local function add(model)
+            if model and typeof(model) == "Instance" and model:IsA("Model") and not seen[model] then
+                seen[model] = true
+                table.insert(list, model)
+            end
+        end
+        pcall(function()
+            add(arg11.Character)
+        end)
+        pcall(function()
+            local charactersFolder = Workspace:FindFirstChild("Characters")
+            if charactersFolder then
+                add(charactersFolder:FindFirstChild(arg11.Name))
+            end
+        end)
+        for _, character in ipairs(list) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                or character:FindFirstChild("Torso")
+                or character:FindFirstChild("UpperTorso")
+                or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then
+                humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
+            end
+            if humanoidRootPart then
+                return character, humanoid, humanoidRootPart
+            end
+        end
+    end
+
+    fn63 = function(arg11)
+        return arg11 and arg11.Team and arg11.Team.Name or "Civilian"
+    end
+
+    fn84 = function(arg11, arg12, arg13)
+        if not arg11 or arg11 == player then
+            return false
+        end
+        if arg12 then
+            return arg11.Team and arg11.Team.Name == "Police"
+        end
+        if arg13 then
+            return arg11.Team and arg11.Team.Name == "Civilian"
+        end
+        return true
+    end
+
+    fn85 = function(arg11, arg12)
+        if not arg12 then
+            return true
+        end
+        return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
+    end
+
+    fn87 = function(arg11)
+        local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
+        for _, v33 in ipairs(tbl29) do
+            local v34 = arg11:FindFirstChild(v33)
+            if v34 then
+                return v34
+            end
+        end
+        return arg11:FindFirstChild("HumanoidRootPart")
+    end
+
+    fn90 = function(position, position2)
         local part = Instance.new("Part")
         local part2 = Instance.new("Part")
+
         for _, v32 in ipairs({ part, part2 }) do
-            v32.Anchored = true; v32.CanCollide = false; v32.Transparency = 1
-            v32.Size = Vector3.new(0.1, 0.1, 0.1); v32.Parent = Workspace
+            v32.Anchored = true
+            v32.CanCollide = false
+            v32.Transparency = 1
+            v32.Size = Vector3.new(0.1, 0.1, 0.1)
+            v32.Parent = Workspace
         end
-        part.Position = position; part2.Position = position2
+
+        part.Position = position
+        part2.Position = position2
         local attachment = Instance.new("Attachment", part)
         local attachment2 = Instance.new("Attachment", part2)
         local beam = Instance.new("Beam", part)
-        beam.Attachment0 = attachment; beam.Attachment1 = attachment2
-        beam.Width0 = 0.15; beam.Width1 = 0.15
-        beam.Color = ColorSequence.new(Color3.fromRGB(180, 200, 255))
-        task.delay(0.8, function() pcall(function() part:Destroy(); part2:Destroy() end) end)
-    end
-    local lastRageAttack = 0
-    local lastNPCCheckRage = 0
-    RunService.Heartbeat:Connect(function()
-        if not tbl13.enabled or not playerEvent then return end
-        local now = tick()
-        if now - lastRageAttack < tbl13.interval then return end
-        local v32, v33, v34 = fn40_rage(player)
-        if not v34 then return end
-        local position = v34.Position
-        local v35 = fn63(player)
-        local bestTarget, bestTargetPart, bestDist = nil, nil, nil
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player and fn84(plr, tbl13.policeLock, tbl13.civilianLock) and fn85(plr, tbl13.combatCheck) then
-                local v36, v37 = fn40_rage(plr)
-                local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87(v36))
-                if v36 and v37 and v38 and v37.Health > 0 then
-                    if tbl13.jobCheck and fn63(plr) == v35 then continue end
-                    if tbl13.aliveCheck and (not v37 or v37.Health <= 0) then continue end
-                    local dist = (v38.Position - position).Magnitude
-                    if dist <= tbl13.range then
-                        if tbl13.wallCheck then
-                            local raycastParams = RaycastParams.new()
-                            raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
-                            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                            local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
-                            if hit and not hit.Instance:IsDescendantOf(v36) then continue end
-                        end
-                        if not bestDist or dist < bestDist then bestDist = dist; bestTarget = plr; bestTargetPart = v38 end
-                    end
-                end
+        beam.Attachment0 = attachment
+        beam.Attachment1 = attachment2
+        beam.Width0 = 0.15
+        beam.Width1 = 0.15
+        beam.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+            ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 165, 0)),
+            ColorSequenceKeypoint.new(0.34, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 200, 255)),
+            ColorSequenceKeypoint.new(0.84, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(148, 0, 211))
+        })
+
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://6534948092"
+        sound.Volume = 0.5
+        sound.Parent = part
+        local soundEndedConn
+        soundEndedConn = sound.Ended:Connect(function()
+            if part and part.Parent then
+                sound:Play()
             end
-        end
-        if tbl13.affectNPC and now - lastNPCCheckRage >= 0.5 then
-            lastNPCCheckRage = now
-            local nearbyParts = Workspace:GetPartBoundsInRadius(position, 20)
-            for _, part in ipairs(nearbyParts) do
-                local model = part:FindFirstAncestorOfClass("Model")
-                if model and not Players:GetPlayerFromCharacter(model) then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local head = model:FindFirstChild(tbl13.bodyPart) or model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
-                        if head then
-                            local dist = (head.Position - position).Magnitude
-                            if dist <= 20 then
-                                if tbl13.wallCheck then
-                                    local raycastParams = RaycastParams.new()
-                                    raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
-                                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                                    local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, head.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
-                                    if hit and not hit.Instance:IsDescendantOf(model) then continue end
+        end)
+        sound:Play()
+
+        task.delay(0.8, function()
+            pcall(function()
+                if soundEndedConn then soundEndedConn:Disconnect() end
+                if sound then sound:Stop() end
+                part:Destroy()
+                part2:Destroy()
+            end)
+        end)
+    end
+
+    task.spawn(function()
+        while true do
+            if tbl13.enabled and playerEvent then
+                local v32, v33, v34 = fn40(player)
+                if v34 then
+                    local position = v34.Position
+                    local v35 = fn63(player)
+                    for _, player2 in ipairs(Players:GetPlayers()) do
+                        if player2 ~= player
+                            and fn84(player2, tbl13.policeLock, tbl13.civilianLock)
+                            and fn85(player2, tbl13.combatCheck) then
+                            local v36, v37, v38Part = fn40(player2)
+                            local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87(v36))
+                            if v36 and v37 and v38 and v37.Health > 0 then
+                                if tbl13.jobCheck and fn63(player2) == v35 then
+                                    continue
                                 end
-                                if not bestDist or dist < bestDist then bestDist = dist; bestTarget = model; bestTargetPart = head end
+
+                                if (v38.Position - position).Magnitude <= tbl13.range then
+                                    if tbl13.wallCheck then
+                                        local raycastParams = RaycastParams.new()
+                                        raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
+                                        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+                                        local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
+                                        if hit and not hit.Instance:IsDescendantOf(v36) then
+                                            continue
+                                        end
+                                    end
+
+                                    pcall(function()
+                                        playerEvent:FireServer("damage", {
+                                            bodyParts = { { tbl13.bodyPart, 1 } },
+                                            shotCode = { position, (v38.Position - position).Unit },
+                                            pos = v38.Position,
+                                            target = player2,
+                                            damageFactor = 1.5,
+                                            bulletProofTool = false,
+                                        })
+
+                                        if tbl13.beam then
+                                            fn90(position, v38.Position)
+                                        end
+                                    end)
+
+                                    continue
+                                end
                             end
                         end
                     end
                 end
             end
-        end
-        if bestTarget and bestTargetPart then
-            pcall(function()
-                playerEvent:FireServer("damage", {
-                    bodyParts = { { tbl13.bodyPart, 1 } },
-                    shotCode = { position, (bestTargetPart.Position - position).Unit },
-                    pos = bestTargetPart.Position,
-                    target = bestTarget,
-                    damageFactor = 1.5,
-                    bulletProofTool = false,
-                })
-                if tbl13.beam then fn90(position, bestTargetPart.Position) end
-            end)
-            lastRageAttack = now
+
+            task.wait(tbl13.interval)
         end
     end)
-    F:Toggle({ Title = "Ragebot", Default = false, Callback = function(v) tbl13.enabled = v end })
-    F:Slider({ Title = "攻击距离", Value = { Min = 10, Max = 500, Default = 150 }, Step = 1, Callback = function(v) tbl13.range = v end })
-    F:Slider({ Title = "攻击间隔", Value = { Min = 0.01, Max = 1, Default = 0.05 }, Step = 0.01, Callback = function(v) tbl13.interval = v end })
-    F:Dropdown({ Title = "攻击部位", Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" }, Value = "头部", Callback = function(arg11) tbl13.bodyPart = tbl14[arg11] or "Head" end })
-    F:Toggle({ Title = "职业检测", Default = false, Callback = function(v) tbl13.jobCheck = v end })
-    F:Toggle({ Title = "墙壁检测", Default = false, Callback = function(v) tbl13.wallCheck = v end })
-    F:Toggle({ Title = "活体检测", Default = false, Callback = function(v) tbl13.aliveCheck = v end })
-    F:Toggle({ Title = "战斗状态检测", Default = false, Callback = function(v) tbl13.combatCheck = v end })
-    F:Toggle({ Title = "锁定警察", Default = false, Callback = function(v) tbl13.policeLock = v; if v then tbl13.civilianLock = false end end })
-    F:Toggle({ Title = "锁定平民", Default = false, Callback = function(v) tbl13.civilianLock = v; if v then tbl13.policeLock = false end end })
-    F:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl13.affectNPC = v end })
-    F:Toggle({ Title = "弹道显示", Default = false, Callback = function(v) tbl13.beam = v end })
+
+    F:Toggle({
+        Title = "Ragebot",
+        Default = false,
+        Callback = function(enabled)
+            tbl13.enabled = enabled
+        end,
+    })
+
+    F:Slider({
+        Title = "攻击距离",
+        Value = { Min = 10, Max = 500, Default = 150 },
+        Step = 1,
+        Callback = function(range)
+            tbl13.range = range
+        end,
+    })
+
+    F:Slider({
+        Title = "攻击间隔",
+        Value = { Min = 0.01, Max = 1, Default = 0.05 },
+        Step = 0.01,
+        Callback = function(interval)
+            tbl13.interval = interval
+        end,
+    })
+
+    F:Dropdown({
+        Title = "攻击部位",
+        Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" },
+        Value = "头部",
+        Callback = function(arg11)
+            tbl13.bodyPart = tbl14[arg11] or "Head"
+        end,
+    })
+
+    F:Toggle({
+        Title = "职业检测",
+        Default = false,
+        Callback = function(jobCheck)
+            tbl13.jobCheck = jobCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "墙壁检测",
+        Default = false,
+        Callback = function(wallCheck)
+            tbl13.wallCheck = wallCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "活体检测",
+        Default = false,
+        Callback = function(aliveCheck)
+            tbl13.aliveCheck = aliveCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "战斗状态检测",
+        Default = false,
+        Callback = function(combatCheck)
+            tbl13.combatCheck = combatCheck
+        end,
+    })
+
+    F:Toggle({
+        Title = "锁定警察",
+        Default = false,
+        Callback = function(policeLock)
+            tbl13.policeLock = policeLock
+            if policeLock then
+                tbl13.civilianLock = false
+            end
+        end,
+    })
+
+    F:Toggle({
+        Title = "锁定平民",
+        Default = false,
+        Callback = function(civilianLock)
+            tbl13.civilianLock = civilianLock
+            if civilianLock then
+                tbl13.policeLock = false
+            end
+        end,
+    })
+
+    F:Toggle({
+        Title = "攻击NPC",
+        Default = false,
+        Callback = function(v)
+            tbl13.affectNPC = v
+        end,
+    })
+
+    F:Toggle({
+        Title = "弹道显示",
+        Default = false,
+        Callback = function(beam)
+            tbl13.beam = beam
+        end,
+    })
 
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
