@@ -1834,27 +1834,7 @@ function createUI()
     PoliceTab:Divider({ Text = "自动点护送" })
     local autoEscortEnabled = false
     local autoCuffEnabled = false
-    local autoCuffPromptConn = nil
-    PoliceTab:Toggle({
-        Title = "自动手铐",
-        Value = false,
-        Callback = function(value)
-            autoCuffEnabled = value
-            if value then
-                for _, desc in ipairs(workspace:GetDescendants()) do
-                    if desc:IsA("ProximityPrompt") then desc.HoldDuration = 0 end
-                end
-                if autoCuffPromptConn then autoCuffPromptConn:Disconnect() end
-                autoCuffPromptConn = workspace.DescendantAdded:Connect(function(desc)
-                    if desc:IsA("ProximityPrompt") and autoCuffEnabled then
-                        desc.HoldDuration = 0
-                    end
-                end)
-            else
-                if autoCuffPromptConn then autoCuffPromptConn:Disconnect(); autoCuffPromptConn = nil end
-            end
-        end
-    })
+    PoliceTab:Toggle({ Title = "自动手铐", Value = false, Callback = function(value) autoCuffEnabled = value end })
     PoliceTab:Toggle({ Title = "自动点护送", Value = false, Callback = function(value) autoEscortEnabled = value end })
     PoliceTab:Button({
         Title = "传送至监狱内部",
@@ -1898,28 +1878,8 @@ function createUI()
     local autoHealEnabled = false
     local healRadius = 30
     local healInterval = 0.1
-    local autoHealPromptConn = nil
     DoctorTab:Divider({ Text = "自动治疗" })
-    DoctorTab:Toggle({
-        Title = "自动治疗",
-        Value = false,
-        Callback = function(value)
-            autoHealEnabled = value
-            if value then
-                for _, desc in ipairs(workspace:GetDescendants()) do
-                    if desc:IsA("ProximityPrompt") then desc.HoldDuration = 0 end
-                end
-                if autoHealPromptConn then autoHealPromptConn:Disconnect() end
-                autoHealPromptConn = workspace.DescendantAdded:Connect(function(desc)
-                    if desc:IsA("ProximityPrompt") and autoHealEnabled then
-                        desc.HoldDuration = 0
-                    end
-                end)
-            else
-                if autoHealPromptConn then autoHealPromptConn:Disconnect(); autoHealPromptConn = nil end
-            end
-        end
-    })
+    DoctorTab:Toggle({ Title = "自动治疗", Value = false, Callback = function(value) autoHealEnabled = value end })
     DoctorTab:Divider({ Text = "修复物品" })
     DoctorTab:Button({
         Title = "修复MT急救包",
@@ -2058,6 +2018,8 @@ function createUI()
     DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
     DoctorTab:Toggle({ Title = "不传送平民队伍的玩家", Value = false, Callback = function(value) skipCivilianTeleport = value end })
     DoctorTab:Toggle({ Title = "只传送附近的玩家", Value = false, Callback = function(value) onlyNearbyTeleport = value end })
+
+    -- 修复：自动治疗循环，每次循环里把 HoldDuration 直接设置为 0 再触发
     task.spawn(function()
         while not isDestroyed do
             task.wait(healInterval)
@@ -2074,10 +2036,16 @@ function createUI()
                                 local dist = (targetRoot.Position - myRoot.Position).Magnitude
                                 if dist <= healRadius then
                                     for _, obj in ipairs(p.Character:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then pcall(function() fireproximityprompt(obj) end) end
+                                        if obj:IsA("ProximityPrompt") then
+                                            obj.HoldDuration = 0
+                                            pcall(function() fireproximityprompt(obj) end)
+                                        end
                                     end
                                     for _, obj in ipairs(char:GetDescendants()) do
-                                        if obj:IsA("ProximityPrompt") then pcall(function() fireproximityprompt(obj) end) end
+                                        if obj:IsA("ProximityPrompt") then
+                                            obj.HoldDuration = 0
+                                            pcall(function() fireproximityprompt(obj) end)
+                                        end
                                     end
                                 end
                             end
@@ -2087,6 +2055,8 @@ function createUI()
             end
         end
     end)
+
+    -- 修复：自动手铐循环，每次循环里把 HoldDuration 直接设置为 0 再触发
     task.spawn(function()
         while not isDestroyed do
             if autoCuffEnabled then
@@ -2098,6 +2068,12 @@ function createUI()
                             local hum = p.Character:FindFirstChildOfClass("Humanoid")
                             local head = p.Character:FindFirstChild("Head")
                             if hum and head and (head.Position - myRoot.Position).Magnitude < 15 then
+                                for _, obj in ipairs(p.Character:GetDescendants()) do
+                                    if obj:IsA("ProximityPrompt") then
+                                        obj.HoldDuration = 0
+                                        pcall(function() fireproximityprompt(obj) end)
+                                    end
+                                end
                                 local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
                                 if event then
                                     task.spawn(function() pcall(function() event:InvokeServer("handcuff", p, false) end) end)
