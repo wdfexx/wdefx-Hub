@@ -356,10 +356,10 @@ for i = 1, #username do
 end
 
 WindUI:Popup({
-    Title = 'SX HUB V3',
+    Title = 'wdfex',
     IconThemed = true,
     Icon = "crown",
-    Content = "欢迎尊重的用户 " .. coloredUsername .. " \n使用SX HUB\n你的支持是我们更新的动力\nQQ主群566257944",
+    Content = "欢迎尊重的用户 " .. coloredUsername .. " \n使用wdfex-Hun\n你的支持是我们更新的动力\nQQ主群566257944",
     Buttons = {
         {
             Title = "取消",
@@ -379,10 +379,10 @@ WindUI:Popup({
 })
 function createUI()
     local Window = WindUI:CreateWindow({
-        Title = 'SX HUB',
+        Title = 'wdfex-Hub',
         Icon = "crown",
         IconThemed = true,
-        Author = "v3.0.1 by 神青",
+        Author = "bywdfex",
         Folder = "CloudHub",
         Size = UDim2.fromOffset(300, 200),
         Transparent = true,
@@ -428,7 +428,7 @@ function createUI()
     })
 
 Window:EditOpenButton({
-    Title = "SX HUB",
+    Title = "wdfex-Hub",
     Icon = "crown",
     CornerRadius = UDim.new(0,16),
     StrokeThickness = 4,
@@ -3776,7 +3776,7 @@ Main:Slider({
     })
 local Main = Window:Tab({Title = "娱乐", Icon = "settings"})
 
-_G.AUTO_CHAT_TEXT = "SX HUB ！！！"
+_G.AUTO_CHAT_TEXT = "wdfex-Hub ！！！"
 _G.AUTO_CHAT_ENABLED = false
 _G.AUTO_CHAT_INTERVAL = 1.5
 _G.AUTO_CHAT_MODE = "自定义"
@@ -3792,7 +3792,7 @@ local chatSystem = {
         ["7字经"] = function() return {"来老弟", "你有啥实力", "你活着干啥呢", "臭底层", "快来打压你爹", "我在这等着呢", "快来打压我"} end,
         ["14字经"] = function() return {"你有啥用", "你活着干啥呢", "赶紧跳了吧", "老弟家里几位在哪里", "来吧赶紧让我口吃", "你爹等着你呢", "你个窝囊废", "孩子快来呀", "怎么不敢和你爹对话了？", "你有什么用处", "你活着当技女吗？", "一句话", "来打压我", "哈哈哈笑死我了"} end,
         ["糖人语言"] = function() return {"我是奶龙", "奶龙是我", "你是谁？？", "我是谁", "你干嘛啊？"} end,
-        ["宣传词"] = function() return {"SX HUB牛逼", "打败一切", "快来购买", "功能多多", "支持超多服务器"} end
+        ["宣传词"] = function() return {"wdfex-Hub牛逼", "打败一切", "快来购买", "功能多多", "支持超多服务器"} end
     },
     connections = {},
     active = false
@@ -4500,7 +4500,7 @@ Settings:Button({
             speed = animationSpeed,
             scale = uiScale
         }
-        setclipboard("SX HUB V2 设置: " .. game:GetService("HttpService"):JSONEncode(settings))
+        setclipboard("wdfex-Hub设置: " .. game:GetService("HttpService"):JSONEncode(settings))
         playSound()
     end
 })
