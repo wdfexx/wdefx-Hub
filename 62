@@ -1,5 +1,5 @@
 --!nocheck
--- WindUI Library v2.3
+-- WindUI Library v2.4
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -22,20 +22,22 @@ local Theme = {
     accentBright = Color3.fromRGB(167, 139, 250),
     danger       = Color3.fromRGB(220, 70, 70),
     dangerHover  = Color3.fromRGB(240, 90, 90),
+    success      = Color3.fromRGB(80, 200, 120),
+    warning      = Color3.fromRGB(255, 180, 60),
     font         = Enum.Font.Gotham,
     fontBold     = Enum.Font.GothamBold,
     fontMed      = Enum.Font.GothamMedium,
+    fontCode     = Enum.Font.Code,
 }
 
 local Config = {
     BackgroundImage = "",
-    BackgroundImageTransparency = 0,      -- 图片完全不透明
-    OverlayTransparency = 0.9,            -- 遮罩很淡
+    BackgroundImageTransparency = 0,
+    OverlayTransparency = 0.9,
     BallImage = "",
     BallImageTransparency = 0,
 }
 
--- 控件背景默认全透明, 只显示文字和开关
 local CONTROL_BG_TRANSPARENCY = 1
 
 local function new(class, props, parent)
@@ -49,13 +51,17 @@ local function corner(radius, parent)
     return new("UICorner", { CornerRadius = UDim.new(0, radius or 6) }, parent)
 end
 
+local function circle(parent)
+    return new("UICorner", { CornerRadius = UDim.new(1, 0) }, parent)
+end
+
 local function rainbowGradient(parent, thickness)
     local stroke = new("UIStroke", {
         Color = Color3.fromRGB(255, 255, 255),
         Thickness = thickness or 2,
         Transparency = 0,
     }, parent)
-    local g = new("UIGradient", {
+    new("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 100)),
             ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 180, 80)),
@@ -65,7 +71,7 @@ local function rainbowGradient(parent, thickness)
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 100)),
         }),
     }, stroke)
-    return stroke, g
+    return stroke
 end
 
 local function getGuiParent()
@@ -90,6 +96,62 @@ local gui = new("ScreenGui", {
 })
 gui.Parent = getGuiParent()
 
+-- ============ 通知系统 ============
+local notifyHolder = new("Frame", {
+    Name = "NotifyHolder",
+    Size = UDim2.new(0, 280, 1, -40),
+    Position = UDim2.new(1, -300, 0, 20),
+    BackgroundTransparency = 1,
+    ZIndex = 900,
+}, gui)
+new("UIListLayout", {
+    Padding = UDim.new(0, 8),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    VerticalAlignment = Enum.VerticalAlignment.Top,
+}, notifyHolder)
+
+local function notify(title, text, duration, color)
+    duration = duration or 3
+    color = color or Theme.accent
+    local card = new("Frame", {
+        Size = UDim2.new(1, 0, 0, 60),
+        BackgroundColor3 = Theme.header,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        ZIndex = 901,
+    }, notifyHolder)
+    corner(8, card)
+    new("UIStroke", { Color = color, Thickness = 1.5, Transparency = 0.3 }, card)
+    new("Frame", {
+        Size = UDim2.new(0, 3, 1, 0),
+        BackgroundColor3 = color,
+        BorderSizePixel = 0, ZIndex = 902,
+    }, card)
+    local tl = new("TextLabel", {
+        Size = UDim2.new(1, -20, 0, 20),
+        Position = UDim2.new(0, 14, 0, 8),
+        BackgroundTransparency = 1, Text = title,
+        TextColor3 = color, TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Theme.fontBold, TextSize = 12, ZIndex = 902,
+    }, card)
+    local t2 = new("TextLabel", {
+        Size = UDim2.new(1, -20, 0, 24),
+        Position = UDim2.new(0, 14, 0, 28),
+        BackgroundTransparency = 1, Text = text,
+        TextColor3 = Theme.textDim, TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Theme.fontMed, TextSize = 11, TextWrapped = true, ZIndex = 902,
+    }, card)
+    card.Position = UDim2.new(1, 20, 0, 0)
+    tween(card, 0.25, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Back)
+    task.delay(duration, function()
+        tween(card, 0.2, { Position = UDim2.new(1, 20, 0, 0) })
+        task.wait(0.25)
+        card:Destroy()
+    end)
+end
+
+-- ============ 拖拽 ============
 local function attachDrag(handle, target, onClick, onEnd)
     local dragging, moved = false, false
     local dragStart, startPos
@@ -124,54 +186,92 @@ local function attachDrag(handle, target, onClick, onEnd)
     end)
 end
 
+-- ============ 缩放 ============
+local function attachResize(handle, target, minW, minH, onResize)
+    local resizing = false
+    local startPos, startSize
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            startPos = input.Position
+            startSize = target.Size
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if not resizing then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local d = input.Position - startPos
+            local newW = math.max(minW, startSize.X.Offset + d.X)
+            local newH = math.max(minH, startSize.Y.Offset + d.Y)
+            target.Size = UDim2.new(0, newW, 0, newH)
+            if onResize then onResize(newW, newH) end
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = false
+        end
+    end)
+end
+
 local Library = {}
 Library.Theme = Theme
 Library.Config = Config
+Library.Notify = notify
 
 function Library.new(config)
     config = config or {}
     local titleText = config.Title or "WindUI"
     local subtitle = config.Subtitle or "v1.0"
     local W = config.Width or 620
-    local H = config.Height or 430
+    local H = config.Height or 440
     local X = config.X or 60
     local Y = config.Y or 60
     local HEADER_H = 42
     local SIDEBAR_W = 145
-    local BALL_SIZE = 52
+    local BALL_SIZE = 54
 
     local window = {}
+    local lastW, lastH = W, H
 
-    -- ===== 悬浮球 =====
-    local ball = new("TextButton", {
+    -- ===== 悬浮球 (图片圆形裁剪) =====
+    local ball = new("ImageButton", {
         Name = "WindBall",
         Size = UDim2.new(0, BALL_SIZE, 0, BALL_SIZE),
         Position = UDim2.new(1, -80, 1, -120),
         BackgroundColor3 = Theme.header,
-        BackgroundTransparency = 0.05,
-        BorderSizePixel = 0, Text = "", AutoButtonColor = false,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0, Text = "",
+        AutoButtonColor = false,
         Visible = false, Active = true,
+        Image = "",
+        ImageTransparency = 0,
+        ScaleType = Enum.ScaleType.Crop,
         ClipsDescendants = true,
     }, gui)
-    corner(BALL_SIZE / 2, ball)
-    local ballStroke, _ = rainbowGradient(ball, 2.5)
+    circle(ball)   -- ★ 强制圆形 (半径 = 1,0 全圆)
 
-    if Config.BallImage and Config.BallImage ~= "" then
-        new("ImageLabel", {
-            Size = UDim2.new(1, 0, 1, 0),
-            BackgroundTransparency = 1,
-            Image = Config.BallImage,
-            ImageTransparency = Config.BallImageTransparency,
-            ScaleType = Enum.ScaleType.Crop,
-            ZIndex = 1,
-        }, ball)
-    else
-        new("TextLabel", {
+    -- 如果没有图, 显示 W
+    local fallbackW
+    if not Config.BallImage or Config.BallImage == "" then
+        ball.Image = ""
+        ball.BackgroundColor3 = Theme.header
+        fallbackW = new("TextLabel", {
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundTransparency = 1, Text = "W",
             TextColor3 = Theme.accent, Font = Theme.fontBold, TextSize = 22,
+            ZIndex = 2,
         }, ball)
+        circle(fallbackW)
+    else
+        ball.Image = Config.BallImage
+        ball.ImageTransparency = Config.BallImageTransparency
     end
+
+    local ballStroke = rainbowGradient(ball, 3)
 
     task.spawn(function()
         while ball.Parent do
@@ -182,6 +282,7 @@ function Library.new(config)
         end
     end)
 
+    -- 顺时针旋转
     task.spawn(function()
         while ball.Parent do
             local t = TweenService:Create(ball,
@@ -213,7 +314,6 @@ function Library.new(config)
             ScaleType = Enum.ScaleType.Crop, ZIndex = 0,
         }, main)
         corner(8, bgImg)
-
         local overlay = new("Frame", {
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundColor3 = Theme.bg,
@@ -223,7 +323,7 @@ function Library.new(config)
         corner(8, overlay)
     end
 
-    -- ===== header (全透明) =====
+    -- ===== header =====
     local header = new("Frame", {
         Size = UDim2.new(1, 0, 0, HEADER_H),
         BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2,
@@ -286,7 +386,7 @@ function Library.new(config)
     minBtn.MouseEnter:Connect(function() tween(minBtn, 0.1, { BackgroundColor3 = Theme.itemBgHover, BackgroundTransparency = 0.2 }) end)
     minBtn.MouseLeave:Connect(function() tween(minBtn, 0.1, { BackgroundColor3 = Theme.itemBg, BackgroundTransparency = 0.3 }) end)
 
-    -- ===== sidebar (全透明) =====
+    -- ===== sidebar =====
     local sidebar = new("ScrollingFrame", {
         Size = UDim2.new(0, SIDEBAR_W, 1, -HEADER_H - 44),
         Position = UDim2.new(0, 0, 0, HEADER_H),
@@ -302,7 +402,6 @@ function Library.new(config)
         PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10),
     }, sidebar)
 
-    -- 底部条 (全透明)
     local footer = new("Frame", {
         Size = UDim2.new(0, SIDEBAR_W, 0, 44),
         Position = UDim2.new(0, 0, 1, -44),
@@ -324,7 +423,22 @@ function Library.new(config)
         ClipsDescendants = true, ZIndex = 2,
     }, main)
 
-    -- ===== 分类管理 =====
+    -- ★ 缩放手柄 (右下角)
+    local resizeHandle = new("TextButton", {
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 1, -20),
+        BackgroundTransparency = 1,
+        Text = "◢",
+        TextColor3 = Theme.textDim, Font = Theme.fontBold, TextSize = 12,
+        AutoButtonColor = false, ZIndex = 10,
+    }, main)
+    attachResize(resizeHandle, main, 400, 300, function(w, h)
+        lastW, lastH = w, h
+    end)
+    resizeHandle.MouseEnter:Connect(function() tween(resizeHandle, 0.1, { TextColor3 = Theme.accent }) end)
+    resizeHandle.MouseLeave:Connect(function() tween(resizeHandle, 0.1, { TextColor3 = Theme.textDim }) end)
+
+    -- ===== 分类 =====
     local categories = {}
     local activeCategory = nil
     local switchCategory
@@ -376,11 +490,9 @@ function Library.new(config)
             label = lbl, page = page, layout = pageLayout, order = 0,
         }
         table.insert(categories, cat)
-
         btn.MouseButton1Click:Connect(function()
             if switchCategory then switchCategory(cat) end
         end)
-
         return cat
     end
 
@@ -458,7 +570,20 @@ function Library.new(config)
         refreshPage(cat)
     end
 
-    -- Button: 全透明背景
+    local function addParagraph(cat, text)
+        local p = new("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1, Text = text or "",
+            TextColor3 = Theme.textDim, TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true,
+            Font = Theme.fontMed, TextSize = 11,
+            LayoutOrder = nextOrderIn(cat), ZIndex = 4,
+        }, cat.page)
+        outline(p)
+        refreshPage(cat); return p
+    end
+
     local function addButton(cat, cfg)
         cfg = cfg or {}
         local btn = new("TextButton", {
@@ -471,9 +596,7 @@ function Library.new(config)
             LayoutOrder = nextOrderIn(cat), ZIndex = 4,
         }, cat.page)
         corner(6, btn)
-        local lbl = btn
         new("UIStroke", { Color = Color3.fromRGB(0, 0, 0), Thickness = 1, Transparency = 0.2 }, btn)
-
         btn.MouseEnter:Connect(function()
             tween(btn, 0.1, { BackgroundColor3 = Theme.accentDark, BackgroundTransparency = 0.5 })
         end)
@@ -484,7 +607,6 @@ function Library.new(config)
         refreshPage(cat); return btn
     end
 
-    -- Toggle: 行透明, 开关保留
     local function addToggle(cat, cfg)
         cfg = cfg or {}
         local st = cfg.Default or false
@@ -541,7 +663,6 @@ function Library.new(config)
         return { Set = set, Get = function() return st end, Instance = row }
     end
 
-    -- Slider: 行透明, 轨道保留
     local function addSlider(cat, cfg)
         cfg = cfg or {}
         local minV = cfg.Min or 0
@@ -628,7 +749,6 @@ function Library.new(config)
         }
     end
 
-    -- Input: 全透明背景, 只留边框
     local function addInput(cat, cfg)
         cfg = cfg or {}
         local row = new("Frame", {
@@ -662,7 +782,6 @@ function Library.new(config)
         }
     end
 
-    -- Dropdown: header 透明, 列表保留
     local function addDropdown(cat, cfg)
         cfg = cfg or {}
         local options = cfg.Options or {}
@@ -674,7 +793,6 @@ function Library.new(config)
             LayoutOrder = nextOrderIn(cat),
             ClipsDescendants = false, ZIndex = 4,
         }, cat.page)
-
         local header2 = new("TextButton", {
             Size = UDim2.new(1, 0, 0, 36),
             BackgroundTransparency = CONTROL_BG_TRANSPARENCY,
@@ -691,7 +809,6 @@ function Library.new(config)
             Font = Theme.fontMed, TextSize = 11, ZIndex = 6,
         }, header2)
         outline(dlabel)
-
         local curLabel = new("TextLabel", {
             Size = UDim2.new(1, -90, 1, 0), Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1, Text = current,
@@ -699,13 +816,11 @@ function Library.new(config)
             Font = Theme.fontMed, TextSize = 11, ZIndex = 6,
         }, header2)
         outline(curLabel)
-
         local arrow = new("TextLabel", {
             Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -26, 0, 0),
             BackgroundTransparency = 1, Text = "▼",
             TextColor3 = Theme.textDim, Font = Theme.fontBold, TextSize = 8, ZIndex = 6,
         }, header2)
-
         local list = new("ScrollingFrame", {
             Size = UDim2.new(1, 0, 0, math.min(#options * 28, 180)),
             Position = UDim2.new(0, 0, 0, 40),
@@ -724,7 +839,6 @@ function Library.new(config)
             PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4),
             PaddingRight = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
         }, list)
-
         local items = {}
         for i, opt in ipairs(options) do
             local it = new("TextButton", {
@@ -743,13 +857,11 @@ function Library.new(config)
         task.defer(function()
             list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
         end)
-
         header2.MouseButton1Click:Connect(function()
             open = not open
             list.Visible = open
             arrow.Text = open and "▲" or "▼"
         end)
-
         for i, it in ipairs(items) do
             it.MouseButton1Click:Connect(function()
                 current = options[i]
@@ -779,7 +891,6 @@ function Library.new(config)
         }
     end
 
-    -- Keybind: 行透明, 按键框保留
     local function addKeybind(cat, cfg)
         cfg = cfg or {}
         local currentKey = cfg.Default or Enum.KeyCode.RightShift
@@ -792,7 +903,6 @@ function Library.new(config)
         }, cat.page)
         corner(6, row)
         new("UIStroke", { Color = Color3.fromRGB(0, 0, 0), Thickness = 1, Transparency = 0.2 }, row)
-
         local klabel = new("TextLabel", {
             Size = UDim2.new(1, -110, 1, 0), Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1, Text = cfg.Text or "Keybind",
@@ -800,7 +910,6 @@ function Library.new(config)
             Font = Theme.fontMed, TextSize = 12, ZIndex = 5,
         }, row)
         outline(klabel)
-
         local keyBtn = new("TextButton", {
             Size = UDim2.new(0, 80, 0, 24),
             Position = UDim2.new(1, -94, 0.5, -12),
@@ -812,7 +921,6 @@ function Library.new(config)
             AutoButtonColor = false, ZIndex = 5,
         }, row)
         corner(5, keyBtn)
-
         keyBtn.MouseButton1Click:Connect(function()
             waiting = true; keyBtn.Text = "..."; keyBtn.TextColor3 = Theme.accent
         end)
@@ -831,10 +939,143 @@ function Library.new(config)
         return { Get = function() return currentKey end }
     end
 
+    -- ★ ColorPicker 颜色选择
+    local function addColorPicker(cat, cfg)
+        cfg = cfg or {}
+        local hue = cfg.DefaultHue or 0
+        local sat = 1
+        local val = 1
+        local row = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 90),
+            BackgroundTransparency = CONTROL_BG_TRANSPARENCY,
+            BorderSizePixel = 0,
+            LayoutOrder = nextOrderIn(cat), ZIndex = 4,
+        }, cat.page)
+        corner(6, row)
+        new("UIStroke", { Color = Color3.fromRGB(0, 0, 0), Thickness = 1, Transparency = 0.2 }, row)
+
+        local lbl = new("TextLabel", {
+            Size = UDim2.new(1, -70, 0, 18),
+            Position = UDim2.new(0, 14, 0, 6),
+            BackgroundTransparency = 1, Text = cfg.Text or "颜色",
+            TextColor3 = Theme.text, TextXAlignment = Enum.TextXAlignment.Left,
+            Font = Theme.fontMed, TextSize = 11, ZIndex = 5,
+        }, row)
+        outline(lbl)
+
+        local preview = new("Frame", {
+            Size = UDim2.new(0, 40, 0, 18),
+            Position = UDim2.new(1, -56, 0, 6),
+            BackgroundColor3 = Color3.fromHSV(hue, sat, val),
+            BorderSizePixel = 0, ZIndex = 5,
+        }, row)
+        corner(4, preview)
+
+        -- 色相条
+        local hueBar = new("Frame", {
+            Size = UDim2.new(1, -28, 0, 20),
+            Position = UDim2.new(0, 14, 0, 32),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0, ZIndex = 5,
+        }, row)
+        corner(4, hueBar)
+        local hueGrad = new("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+                ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+                ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+            }),
+        }, hueBar)
+        local hueKnob = new("Frame", {
+            Size = UDim2.new(0, 6, 1, 4),
+            Position = UDim2.new(hue, 0, 0, -2),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0, ZIndex = 6,
+        }, hueBar)
+        corner(3, hueKnob)
+
+        -- 明度条
+        local valBar = new("Frame", {
+            Size = UDim2.new(1, -28, 0, 14),
+            Position = UDim2.new(0, 14, 0, 60),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0, ZIndex = 5,
+        }, row)
+        corner(4, valBar)
+        local valGrad = new("UIGradient", {
+            Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255)),
+        }, valBar)
+        local valKnob = new("Frame", {
+            Size = UDim2.new(0, 6, 1, 4),
+            Position = UDim2.new(val, 0, 0, -2),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0, ZIndex = 6,
+        }, valBar)
+        corner(3, valKnob)
+
+        local function fire()
+            local c = Color3.fromHSV(hue, sat, val)
+            preview.BackgroundColor3 = c
+            if cfg.Callback then pcall(cfg.Callback, c) end
+        end
+
+        local hueDrag, valDrag = false, false
+        hueBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                hueDrag = true
+                local rel = math.clamp((input.Position.X - hueBar.AbsolutePosition.X) / hueBar.AbsoluteSize.X, 0, 1)
+                hue = rel
+                hueKnob.Position = UDim2.new(rel, 0, 0, -2)
+                fire()
+            end
+        end)
+        valBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                valDrag = true
+                local rel = math.clamp((input.Position.X - valBar.AbsolutePosition.X) / valBar.AbsoluteSize.X, 0, 1)
+                val = rel
+                valKnob.Position = UDim2.new(rel, 0, 0, -2)
+                fire()
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch then
+                if hueDrag then
+                    local rel = math.clamp((input.Position.X - hueBar.AbsolutePosition.X) / hueBar.AbsoluteSize.X, 0, 1)
+                    hue = rel
+                    hueKnob.Position = UDim2.new(rel, 0, 0, -2)
+                    fire()
+                elseif valDrag then
+                    local rel = math.clamp((input.Position.X - valBar.AbsolutePosition.X) / valBar.AbsoluteSize.X, 0, 1)
+                    val = rel
+                    valKnob.Position = UDim2.new(rel, 0, 0, -2)
+                    fire()
+                end
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                hueDrag, valDrag = false, false
+            end
+        end)
+
+        refreshPage(cat)
+        return {
+            Get = function() return Color3.fromHSV(hue, sat, val) end,
+        }
+    end
+
     -- ===== 关闭确认框 =====
     local function showCloseConfirm()
         local dialog = new("Frame", {
-            Name = "CloseConfirm",
             Size = UDim2.new(0, 280, 0, 140),
             Position = UDim2.new(0.5, -140, 0.5, -70),
             BackgroundColor3 = Theme.header,
@@ -843,7 +1084,6 @@ function Library.new(config)
         }, gui)
         corner(10, dialog)
         rainbowGradient(dialog, 2)
-
         new("TextLabel", {
             Size = UDim2.new(1, -30, 0, 28), Position = UDim2.new(0, 16, 0, 12),
             BackgroundTransparency = 1, Text = "确认关闭",
@@ -879,19 +1119,16 @@ function Library.new(config)
             AutoButtonColor = false, ZIndex = 202,
         }, btnRow)
         corner(6, yesBtn)
-
         noBtn.MouseEnter:Connect(function() tween(noBtn, 0.1, { BackgroundColor3 = Theme.itemBgHover }) end)
         noBtn.MouseLeave:Connect(function() tween(noBtn, 0.1, { BackgroundColor3 = Theme.itemBg }) end)
         yesBtn.MouseEnter:Connect(function() tween(yesBtn, 0.1, { BackgroundColor3 = Theme.dangerHover }) end)
         yesBtn.MouseLeave:Connect(function() tween(yesBtn, 0.1, { BackgroundColor3 = Theme.danger }) end)
-
         dialog.Size = UDim2.new(0, 0, 0, 0)
         dialog.Position = UDim2.new(0.5, 0, 0.5, 0)
         tween(dialog, 0.2, {
             Size = UDim2.new(0, 280, 0, 140),
             Position = UDim2.new(0.5, -140, 0.5, -70),
         }, Enum.EasingStyle.Back)
-
         noBtn.MouseButton1Click:Connect(function()
             tween(dialog, 0.15, {
                 Size = UDim2.new(0, 0, 0, 0),
@@ -930,7 +1167,7 @@ function Library.new(config)
         task.delay(0.22, function() ball.Visible = false end)
         main.Visible = true
         main.Size = UDim2.new(0, 0, 0, 0)
-        tween(main, 0.22, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Back)
+        tween(main, 0.22, { Size = UDim2.new(0, lastW, 0, lastH) }, Enum.EasingStyle.Back)
     end
     minBtn.MouseButton1Click:Connect(minimize)
     attachDrag(ball, ball, restore, function(moved)
@@ -942,6 +1179,7 @@ function Library.new(config)
     function window:Minimize() minimize() end
     function window:Restore() restore() end
     function window:Destroy() main:Destroy(); ball:Destroy() end
+    function window:Notify(t, txt, dur, c) notify(t, txt, dur, c) end
 
     local catObjs = {}
     function window:Category(name)
@@ -951,6 +1189,7 @@ function Library.new(config)
         return {
             Section = function(_, t) return addSection(cat, t) end,
             Label = function(_, t, d) return addLabel(cat, t, d) end,
+            Paragraph = function(_, t) return addParagraph(cat, t) end,
             Divider = function() addDivider(cat) end,
             Button = function(_, c) return addButton(cat, c) end,
             Toggle = function(_, c) return addToggle(cat, c) end,
@@ -958,6 +1197,7 @@ function Library.new(config)
             Input = function(_, c) return addInput(cat, c) end,
             Dropdown = function(_, c) return addDropdown(cat, c) end,
             Keybind = function(_, c) return addKeybind(cat, c) end,
+            ColorPicker = function(_, c) return addColorPicker(cat, c) end,
         }
     end
     function window:SelectCategory(name)
