@@ -1,32 +1,39 @@
 --!nocheck
 -- ================================================================
--- ALPHA UI Library v2
--- 主窗口 + 最小化到悬浮球 + 悬浮球可拖拽 + 点击恢复
--- 控件: 分组/标签/按钮/开关/滑块/输入框/下拉/日志
+-- WindUI Clone · v1
+-- 1:1 模仿 WindUI 布局风格
+-- 左侧分类 / 顶部导航 / 内容区 / 控件 (Toggle/Slider/Button/Dropdown/Input/Keybind)
+-- 支持最小化到悬浮球
 -- ================================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 -- ================= 主题 =================
 local Theme = {
-    bg           = Color3.fromRGB(24, 26, 32),
-    bgLight      = Color3.fromRGB(32, 35, 44),
-    bgItem       = Color3.fromRGB(38, 42, 52),
-    bgInput      = Color3.fromRGB(18, 20, 26),
-    border       = Color3.fromRGB(48, 52, 62),
-    text         = Color3.fromRGB(230, 235, 240),
-    textDim      = Color3.fromRGB(150, 155, 165),
-    textMute     = Color3.fromRGB(100, 105, 115),
-    accent       = Color3.fromRGB(0, 200, 200),
-    accentDark   = Color3.fromRGB(0, 140, 140),
-    accentBright = Color3.fromRGB(0, 235, 235),
+    -- WindUI 默认深色
+    bg           = Color3.fromRGB(27, 27, 27),
+    sidebar      = Color3.fromRGB(32, 32, 32),
+    header       = Color3.fromRGB(36, 36, 36),
+    itemBg       = Color3.fromRGB(40, 40, 40),
+    itemBgHover  = Color3.fromRGB(48, 48, 48),
+    inputBg      = Color3.fromRGB(20, 20, 20),
+    border       = Color3.fromRGB(50, 50, 50),
+    text         = Color3.fromRGB(240, 240, 240),
+    textDim      = Color3.fromRGB(160, 160, 160),
+    textMute     = Color3.fromRGB(100, 100, 100),
+    -- 强调色 (可换)
+    accent       = Color3.fromRGB(139, 92, 246),   -- #8B5CF6 紫
+    accentDark   = Color3.fromRGB(109, 62, 216),
+    accentBright = Color3.fromRGB(167, 139, 250),
     danger       = Color3.fromRGB(220, 70, 70),
-    success      = Color3.fromRGB(0, 200, 120),
+    success      = Color3.fromRGB(80, 200, 120),
     font         = Enum.Font.Gotham,
     fontBold     = Enum.Font.GothamBold,
+    fontMed      = Enum.Font.GothamMedium,
     fontCode     = Enum.Font.Code,
 }
 
@@ -50,15 +57,6 @@ local function stroke(color, thickness, transparency, parent)
     }, parent)
 end
 
-local function padding(top, left, right, bottom, parent)
-    return new("UIPadding", {
-        PaddingTop = UDim.new(0, top or 0),
-        PaddingLeft = UDim.new(0, left or 0),
-        PaddingRight = UDim.new(0, right or 0),
-        PaddingBottom = UDim.new(0, bottom or 0),
-    }, parent)
-end
-
 local function getGuiParent()
     local ok, hui = pcall(function() return gethui() end)
     if ok and hui then return hui end
@@ -67,21 +65,31 @@ local function getGuiParent()
     return player:WaitForChild("PlayerGui")
 end
 
+local function tween(obj, time, props, style, dir)
+    local tw = TweenService:Create(
+        obj,
+        TweenInfo.new(time or 0.15, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
+        props
+    )
+    tw:Play()
+    return tw
+end
+
 -- ================= ScreenGui =================
-local UIRoot = new("ScreenGui", {
-    Name = "AlphaUILib_" .. tostring(math.random(10000, 99999)),
+local gui = new("ScreenGui", {
+    Name = "WindUIClone_" .. tostring(math.random(10000, 99999)),
     ResetOnSpawn = false,
     IgnoreGuiInset = true,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-    DisplayOrder = 500,
+    DisplayOrder = 600,
 })
-UIRoot.Parent = getGuiParent()
+gui.Parent = getGuiParent()
 
--- ================= 通用拖拽 =================
--- 返回 dragging 状态表, 并在结束时调用 onEnd(wasDrag)
-local function attachDrag(handle, target, onClick, onEnd)
-    local dragging = false
-    local moved = false
+-- ================================================================
+-- 拖拽
+-- ================================================================
+local function attachDrag(handle, target, onClick)
+    local dragging, moved = false, false
     local dragStart, startPos
 
     handle.InputBegan:Connect(function(input)
@@ -99,9 +107,7 @@ local function attachDrag(handle, target, onClick, onEnd)
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
             local d = input.Position - dragStart
-            if math.abs(d.X) > 3 or math.abs(d.Y) > 3 then
-                moved = true
-            end
+            if math.abs(d.X) > 3 or math.abs(d.Y) > 3 then moved = true end
             target.Position = UDim2.new(
                 startPos.X.Scale, startPos.X.Offset + d.X,
                 startPos.Y.Scale, startPos.Y.Offset + d.Y
@@ -114,278 +120,366 @@ local function attachDrag(handle, target, onClick, onEnd)
             or input.UserInputType == Enum.UserInputType.Touch then
             if dragging then
                 dragging = false
-                if not moved and onClick then
-                    onClick()
-                end
-                if onEnd then onEnd(moved) end
+                if not moved and onClick then onClick() end
             end
         end
     end)
 end
 
--- ================= Library =================
+-- ================================================================
+-- Library
+-- ================================================================
 local Library = {}
 Library.Theme = Theme
-Library.Root = UIRoot
 
 function Library.new(config)
     config = config or {}
-    local title = config.Title or "ALPHA UI"
-    local w = config.Width or 340
-    local h = config.Height or 480
-    local x = config.X or 40
-    local y = config.Y or 40
+    local titleText = config.Title or "WindUI"
+    local subtitle = config.Subtitle or "v1.0"
+    local W = config.Width or 560
+    local H = config.Height or 400
+    local X = config.X or 60
+    local Y = config.Y or 60
+
+    local HEADER_H = 40
+    local SIDEBAR_W = 140
 
     local window = {}
 
-    -- ============================================
+    -- ==========================================
     -- 悬浮球 (最小化后显示)
-    -- ============================================
-    local ballSize = 52
+    -- ==========================================
+    local BALL_SIZE = 48
     local ball = new("TextButton", {
-        Name = "AlphaBall",
-        Size = UDim2.new(0, ballSize, 0, ballSize),
+        Name = "WindBall",
+        Size = UDim2.new(0, BALL_SIZE, 0, BALL_SIZE),
         Position = UDim2.new(1, -80, 1, -120),
-        BackgroundColor3 = Theme.bgLight,
+        BackgroundColor3 = Theme.header,
         BorderSizePixel = 0,
-        Text = "A",
+        Text = "W",
         TextColor3 = Theme.accent,
         Font = Theme.fontBold,
         TextSize = 22,
         AutoButtonColor = false,
         Visible = false,
         Active = true,
-    }, UIRoot)
-    corner(ballSize / 2, ball)
+    }, gui)
+    corner(BALL_SIZE / 2, ball)
     local ballStroke = stroke(Theme.accent, 2, 0.3, ball)
 
-    -- 悬浮球呼吸动画
     task.spawn(function()
         while ball.Parent do
-            TweenService:Create(ballStroke, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                Transparency = 0.7,
-            }):Play()
+            tween(ballStroke, 1.2, { Transparency = 0.7 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
             task.wait(1.2)
-            TweenService:Create(ballStroke, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                Transparency = 0.1,
-            }):Play()
+            tween(ballStroke, 1.2, { Transparency = 0.1 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
             task.wait(1.2)
         end
     end)
 
-    -- ============================================
+    -- ==========================================
     -- 主窗口
-    -- ============================================
+    -- ==========================================
     local main = new("Frame", {
-        Name = "AlphaWindow",
-        Size = UDim2.new(0, w, 0, h),
-        Position = UDim2.new(0, x, 0, y),
+        Name = "WindMain",
+        Size = UDim2.new(0, W, 0, H),
+        Position = UDim2.new(0, X, 0, Y),
         BackgroundColor3 = Theme.bg,
         BorderSizePixel = 0,
         Active = true,
-        Visible = true,
-    }, UIRoot)
-    corner(10, main)
-    stroke(Theme.accent, 1, 0.4, main)
+        ClipsDescendants = true,
+    }, gui)
+    corner(8, main)
+    stroke(Theme.border, 1, 0.3, main)
 
-    -- 标题栏
-    local titleBar = new("Frame", {
-        Size = UDim2.new(1, 0, 0, 34),
-        BackgroundColor3 = Theme.bgLight,
+    -- ---------- 顶部 header ----------
+    local header = new("Frame", {
+        Size = UDim2.new(1, 0, 0, HEADER_H),
+        BackgroundColor3 = Theme.header,
         BorderSizePixel = 0,
     }, main)
-    corner(10, titleBar)
-    new("Frame", {
-        Size = UDim2.new(1, 0, 0, 10),
-        Position = UDim2.new(0, 0, 1, -10),
-        BackgroundColor3 = Theme.bgLight,
-        BorderSizePixel = 0,
-    }, titleBar)
 
+    -- Logo
+    local logo = new("Frame", {
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(0, 12, 0.5, -12),
+        BackgroundColor3 = Theme.accent,
+        BorderSizePixel = 0,
+    }, header)
+    corner(6, logo)
     new("TextLabel", {
-        Size = UDim2.new(1, -80, 1, 0),
-        Position = UDim2.new(0, 14, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
-        Text = title,
-        TextColor3 = Theme.accent,
+        Text = "W",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Theme.fontBold,
+        TextSize = 14,
+    }, logo)
+
+    -- 标题
+    new("TextLabel", {
+        Size = UDim2.new(0, 200, 1, 0),
+        Position = UDim2.new(0, 44, 0, 0),
+        BackgroundTransparency = 1,
+        Text = titleText,
+        TextColor3 = Theme.text,
         TextXAlignment = Enum.TextXAlignment.Left,
         Font = Theme.fontBold,
         TextSize = 13,
-    }, titleBar)
+    }, header)
 
-    -- 关闭按钮
-    local closeBtn = new("TextButton", {
-        Size = UDim2.new(0, 32, 1, 0),
-        Position = UDim2.new(1, -32, 0, 0),
+    -- 副标题
+    new("TextLabel", {
+        Size = UDim2.new(0, 200, 1, 0),
+        Position = UDim2.new(0, 44 + (#titleText * 7) + 8, 0, 0),
         BackgroundTransparency = 1,
+        Text = subtitle,
+        TextColor3 = Theme.textMute,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Theme.fontMed,
+        TextSize = 10,
+    }, header)
+
+    -- 右上角按钮: 关闭 / 最小化
+    local closeBtn = new("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -38, 0.5, -15),
+        BackgroundColor3 = Theme.itemBg,
+        BorderSizePixel = 0,
         Text = "×",
         TextColor3 = Theme.textDim,
         Font = Theme.fontBold,
-        TextSize = 20,
+        TextSize = 16,
         AutoButtonColor = false,
-    }, titleBar)
+    }, header)
+    corner(6, closeBtn)
 
-    -- 最小化按钮
     local minBtn = new("TextButton", {
-        Size = UDim2.new(0, 32, 1, 0),
-        Position = UDim2.new(1, -64, 0, 0),
-        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -72, 0.5, -15),
+        BackgroundColor3 = Theme.itemBg,
+        BorderSizePixel = 0,
         Text = "−",
         TextColor3 = Theme.textDim,
         Font = Theme.fontBold,
         TextSize = 18,
         AutoButtonColor = false,
-    }, titleBar)
+    }, header)
+    corner(6, minBtn)
 
-    -- 内容区
-    local content = new("ScrollingFrame", {
-        Size = UDim2.new(1, -16, 1, -46),
-        Position = UDim2.new(0, 8, 0, 40),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 4,
-        ScrollBarImageColor3 = Theme.accentDark,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-    }, main)
-    local contentLayout = new("UIListLayout", {
-        Padding = UDim.new(0, 4),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-    }, content)
-    padding(0, 0, 4, 6, content)
-
-    -- 主窗口拖拽
-    attachDrag(titleBar, main)
-
-    -- ============================================
-    -- 最小化 / 恢复
-    -- ============================================
-    local minimized = false
-    local animTime = 0.18
-
-    local function minimize()
-        if minimized then return end
-        minimized = true
-
-        -- 记录窗口位置, 悬浮球飞到窗口位置附近
-        local wp = main.Position
-        ball.Position = UDim2.new(wp.X.Scale, wp.X.Offset, wp.Y.Scale, wp.Y.Offset)
-        ball.Visible = true
-        ball.Size = UDim2.new(0, 0, 0, 0)
-        TweenService:Create(ball, TweenInfo.new(animTime, Enum.EasingStyle.Back), {
-            Size = UDim2.new(0, ballSize, 0, ballSize),
-        }):Play()
-
-        -- 窗口缩小消失
-        TweenService:Create(main, TweenInfo.new(animTime), {
-            Size = UDim2.new(0, 0, 0, 0),
-        }):Play()
-        task.delay(animTime, function()
-            main.Visible = false
-        end)
-    end
-
-    local function restore()
-        if not minimized then return end
-        minimized = false
-
-        -- 悬浮球缩小消失
-        TweenService:Create(ball, TweenInfo.new(animTime), {
-            Size = UDim2.new(0, 0, 0, 0),
-        }):Play()
-        task.delay(animTime, function()
-            ball.Visible = false
-        end)
-
-        -- 窗口放大显示
-        main.Visible = true
-        main.Size = UDim2.new(0, 0, 0, 0)
-        TweenService:Create(main, TweenInfo.new(animTime, Enum.EasingStyle.Back), {
-            Size = UDim2.new(0, w, 0, h),
-        }):Play()
-    end
-
-    minBtn.MouseButton1Click:Connect(minimize)
-
-    -- 悬浮球: 拖动 + 点击恢复
-    attachDrag(ball, ball, restore)
-
-    -- 关闭
-    closeBtn.MouseButton1Click:Connect(function()
-        main:Destroy()
-        ball:Destroy()
+    closeBtn.MouseEnter:Connect(function()
+        tween(closeBtn, 0.1, { BackgroundColor3 = Theme.danger })
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        tween(closeBtn, 0.1, { BackgroundColor3 = Theme.itemBg })
+    end)
+    minBtn.MouseEnter:Connect(function()
+        tween(minBtn, 0.1, { BackgroundColor3 = Theme.itemBgHover })
+    end)
+    minBtn.MouseLeave:Connect(function()
+        tween(minBtn, 0.1, { BackgroundColor3 = Theme.itemBg })
     end)
 
-    -- ============================================
-    -- 布局辅助
-    -- ============================================
-    local orderCounter = 0
-    local function nextOrder()
-        orderCounter = orderCounter + 1
-        return orderCounter
+    -- ---------- 左侧 sidebar ----------
+    local sidebar = new("ScrollingFrame", {
+        Size = UDim2.new(0, SIDEBAR_W, 1, -HEADER_H - 40),
+        Position = UDim2.new(0, 0, 0, HEADER_H),
+        BackgroundColor3 = Theme.sidebar,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+    }, main)
+    local sidebarLayout = new("UIListLayout", {
+        Padding = UDim.new(0, 4),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, sidebar)
+    new("UIPadding", {
+        PaddingTop = UDim.new(0, 10),
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 10),
+    }, sidebar)
+
+    -- 底部信息条
+    local footer = new("Frame", {
+        Size = UDim2.new(0, SIDEBAR_W, 0, 40),
+        Position = UDim2.new(0, 0, 1, -40),
+        BackgroundColor3 = Theme.sidebar,
+        BorderSizePixel = 0,
+    }, main)
+    new("TextLabel", {
+        Size = UDim2.new(1, -16, 1, 0),
+        Position = UDim2.new(0, 12, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Powered by WindUI",
+        TextColor3 = Theme.textMute,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Theme.fontMed,
+        TextSize = 10,
+    }, footer)
+
+    -- ---------- 右侧内容区 ----------
+    local contentHolder = new("Frame", {
+        Size = UDim2.new(1, -SIDEBAR_W, 1, -HEADER_H),
+        Position = UDim2.new(0, SIDEBAR_W, 0, HEADER_H),
+        BackgroundColor3 = Theme.bg,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    }, main)
+
+    -- ==========================================
+    -- 分类管理
+    -- ==========================================
+    local categories = {}       -- { name, btn, page, indicator }
+    local activeCategory = nil
+
+    local function createCategory(name)
+        local btn = new("TextButton", {
+            Size = UDim2.new(1, 0, 0, 34),
+            BackgroundColor3 = Theme.sidebar,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            LayoutOrder = #categories + 1,
+        }, sidebar)
+        corner(6, btn)
+
+        local indicator = new("Frame", {
+            Size = UDim2.new(0, 3, 0, 16),
+            Position = UDim2.new(0, 0, 0.5, -8),
+            BackgroundColor3 = Theme.accent,
+            BorderSizePixel = 0,
+            Visible = false,
+        }, btn)
+        corner(2, indicator)
+
+        local lbl = new("TextLabel", {
+            Size = UDim2.new(1, -20, 1, 0),
+            Position = UDim2.new(0, 14, 0, 0),
+            BackgroundTransparency = 1,
+            Text = name,
+            TextColor3 = Theme.textDim,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Font = Theme.fontMed,
+            TextSize = 12,
+        }, btn)
+
+        local page = new("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            ScrollBarImageColor3 = Theme.accentDark,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Visible = false,
+        }, contentHolder)
+        local pageLayout = new("UIListLayout", {
+            Padding = UDim.new(0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        }, page)
+        new("UIPadding", {
+            PaddingTop = UDim.new(0, 14),
+            PaddingLeft = UDim.new(0, 14),
+            PaddingRight = UDim.new(0, 14),
+            PaddingBottom = UDim.new(0, 14),
+        }, page)
+
+        local cat = {
+            name = name,
+            btn = btn,
+            indicator = indicator,
+            label = lbl,
+            page = page,
+            layout = pageLayout,
+            order = 0,
+        }
+        table.insert(categories, cat)
+        return cat
     end
 
-    local function refreshCanvas()
+    local function switchCategory(cat)
+        if activeCategory == cat then return end
+
+        for _, c in ipairs(categories) do
+            if c == cat then
+                c.page.Visible = true
+                c.indicator.Visible = true
+                tween(c.btn, 0.15, { BackgroundColor3 = Theme.itemBg })
+                tween(c.label, 0.15, { TextColor3 = Theme.text })
+            else
+                c.page.Visible = false
+                c.indicator.Visible = false
+                tween(c.btn, 0.15, { BackgroundColor3 = Theme.sidebar })
+                tween(c.label, 0.15, { TextColor3 = Theme.textDim })
+            end
+        end
+        activeCategory = cat
+    end
+
+    local function refreshPage(cat)
         task.defer(function()
-            content.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 12)
+            cat.page.CanvasSize = UDim2.new(0, 0, 0, cat.layout.AbsoluteContentSize.Y + 20)
         end)
     end
 
-    -- ============================================
-    -- 控件 API
-    -- ============================================
+    local function nextOrderIn(cat)
+        cat.order = cat.order + 1
+        return cat.order
+    end
+
+    -- ==========================================
+    -- 控件 API (基于 category)
+    -- ==========================================
 
     -- ---------- Section ----------
-    function window:Section(text)
+    local function addSection(cat, text)
         local s = new("TextLabel", {
-            Size = UDim2.new(1, -8, 0, 26),
+            Size = UDim2.new(1, 0, 0, 20),
             BackgroundTransparency = 1,
-            Text = text or "SECTION",
+            Text = "▎" .. (text or "SECTION"),
             TextColor3 = Theme.accent,
             TextXAlignment = Enum.TextXAlignment.Left,
             Font = Theme.fontBold,
             TextSize = 11,
-            LayoutOrder = nextOrder(),
-        }, content)
-        padding(8, 6, 0, 0, s)
-        refreshCanvas()
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
+        refreshPage(cat)
         return s
     end
 
     -- ---------- Label ----------
-    function window:Label(text, dim)
+    local function addLabel(cat, text, dim)
         local l = new("TextLabel", {
-            Size = UDim2.new(1, -8, 0, 18),
+            Size = UDim2.new(1, 0, 0, 18),
             BackgroundTransparency = 1,
             Text = text or "",
             TextColor3 = dim and Theme.textDim or Theme.text,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Font = Theme.font,
-            TextSize = 12,
-            LayoutOrder = nextOrder(),
-        }, content)
-        padding(0, 8, 0, 0, l)
-        refreshCanvas()
+            Font = Theme.fontMed,
+            TextSize = 11,
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
+        refreshPage(cat)
         return l
     end
 
     -- ---------- Divider ----------
-    function window:Divider()
-        local d = new("Frame", {
-            Size = UDim2.new(1, -16, 0, 1),
+    local function addDivider(cat)
+        new("Frame", {
+            Size = UDim2.new(1, 0, 0, 1),
             BackgroundColor3 = Theme.border,
             BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, content)
-        refreshCanvas()
-        return d
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
+        refreshPage(cat)
     end
 
     -- ---------- Button ----------
-    function window:Button(cfg)
+    local function addButton(cat, cfg)
         cfg = cfg or {}
-        local baseColor = cfg.Color or Theme.bgItem
+        local baseColor = cfg.Color or Theme.itemBg
         local btn = new("TextButton", {
-            Size = UDim2.new(1, -8, 0, cfg.Height or 32),
+            Size = UDim2.new(1, 0, 0, 36),
             BackgroundColor3 = baseColor,
             BorderSizePixel = 0,
             Text = cfg.Text or "Button",
@@ -393,70 +487,65 @@ function Library.new(config)
             Font = Theme.fontBold,
             TextSize = 12,
             AutoButtonColor = false,
-            LayoutOrder = nextOrder(),
-        }, content)
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
         corner(6, btn)
 
         btn.MouseEnter:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.1), {
-                BackgroundColor3 = cfg.HoverColor or Theme.accentDark,
-            }):Play()
+            tween(btn, 0.1, { BackgroundColor3 = Theme.accentDark })
         end)
         btn.MouseLeave:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.1), {
-                BackgroundColor3 = baseColor,
-            }):Play()
+            tween(btn, 0.1, { BackgroundColor3 = baseColor })
         end)
 
         if cfg.Callback then
             btn.MouseButton1Click:Connect(cfg.Callback)
         end
-        refreshCanvas()
+        refreshPage(cat)
         return btn
     end
 
     -- ---------- Toggle ----------
-    function window:Toggle(cfg)
+    local function addToggle(cat, cfg)
         cfg = cfg or {}
         local state = cfg.Default or false
 
         local row = new("Frame", {
-            Size = UDim2.new(1, -8, 0, 34),
-            BackgroundColor3 = Theme.bgItem,
+            Size = UDim2.new(1, 0, 0, 36),
+            BackgroundColor3 = Theme.itemBg,
             BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, content)
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
         corner(6, row)
 
         new("TextLabel", {
-            Size = UDim2.new(1, -60, 1, 0),
-            Position = UDim2.new(0, 12, 0, 0),
+            Size = UDim2.new(1, -70, 1, 0),
+            Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1,
             Text = cfg.Text or "Toggle",
             TextColor3 = Theme.text,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Font = Theme.font,
+            Font = Theme.fontMed,
             TextSize = 12,
         }, row)
 
         local track = new("Frame", {
-            Size = UDim2.new(0, 40, 0, 20),
+            Size = UDim2.new(0, 38, 0, 20),
             Position = UDim2.new(1, -50, 0.5, -10),
-            BackgroundColor3 = state and Theme.accentDark or Theme.bgInput,
+            BackgroundColor3 = state and Theme.accent or Theme.inputBg,
             BorderSizePixel = 0,
         }, row)
         corner(10, track)
-        stroke(Theme.border, 1, 0.3, track)
 
         local knob = new("Frame", {
-            Size = UDim2.new(0, 16, 0, 16),
-            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
-            BackgroundColor3 = state and Theme.accentBright or Theme.textDim,
+            Size = UDim2.new(0, 14, 0, 14),
+            Position = state and UDim2.new(1, -18, 0.5, -7) or UDim2.new(0, 3, 0.5, -7),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
             BorderSizePixel = 0,
         }, track)
-        corner(8, knob)
+        corner(7, knob)
 
-        local btn = new("TextButton", {
+        local clicker = new("TextButton", {
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundTransparency = 1,
             Text = "",
@@ -464,19 +553,16 @@ function Library.new(config)
 
         local function set(v)
             state = v
-            TweenService:Create(track, TweenInfo.new(0.15), {
-                BackgroundColor3 = state and Theme.accentDark or Theme.bgInput,
-            }):Play()
-            TweenService:Create(knob, TweenInfo.new(0.15), {
-                Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
-                BackgroundColor3 = state and Theme.accentBright or Theme.textDim,
-            }):Play()
+            tween(track, 0.15, { BackgroundColor3 = state and Theme.accent or Theme.inputBg })
+            tween(knob, 0.15, {
+                Position = state and UDim2.new(1, -18, 0.5, -7) or UDim2.new(0, 3, 0.5, -7),
+            })
             if cfg.Callback then pcall(cfg.Callback, state) end
         end
 
-        btn.MouseButton1Click:Connect(function() set(not state) end)
+        clicker.MouseButton1Click:Connect(function() set(not state) end)
 
-        refreshCanvas()
+        refreshPage(cat)
         return {
             Set = set,
             Get = function() return state end,
@@ -485,7 +571,7 @@ function Library.new(config)
     end
 
     -- ---------- Slider ----------
-    function window:Slider(cfg)
+    local function addSlider(cat, cfg)
         cfg = cfg or {}
         local minV = cfg.Min or 0
         local maxV = cfg.Max or 100
@@ -493,28 +579,28 @@ function Library.new(config)
         local step = cfg.Step or 1
 
         local row = new("Frame", {
-            Size = UDim2.new(1, -8, 0, 46),
-            BackgroundColor3 = Theme.bgItem,
+            Size = UDim2.new(1, 0, 0, 50),
+            BackgroundColor3 = Theme.itemBg,
             BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, content)
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
         corner(6, row)
 
         local label = new("TextLabel", {
             Size = UDim2.new(1, -20, 0, 16),
-            Position = UDim2.new(0, 10, 0, 4),
+            Position = UDim2.new(0, 14, 0, 6),
             BackgroundTransparency = 1,
             Text = (cfg.Text or "Slider") .. ": " .. val,
             TextColor3 = Theme.text,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Font = Theme.font,
+            Font = Theme.fontMed,
             TextSize = 11,
         }, row)
 
         local track = new("Frame", {
-            Size = UDim2.new(1, -20, 0, 6),
-            Position = UDim2.new(0, 10, 0, 28),
-            BackgroundColor3 = Theme.bgInput,
+            Size = UDim2.new(1, -28, 0, 6),
+            Position = UDim2.new(0, 14, 0, 32),
+            BackgroundColor3 = Theme.inputBg,
             BorderSizePixel = 0,
         }, row)
         corner(3, track)
@@ -527,14 +613,14 @@ function Library.new(config)
         corner(3, fill)
 
         local knob = new("Frame", {
-            Size = UDim2.new(0, 12, 0, 12),
+            Size = UDim2.new(0, 14, 0, 14),
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = UDim2.new(0, 0, 0.5, 0),
             BackgroundColor3 = Theme.accentBright,
             BorderSizePixel = 0,
             ZIndex = 2,
         }, track)
-        corner(6, knob)
+        corner(7, knob)
 
         local function refresh()
             local t = (val - minV) / (maxV - minV)
@@ -553,16 +639,16 @@ function Library.new(config)
             if cfg.Callback then pcall(cfg.Callback, val) end
         end
 
-        local sliderDrag = false
+        local dslider = false
         track.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-                sliderDrag = true
+                dslider = true
                 setFromX(input.Position.X)
             end
         end)
         UserInputService.InputChanged:Connect(function(input)
-            if not sliderDrag then return end
+            if not dslider then return end
             if input.UserInputType == Enum.UserInputType.MouseMovement
                 or input.UserInputType == Enum.UserInputType.Touch then
                 setFromX(input.Position.X)
@@ -571,12 +657,12 @@ function Library.new(config)
         UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-                sliderDrag = false
+                dslider = false
             end
         end)
 
         refresh()
-        refreshCanvas()
+        refreshPage(cat)
         return {
             Set = function(v)
                 val = math.clamp(v, minV, maxV)
@@ -589,27 +675,27 @@ function Library.new(config)
     end
 
     -- ---------- Input ----------
-    function window:Input(cfg)
+    local function addInput(cat, cfg)
         cfg = cfg or {}
         local row = new("Frame", {
-            Size = UDim2.new(1, -8, 0, cfg.Height or 34),
-            BackgroundColor3 = Theme.bgInput,
+            Size = UDim2.new(1, 0, 0, 36),
+            BackgroundColor3 = Theme.inputBg,
             BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, content)
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
         corner(6, row)
         stroke(Theme.border, 1, 0.5, row)
 
         local box = new("TextBox", {
-            Size = UDim2.new(1, -16, 1, 0),
-            Position = UDim2.new(0, 8, 0, 0),
+            Size = UDim2.new(1, -20, 1, 0),
+            Position = UDim2.new(0, 12, 0, 0),
             BackgroundTransparency = 1,
             Text = cfg.Default or "",
             PlaceholderText = cfg.Placeholder or "输入...",
             PlaceholderColor3 = Theme.textMute,
             TextColor3 = Theme.text,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Font = cfg.Font or Theme.font,
+            Font = Theme.fontMed,
             TextSize = 12,
             ClearTextOnFocus = false,
         }, row)
@@ -620,241 +706,291 @@ function Library.new(config)
             end)
         end
 
-        refreshCanvas()
+        refreshPage(cat)
         return {
             Set = function(t) box.Text = t end,
             Get = function() return box.Text end,
-            Instance = row,
             Box = box,
         }
     end
 
     -- ---------- Dropdown ----------
-    function window:Dropdown(cfg)
+    local function addDropdown(cat, cfg)
         cfg = cfg or {}
         local options = cfg.Options or {}
         local current = cfg.Default or (options[1] or "")
         local open = false
 
         local container = new("Frame", {
-            Size = UDim2.new(1, -8, 0, 32),
+            Size = UDim2.new(1, 0, 0, 36),
             BackgroundTransparency = 1,
-            LayoutOrder = nextOrder(),
+            LayoutOrder = nextOrderIn(cat),
             ClipsDescendants = false,
-        }, content)
+        }, cat.page)
 
         local header = new("TextButton", {
-            Size = UDim2.new(1, 0, 0, 32),
-            BackgroundColor3 = Theme.bgItem,
+            Size = UDim2.new(1, 0, 0, 36),
+            BackgroundColor3 = Theme.itemBg,
             BorderSizePixel = 0,
             Text = "",
             AutoButtonColor = false,
         }, container)
         corner(6, header)
-        stroke(Theme.border, 1, 0.5, header)
 
         new("TextLabel", {
-            Size = UDim2.new(1, -40, 1, 0),
-            Position = UDim2.new(0, 12, 0, 0),
+            Size = UDim2.new(1, -90, 1, 0),
+            Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1,
             Text = cfg.Text or "Dropdown",
             TextColor3 = Theme.textDim,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Font = Theme.font,
+            Font = Theme.fontMed,
             TextSize = 11,
         }, header)
 
-        local currentLabel = new("TextLabel", {
-            Size = UDim2.new(1, -40, 1, 0),
-            Position = UDim2.new(0, 12, 0, 0),
+        local curLabel = new("TextLabel", {
+            Size = UDim2.new(1, -90, 1, 0),
+            Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1,
             Text = current,
             TextColor3 = Theme.text,
             TextXAlignment = Enum.TextXAlignment.Right,
-            Font = Theme.fontBold,
-            TextSize = 12,
+            Font = Theme.fontMed,
+            TextSize = 11,
         }, header)
 
         local arrow = new("TextLabel", {
             Size = UDim2.new(0, 20, 1, 0),
-            Position = UDim2.new(1, -22, 0, 0),
+            Position = UDim2.new(1, -26, 0, 0),
             BackgroundTransparency = 1,
             Text = "▼",
             TextColor3 = Theme.textDim,
             Font = Theme.fontBold,
-            TextSize = 9,
+            TextSize = 8,
         }, header)
 
-        -- 弹出列表 (放在 container 内向上弹)
-        local list = new("Frame", {
-            Size = UDim2.new(1, 0, 0, math.min(#options * 26, 160)),
-            Position = UDim2.new(0, 0, 0, 34),
-            BackgroundColor3 = Theme.bgLight,
+        local list = new("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 0, math.min(#options * 28, 180)),
+            Position = UDim2.new(0, 0, 0, 40),
+            BackgroundColor3 = Theme.sidebar,
             BorderSizePixel = 0,
             Visible = false,
             ZIndex = 10,
-        }, container)
-        corner(6, list)
-        stroke(Theme.accent, 1, 0.6, list)
-
-        local listScroll = new("ScrollingFrame", {
-            Size = UDim2.new(1, 0, 1, 0),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
             ScrollBarThickness = 3,
             CanvasSize = UDim2.new(0, 0, 0, 0),
-        }, list)
+        }, container)
+        corner(6, list)
+        stroke(Theme.accent, 1, 0.5, list)
         local listLayout = new("UIListLayout", {
             Padding = UDim.new(0, 2),
             SortOrder = Enum.SortOrder.LayoutOrder,
-        }, listScroll)
-        padding(4, 4, 4, 4, listScroll)
+        }, list)
+        new("UIPadding", {
+            PaddingTop = UDim.new(0, 4),
+            PaddingLeft = UDim.new(0, 4),
+            PaddingRight = UDim.new(0, 4),
+            PaddingBottom = UDim.new(0, 4),
+        }, list)
 
-        local itemRefs = {}
+        local items = {}
         for i, opt in ipairs(options) do
             local it = new("TextButton", {
                 Size = UDim2.new(1, 0, 0, 24),
-                BackgroundColor3 = (opt == current) and Theme.accentDark or Theme.bgItem,
+                BackgroundColor3 = (opt == current) and Theme.accentDark or Theme.itemBg,
                 BorderSizePixel = 0,
                 Text = tostring(opt),
                 TextColor3 = Theme.text,
                 TextXAlignment = Enum.TextXAlignment.Left,
-                Font = Theme.font,
+                Font = Theme.fontMed,
                 TextSize = 11,
                 AutoButtonColor = false,
                 LayoutOrder = i,
-            }, listScroll)
+            }, list)
             corner(4, it)
-            padding(0, 8, 0, 0, it)
-            itemRefs[i] = it
+            new("UIPadding", { PaddingLeft = UDim.new(0, 10) }, it)
+            items[i] = it
         end
         task.defer(function()
-            listScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
+            list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
         end)
 
-        local function closeList()
-            open = false
-            list.Visible = false
-            arrow.Text = "▼"
-        end
-        local function openList()
-            open = true
-            list.Visible = true
-            arrow.Text = "▲"
-        end
+        local function closeList() open = false; list.Visible = false; arrow.Text = "▼" end
+        local function openList() open = true; list.Visible = true; arrow.Text = "▲" end
 
         header.MouseButton1Click:Connect(function()
             if open then closeList() else openList() end
         end)
 
-        for i, it in ipairs(itemRefs) do
+        for i, it in ipairs(items) do
             it.MouseButton1Click:Connect(function()
                 current = options[i]
-                currentLabel.Text = current
-                for j, other in ipairs(itemRefs) do
-                    other.BackgroundColor3 = (options[j] == current) and Theme.accentDark or Theme.bgItem
+                curLabel.Text = current
+                for j, other in ipairs(items) do
+                    other.BackgroundColor3 = (options[j] == current) and Theme.accentDark or Theme.itemBg
                 end
                 closeList()
                 if cfg.Callback then pcall(cfg.Callback, current) end
             end)
         end
 
-        refreshCanvas()
+        refreshPage(cat)
         return {
             Set = function(v)
                 for i, opt in ipairs(options) do
                     if opt == v then
                         current = v
-                        currentLabel.Text = v
-                        for j, other in ipairs(itemRefs) do
-                            other.BackgroundColor3 = (options[j] == v) and Theme.accentDark or Theme.bgItem
+                        curLabel.Text = v
+                        for j, other in ipairs(items) do
+                            other.BackgroundColor3 = (options[j] == v) and Theme.accentDark or Theme.itemBg
                         end
                     end
                 end
             end,
             Get = function() return current end,
-            Instance = container,
         }
     end
 
-    -- ---------- Log ----------
-    function window:Log(cfg)
+    -- ---------- Keybind ----------
+    local function addKeybind(cat, cfg)
         cfg = cfg or {}
-        local height = cfg.Height or 120
+        local currentKey = cfg.Default or Enum.KeyCode.RightShift
+        local waiting = false
 
-        local frame = new("Frame", {
-            Size = UDim2.new(1, -8, 0, height),
-            BackgroundColor3 = Theme.bgInput,
+        local row = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 36),
+            BackgroundColor3 = Theme.itemBg,
             BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, content)
-        corner(6, frame)
+            LayoutOrder = nextOrderIn(cat),
+        }, cat.page)
+        corner(6, row)
 
-        local scroll = new("ScrollingFrame", {
-            Size = UDim2.new(1, -8, 1, -8),
-            Position = UDim2.new(0, 4, 0, 4),
+        new("TextLabel", {
+            Size = UDim2.new(1, -110, 1, 0),
+            Position = UDim2.new(0, 14, 0, 0),
             BackgroundTransparency = 1,
+            Text = cfg.Text or "Keybind",
+            TextColor3 = Theme.text,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Font = Theme.fontMed,
+            TextSize = 12,
+        }, row)
+
+        local keyBtn = new("TextButton", {
+            Size = UDim2.new(0, 80, 0, 24),
+            Position = UDim2.new(1, -94, 0.5, -12),
+            BackgroundColor3 = Theme.inputBg,
             BorderSizePixel = 0,
-            ScrollBarThickness = 3,
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-        }, frame)
-        local layout = new("UIListLayout", {
-            Padding = UDim.new(0, 2),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-        }, scroll)
+            Text = currentKey.Name,
+            TextColor3 = Theme.text,
+            Font = Theme.fontMed,
+            TextSize = 11,
+            AutoButtonColor = false,
+        }, row)
+        corner(5, keyBtn)
 
-        local logCount = 0
-        local function add(text, color)
-            logCount = logCount + 1
-            local l = new("TextLabel", {
-                Size = UDim2.new(1, -4, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                Text = "[" .. os.date("%H:%M:%S") .. "] " .. tostring(text),
-                TextColor3 = color or Theme.textDim,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextYAlignment = Enum.TextYAlignment.Top,
-                Font = Theme.fontCode,
-                TextSize = 10,
-                TextWrapped = true,
-                LayoutOrder = logCount,
-            }, scroll)
-            task.defer(function()
-                scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
-                scroll.CanvasPosition = Vector2.new(0, math.max(0, layout.AbsoluteContentSize.Y - height + 20))
-            end)
-            -- 限制数量
-            if logCount > 200 then
-                local first = scroll:FindFirstChildWhichIsA("TextLabel")
-                if first then first:Destroy() end
+        keyBtn.MouseButton1Click:Connect(function()
+            waiting = true
+            keyBtn.Text = "..."
+            keyBtn.TextColor3 = Theme.accent
+        end)
+
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gp)
+            if not waiting then return end
+            if gp then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                currentKey = input.KeyCode
+                keyBtn.Text = currentKey.Name
+                keyBtn.TextColor3 = Theme.text
+                waiting = false
+                if cfg.Callback then pcall(cfg.Callback, currentKey) end
             end
-        end
+        end)
 
-        refreshCanvas()
+        refreshPage(cat)
         return {
-            Add = add,
-            Clear = function()
-                for _, c in ipairs(scroll:GetChildren()) do
-                    if c:IsA("TextLabel") then c:Destroy() end
-                end
-                logCount = 0
-                scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-            end,
-            Instance = frame,
+            Get = function() return currentKey end,
         }
     end
 
-    -- ---------- 全局方法 ----------
-    function window:Minimize() minimize() end
-    function window:Restore() restore() end
-    function window:SetTitle(t)
-        titleBar:FindFirstChildOfClass("TextLabel").Text = t
+    -- ==========================================
+    -- Window API
+    -- ==========================================
+    local currentCatObj = {}
+
+    function window:Category(name)
+        local cat = createCategory(name)
+        currentCatObj[name] = cat
+        if not activeCategory then
+            switchCategory(cat)
+        end
+        return {
+            Section = function(_, text) return addSection(cat, text) end,
+            Label = function(_, text, dim) return addLabel(cat, text, dim) end,
+            Divider = function() addDivider(cat) end,
+            Button = function(_, cfg) return addButton(cat, cfg) end,
+            Toggle = function(_, cfg) return addToggle(cat, cfg) end,
+            Slider = function(_, cfg) return addSlider(cat, cfg) end,
+            Input = function(_, cfg) return addInput(cat, cfg) end,
+            Dropdown = function(_, cfg) return addDropdown(cat, cfg) end,
+            Keybind = function(_, cfg) return addKeybind(cat, cfg) end,
+        }
     end
-    function window:GetMain() return main end
-    function window:GetBall() return ball end
-    function window:Destroy()
+
+    function window:SelectCategory(name)
+        local cat = currentCatObj[name]
+        if cat then switchCategory(cat) end
+    end
+
+    -- ==========================================
+    -- 最小化 / 恢复
+    -- ==========================================
+    local minimized = false
+
+    local function minimize()
+        if minimized then return end
+        minimized = true
+        local wp = main.Position
+        ball.Position = UDim2.new(wp.X.Scale, wp.X.Offset, wp.Y.Scale, wp.Y.Offset)
+        ball.Visible = true
+        ball.Size = UDim2.new(0, 0, 0, 0)
+        tween(ball, 0.2, { Size = UDim2.new(0, BALL_SIZE, 0, BALL_SIZE) }, Enum.EasingStyle.Back)
+
+        tween(main, 0.2, { Size = UDim2.new(0, 0, 0, 0) })
+        task.delay(0.2, function() main.Visible = false end)
+    end
+
+    local function restore()
+        if not minimized then return end
+        minimized = false
+        tween(ball, 0.2, { Size = UDim2.new(0, 0, 0, 0) })
+        task.delay(0.2, function() ball.Visible = false end)
+
+        main.Visible = true
+        main.Size = UDim2.new(0, 0, 0, 0)
+        tween(main, 0.2, { Size = UDim2.new(0, W, 0, H) }, Enum.EasingStyle.Back)
+    end
+
+    minBtn.MouseButton1Click:Connect(minimize)
+    attachDrag(ball, ball, restore)
+    attachDrag(header, main)
+
+    closeBtn.MouseButton1Click:Connect(function()
         main:Destroy()
         ball:Destroy()
+    end)
+
+    function window:Minimize() minimize() end
+    function window:Restore() restore() end
+    function window:Destroy() main:Destroy(); ball:Destroy() end
+    function window:SetTitle(t)
+        for _, c in ipairs(header:GetChildren()) do
+            if c:IsA("TextLabel") and c.Text == titleText then
+                c.Text = t
+                titleText = t
+                break
+            end
+        end
     end
 
     return window
@@ -864,63 +1000,129 @@ end
 -- 示例
 -- ================================================================
 local win = Library.new({
-    Title = "ALPHA · DEMO",
-    Width = 340,
-    Height = 500,
-    X = 40,
-    Y = 40,
+    Title = "WIND UI",
+    Subtitle = "v1.0",
+    Width = 600,
+    Height = 420,
+    X = 60,
+    Y = 60,
 })
 
-win:Section("基础控件")
-win:Label("这是一个标签", false)
-win:Label("这是暗色标签", true)
+-- ========== 战斗 ==========
+local combat = win:Category("战斗")
+combat:Section("攻击选项")
+combat:Toggle({
+    Text = "自动攻击",
+    Default = false,
+    Callback = function(v) print("自动攻击:", v) end,
+})
+combat:Slider({
+    Text = "攻击范围",
+    Min = 5, Max = 100, Default = 20, Step = 1,
+    Callback = function(v) print("范围:", v) end,
+})
+combat:Keybind({
+    Text = "瞬移攻击",
+    Default = Enum.KeyCode.Q,
+    Callback = function(k) print("按键:", k.Name) end,
+})
+combat:Section("防御")
+combat:Toggle({ Text = "无敌模式", Default = false })
+combat:Button({
+    Text = "立即治疗",
+    Callback = function() print("治疗") end,
+})
 
-win:Button({
-    Text = "普通按钮",
-    Callback = function()
-        print("按钮被点击")
+-- ========== 移动 ==========
+local move = win:Category("移动")
+move:Section("位移")
+move:Toggle({ Text = "飞行", Default = false })
+move:Slider({
+    Text = "飞行速度",
+    Min = 10, Max = 300, Default = 60, Step = 5,
+})
+move:Divider()
+move:Slider({
+    Text = "走路速度",
+    Min = 16, Max = 500, Default = 16, Step = 1,
+})
+move:Slider({
+    Text = "跳跃力",
+    Min = 50, Max = 500, Default = 50, Step = 5,
+})
+move:Toggle({ Text = "无限跳跃", Default = false })
+move:Section("传送")
+move:Input({
+    Placeholder = "输入玩家名字传送",
+    Callback = function(t) print("传送到:", t) end,
+})
+move:Button({
+    Text = "回到原点 (0, 0, 0)",
+    Callback = function() print("回原点") end,
+})
+
+-- ========== 视觉 ==========
+local visual = win:Category("视觉")
+visual:Section("渲染")
+visual:Toggle({ Text = "自身高亮", Default = false })
+visual:Toggle({ Text = "玩家 ESP", Default = false })
+visual:Toggle({ Text = "夜视", Default = false })
+visual:Slider({
+    Text = "视野范围",
+    Min = 70, Max = 120, Default = 70, Step = 1,
+})
+visual:Section("风格")
+visual:Dropdown({
+    Text = "高亮颜色",
+    Options = { "红色", "绿色", "蓝色", "紫色", "青色" },
+    Default = "紫色",
+    Callback = function(c) print("颜色:", c) end,
+})
+visual:Input({
+    Placeholder = "自定义颜色 hex (#RRGGBB)",
+})
+
+-- ========== 杂项 ==========
+local misc = win:Category("杂项")
+misc:Section("通用")
+misc:Toggle({ Text = "防踢 (AntiKick)", Default = true })
+misc:Toggle({ Text = "防挂机", Default = false })
+misc:Keybind({
+    Text = "显示/隐藏 UI",
+    Default = Enum.KeyCode.RightShift,
+    Callback = function(k) print("热键:", k.Name) end,
+})
+misc:Divider()
+misc:Button({
+    Text = "重新加载脚本",
+    Callback = function() print("重载") end,
+})
+misc:Button({
+    Text = "关闭 UI",
+    Color = Color3.fromRGB(140, 50, 50),
+    Callback = function() win:Destroy() end,
+})
+misc:Section("主题")
+misc:Dropdown({
+    Text = "主题色",
+    Options = { "紫色", "青色", "绿色", "橙色", "粉红" },
+    Default = "紫色",
+    Callback = function(choice)
+        local map = {
+            ["紫色"] = { Color3.fromRGB(139, 92, 246), Color3.fromRGB(109, 62, 216), Color3.fromRGB(167, 139, 250) },
+            ["青色"] = { Color3.fromRGB(0, 200, 200), Color3.fromRGB(0, 140, 140), Color3.fromRGB(0, 235, 235) },
+            ["绿色"] = { Color3.fromRGB(80, 200, 120), Color3.fromRGB(50, 150, 80), Color3.fromRGB(130, 230, 160) },
+            ["橙色"] = { Color3.fromRGB(255, 140, 0), Color3.fromRGB(200, 100, 0), Color3.fromRGB(255, 180, 80) },
+            ["粉红"] = { Color3.fromRGB(236, 72, 153), Color3.fromRGB(190, 50, 120), Color3.fromRGB(250, 120, 190) },
+        }
+        local t = map[choice]
+        if t then
+            Library.Theme.accent = t[1]
+            Library.Theme.accentDark = t[2]
+            Library.Theme.accentBright = t[3]
+            print("主题已切换:", choice)
+        end
     end,
 })
 
-win:Toggle({
-    Text = "启用功能 A",
-    Default = true,
-    Callback = function(v)
-        print("Toggle A:", v)
-    end,
-})
-
-win:Slider({
-    Text = "速度",
-    Min = 10,
-    Max = 300,
-    Default = 60,
-    Step = 1,
-    Callback = function(v)
-        print("Slider:", v)
-    end,
-})
-
-win:Section("输入")
-win:Input({
-    Placeholder = "输入点什么...",
-    Callback = function(text)
-        print("输入:", text)
-    end,
-})
-
-win:Dropdown({
-    Text = "模式",
-    Options = { "普通", "快速", "暴力" },
-    Default = "普通",
-    Callback = function(v)
-        print("选了:", v)
-    end,
-})
-
-win:Section("日志")
-local logCtrl = win:Log({ Height = 130 })
-logCtrl.Add("窗口已加载", Color3.fromRGB(0, 220, 220))
-logCtrl.Add("试试点右上角最小化按钮 →")
-
-print("[ALPHA UI] 已加载, 点标题栏右侧 − 最小化到悬浮球")
+print("[WindUI Clone] 已加载 · 左侧分类切换 · 点 − 最小化到悬浮球")
