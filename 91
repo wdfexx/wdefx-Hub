@@ -11,10 +11,10 @@ local PING_PATH = "/kami/ping"
 local USER_ID = "wdfex12345"
 local APP_NAME = "a"
 local SIGN_KEY = "ec4ea19c08aaed1cb13ee0dfc6222ed4"
-local LOAD_SCRIPT_PAID = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub2"
-local LOAD_SCRIPT_PAID_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub2"
-local LOAD_SCRIPT_FREE = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub免费版"
-local LOAD_SCRIPT_FREE_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub免费版"
+local LOAD_SCRIPT_URL = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub2"
+local LOAD_SCRIPT_URL_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub2"
+local LOAD_FREE_SCRIPT_URL = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub%E5%85%8D%E8%B4%B9%E7%89%88"
+local LOAD_FREE_SCRIPT_URL_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub%E5%85%8D%E8%B4%B9%E7%89%88"
 local CARD_FILE = "wdfex_saved_card.txt"
 
 local USING_BACKUP = false
@@ -26,8 +26,7 @@ local isDragging = false
 local dragStart, frameStart
 local isMobile = UserInputService.TouchEnabled
 local isMouse = UserInputService.MouseEnabled
-local currentVersion = "付费版"
-local dropdownOpen = false
+local currentVersion = "paid"
 
 local function saveCard(card)
     pcall(function()
@@ -42,7 +41,9 @@ local function loadSavedCard()
     pcall(function()
         if type(readfile) == "function" and type(isfile) == "function" and isfile(CARD_FILE) then
             card = readfile(CARD_FILE)
-            if card then card = card:gsub("%s+", "") end
+            if card then
+                card = card:gsub("%s+", "")
+            end
         end
     end)
     return card
@@ -70,28 +71,43 @@ local function httpGet(url)
         local ok, res = pcall(function()
             return syn.request({ Url = url, Method = "GET" })
         end)
-        if ok and res and (res.Body or res.body) then return res.Body or res.body end
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
     end
+
     if type(http_request) == "function" then
         local ok, res = pcall(function()
             return http_request({ Url = url, Method = "GET" })
         end)
-        if ok and res and (res.Body or res.body) then return res.Body or res.body end
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
     end
+
     if type(request) == "function" then
         local ok, res = pcall(function()
             return request({ Url = url, Method = "GET" })
         end)
-        if ok and res and (res.Body or res.body) then return res.Body or res.body end
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
     end
+
     if type(http) == "table" and type(http.request) == "function" then
         local ok, res = pcall(function()
             return http.request({ Url = url, Method = "GET" })
         end)
-        if ok and res and (res.Body or res.body) then return res.Body or res.body end
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
     end
+
     local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok and type(res) == "string" and #res > 0 then return res end
+    if ok and type(res) == "string" and #res > 0 then
+        return res
+    end
+
     return nil
 end
 
@@ -113,7 +129,9 @@ end
 local function probeDomain()
     local url = "https://" .. PRIMARY_DOMAIN .. PING_PATH
     local raw = httpGetWithTimeout(url, 5)
-    if raw and string.find(raw, "ok") then return true end
+    if raw and string.find(raw, "ok") then
+        return true
+    end
     USING_BACKUP = true
     return false
 end
@@ -136,12 +154,12 @@ local function transMsg(code)
         already_online = "该卡密已在线",
         online_limit_reached = "在线设备数已满",
         activate = "激活成功",
-        valid = "验证成功",
-        permanent = "永久有效",
+        valid = "验证通过",
+        permanent = "终身有效",
         heartbeat = "心跳正常",
         bypass = "验证已关闭",
         unbind_ok = "解绑成功",
-        invalid_card = "卡密错误",
+        invalid_card = "卡密无效",
         expired = "卡密已过期",
         banned = "卡密已被禁用",
         device_mismatch = "设备不匹配",
@@ -239,44 +257,56 @@ local function runString(source)
     if type(source) ~= "string" or #source < 10 then
         return false, "源码无效"
     end
+
     local func = nil
+
     if type(loadstring) == "function" then
         local ok, f = pcall(loadstring, source)
         if ok and type(f) == "function" then func = f end
     end
+
     if not func and type(load) == "function" then
         local ok, f = pcall(load, source)
         if ok and type(f) == "function" then func = f end
     end
-    if not func then return false, "执行器不支持 loadstring 或 load" end
+
+    if not func then
+        return false, "执行器不支持 loadstring 或 load"
+    end
+
     local ok2, err2 = pcall(func)
-    if not ok2 then return false, "执行脚本出错: " .. tostring(err2) end
+    if not ok2 then
+        return false, "执行脚本出错: " .. tostring(err2)
+    end
+
     return true, "脚本已运行"
 end
 
-local function loadMainScript()
-    local urls
-    if currentVersion == "免费版" then
-        urls = { LOAD_SCRIPT_FREE, LOAD_SCRIPT_FREE_BACKUP }
-    else
-        urls = { LOAD_SCRIPT_PAID, LOAD_SCRIPT_PAID_BACKUP }
-    end
+local function loadScriptFromURLs(urls, label)
     for _, url in ipairs(urls) do
         local source = httpGetWithTimeout(url, 15)
         if source and #source > 10 then
             local ok, msg = runString(source)
             if ok then
-                print("[wdfex-Hub] 主脚本加载成功 (" .. currentVersion .. ")")
+                print("[wdfex-Hub] " .. label .. " 加载成功")
                 return true
             else
-                warn("[wdfex-Hub] 主脚本执行失败: " .. tostring(msg))
+                warn("[wdfex-Hub] " .. label .. " 执行失败: " .. tostring(msg))
             end
         else
-            warn("[wdfex-Hub] 主脚本下载失败: " .. url)
+            warn("[wdfex-Hub] " .. label .. " 下载失败: " .. url)
         end
         task.wait(0.5)
     end
     return false
+end
+
+local function loadMainScript()
+    return loadScriptFromURLs({ LOAD_SCRIPT_URL, LOAD_SCRIPT_URL_BACKUP }, "付费版脚本")
+end
+
+local function loadFreeScript()
+    return loadScriptFromURLs({ LOAD_FREE_SCRIPT_URL, LOAD_FREE_SCRIPT_URL_BACKUP }, "免费版脚本")
 end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -295,8 +325,8 @@ BackgroundOverlay.ZIndex = 1
 local MainWin = Instance.new("Frame")
 MainWin.Parent = ScreenGui
 MainWin.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainWin.Position = UDim2.new(0.5, -150, 0.5, -215)
-MainWin.Size = UDim2.new(0, 300, 0, 430)
+MainWin.Position = UDim2.new(0.5, -150, 0.5, -210)
+MainWin.Size = UDim2.new(0, 300, 0, 420)
 MainWin.ZIndex = 2
 MainWin.Active = true
 MainWin.Selectable = true
@@ -486,99 +516,136 @@ WhitelistNote.ZIndex = 3
 local VersionDropdown = Instance.new("Frame")
 VersionDropdown.Parent = MainWin
 VersionDropdown.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-VersionDropdown.Position = UDim2.new(0.5, -90, 0, 182)
-VersionDropdown.Size = UDim2.new(0, 180, 0, 32)
-VersionDropdown.ZIndex = 20
+VersionDropdown.Position = UDim2.new(0.5, -80, 0, 182)
+VersionDropdown.Size = UDim2.new(0, 160, 0, 30)
+VersionDropdown.ZIndex = 6
 VersionDropdown.Active = true
 
-local VersionDropdownCorner = Instance.new("UICorner")
-VersionDropdownCorner.Parent = VersionDropdown
-VersionDropdownCorner.CornerRadius = UDim.new(0, 6)
+local VDCorner = Instance.new("UICorner")
+VDCorner.CornerRadius = UDim.new(0, 8)
+VDCorner.Parent = VersionDropdown
 
-local VersionDropdownStroke = Instance.new("UIStroke")
-VersionDropdownStroke.Parent = VersionDropdown
-VersionDropdownStroke.Color = Color3.fromRGB(80, 120, 200)
-VersionDropdownStroke.Thickness = 1
+local VDStroke = Instance.new("UIStroke")
+VDStroke.Color = Color3.fromRGB(80, 120, 200)
+VDStroke.Thickness = 1
+VDStroke.Parent = VersionDropdown
 
-local VersionLabel = Instance.new("TextLabel")
-VersionLabel.Parent = VersionDropdown
-VersionLabel.BackgroundTransparency = 1
-VersionLabel.Position = UDim2.new(0, 12, 0, 0)
-VersionLabel.Size = UDim2.new(1, -40, 1, 0)
-VersionLabel.Font = Enum.Font.GothamBold
-VersionLabel.Text = currentVersion
-VersionLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-VersionLabel.TextSize = 13
-VersionLabel.TextXAlignment = Enum.TextXAlignment.Left
-VersionLabel.ZIndex = 21
+local VDLabel = Instance.new("TextLabel")
+VDLabel.Size = UDim2.new(1, -34, 1, 0)
+VDLabel.Position = UDim2.new(0, 12, 0, 0)
+VDLabel.BackgroundTransparency = 1
+VDLabel.Text = "付费版"
+VDLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+VDLabel.TextSize = 13
+VDLabel.Font = Enum.Font.GothamBold
+VDLabel.TextXAlignment = Enum.TextXAlignment.Left
+VDLabel.ZIndex = 7
+VDLabel.Parent = VersionDropdown
 
-local VersionArrow = Instance.new("TextLabel")
-VersionArrow.Parent = VersionDropdown
-VersionArrow.BackgroundTransparency = 1
-VersionArrow.Position = UDim2.new(1, -30, 0, 0)
-VersionArrow.Size = UDim2.new(0, 20, 1, 0)
-VersionArrow.Font = Enum.Font.GothamBold
-VersionArrow.Text = "▼"
-VersionArrow.TextColor3 = Color3.fromRGB(150, 150, 150)
-VersionArrow.TextSize = 10
-VersionArrow.ZIndex = 21
+local VDArrow = Instance.new("TextLabel")
+VDArrow.Size = UDim2.new(0, 20, 1, 0)
+VDArrow.Position = UDim2.new(1, -26, 0, 0)
+VDArrow.BackgroundTransparency = 1
+VDArrow.Text = "▼"
+VDArrow.TextColor3 = Color3.fromRGB(150, 150, 150)
+VDArrow.TextSize = 10
+VDArrow.Font = Enum.Font.GothamBold
+VDArrow.ZIndex = 7
+VDArrow.Parent = VersionDropdown
 
-local VersionClick = Instance.new("TextButton")
-VersionClick.Parent = VersionDropdown
-VersionClick.BackgroundTransparency = 1
-VersionClick.Size = UDim2.new(1, 0, 1, 0)
-VersionClick.Text = ""
-VersionClick.ZIndex = 22
-VersionClick.AutoButtonColor = false
+local VDOptions = Instance.new("Frame")
+VDOptions.Parent = MainWin
+VDOptions.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+VDOptions.Position = UDim2.new(0.5, -80, 0, 214)
+VDOptions.Size = UDim2.new(0, 160, 0, 60)
+VDOptions.ZIndex = 20
+VDOptions.Visible = false
 
-local VersionList = Instance.new("Frame")
-VersionList.Parent = MainWin
-VersionList.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-VersionList.Position = UDim2.new(0.5, -90, 0, 216)
-VersionList.Size = UDim2.new(0, 180, 0, 0)
-VersionList.ZIndex = 19
-VersionList.Visible = false
-VersionList.ClipsDescendants = true
+local VDOptionsCorner = Instance.new("UICorner")
+VDOptionsCorner.CornerRadius = UDim.new(0, 8)
+VDOptionsCorner.Parent = VDOptions
 
-local VersionListCorner = Instance.new("UICorner")
-VersionListCorner.Parent = VersionList
-VersionListCorner.CornerRadius = UDim.new(0, 6)
+local VDOptionsStroke = Instance.new("UIStroke")
+VDOptionsStroke.Color = Color3.fromRGB(80, 120, 200)
+VDOptionsStroke.Thickness = 1
+VDOptionsStroke.Parent = VDOptions
 
-local VersionListStroke = Instance.new("UIStroke")
-VersionListStroke.Parent = VersionList
-VersionListStroke.Color = Color3.fromRGB(80, 120, 200)
-VersionListStroke.Thickness = 1
+local PaidOption = Instance.new("TextButton")
+PaidOption.Size = UDim2.new(1, 0, 0.5, 0)
+PaidOption.Position = UDim2.new(0, 0, 0, 0)
+PaidOption.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+PaidOption.Text = "付费版"
+PaidOption.TextColor3 = Color3.fromRGB(255, 255, 255)
+PaidOption.TextSize = 13
+PaidOption.Font = Enum.Font.GothamBold
+PaidOption.BorderSizePixel = 0
+PaidOption.ZIndex = 21
+PaidOption.Parent = VDOptions
 
-local OptionPaid = Instance.new("TextButton")
-OptionPaid.Parent = VersionList
-OptionPaid.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-OptionPaid.BorderSizePixel = 0
-OptionPaid.Position = UDim2.new(0, 0, 0, 0)
-OptionPaid.Size = UDim2.new(1, 0, 0, 32)
-OptionPaid.Font = Enum.Font.GothamBold
-OptionPaid.Text = "付费版"
-OptionPaid.TextColor3 = Color3.fromRGB(220, 220, 220)
-OptionPaid.TextSize = 13
-OptionPaid.ZIndex = 20
-OptionPaid.AutoButtonColor = false
+local PaidCorner = Instance.new("UICorner")
+PaidCorner.CornerRadius = UDim.new(0, 8, 0, 8)
+PaidCorner.Parent = PaidOption
 
-local OptionFree = Instance.new("TextButton")
-OptionFree.Parent = VersionList
-OptionFree.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-OptionFree.BorderSizePixel = 0
-OptionFree.Position = UDim2.new(0, 0, 0, 32)
-OptionFree.Size = UDim2.new(1, 0, 0, 32)
-OptionFree.Font = Enum.Font.GothamBold
-OptionFree.Text = "免费版"
-OptionFree.TextColor3 = Color3.fromRGB(220, 220, 220)
-OptionFree.TextSize = 13
-OptionFree.ZIndex = 20
-OptionFree.AutoButtonColor = false
+local FreeOption = Instance.new("TextButton")
+FreeOption.Size = UDim2.new(1, 0, 0.5, 0)
+FreeOption.Position = UDim2.new(0, 0, 0.5, 0)
+FreeOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+FreeOption.Text = "免费版"
+FreeOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+FreeOption.TextSize = 13
+FreeOption.Font = Enum.Font.GothamBold
+FreeOption.BorderSizePixel = 0
+FreeOption.ZIndex = 21
+FreeOption.Parent = VDOptions
+
+local FreeCorner = Instance.new("UICorner")
+FreeCorner.CornerRadius = UDim.new(0, 8, 0, 8)
+FreeCorner.Parent = FreeOption
+
+local function updateVersionUI()
+    if currentVersion == "paid" then
+        VDLabel.Text = "付费版"
+        WhitelistNote.Text = "卡密售价4元"
+        WhitelistNote.TextColor3 = Color3.fromRGB(255, 200, 80)
+        PaidOption.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+        PaidOption.TextColor3 = Color3.fromRGB(255, 255, 255)
+        FreeOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        FreeOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+    else
+        VDLabel.Text = "免费版"
+        WhitelistNote.Text = "当前选择的是免费版 卡密随便输入即可"
+        WhitelistNote.TextColor3 = Color3.fromRGB(80, 255, 80)
+        PaidOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        PaidOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+        FreeOption.BackgroundColor3 = Color3.fromRGB(30, 55, 30)
+        FreeOption.TextColor3 = Color3.fromRGB(80, 255, 80)
+    end
+end
+
+VersionDropdown.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        VDOptions.Visible = not VDOptions.Visible
+    end
+end)
+
+PaidOption.MouseButton1Click:Connect(function()
+    currentVersion = "paid"
+    updateVersionUI()
+    VDOptions.Visible = false
+    playSound("rbxassetid://62339698", 0.3)
+end)
+
+FreeOption.MouseButton1Click:Connect(function()
+    currentVersion = "free"
+    updateVersionUI()
+    VDOptions.Visible = false
+    playSound("rbxassetid://62339698", 0.3)
+end)
 
 local InputContainer = Instance.new("Frame")
 InputContainer.Parent = MainWin
 InputContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-InputContainer.Position = UDim2.new(0.5, -120, 0, 258)
+InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
 InputContainer.Size = UDim2.new(0, 240, 0, 36)
 InputContainer.ZIndex = 3
 
@@ -619,7 +686,7 @@ ClearInputButton.ZIndex = 4
 
 local VerifyBtn = Instance.new("TextButton")
 VerifyBtn.Parent = MainWin
-VerifyBtn.Position = UDim2.new(0.5, -95, 0, 308)
+VerifyBtn.Position = UDim2.new(0.5, -95, 0, 268)
 VerifyBtn.Size = UDim2.new(0, 190, 0, 36)
 VerifyBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 VerifyBtn.Font = Enum.Font.SourceSansBold
@@ -644,7 +711,7 @@ VerifyBtnStroke.Thickness = 1.5
 
 local UnbindBtn = Instance.new("TextButton")
 UnbindBtn.Parent = MainWin
-UnbindBtn.Position = UDim2.new(0.5, -95, 0, 352)
+UnbindBtn.Position = UDim2.new(0.5, -95, 0, 312)
 UnbindBtn.Size = UDim2.new(0, 190, 0, 30)
 UnbindBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 60)
 UnbindBtn.Font = Enum.Font.GothamBold
@@ -684,7 +751,7 @@ CloseBtn.TextSize = 18
 CloseBtn.TextXAlignment = Enum.TextXAlignment.Center
 CloseBtn.BorderSizePixel = 0
 CloseBtn.AutoButtonColor = false
-CloseBtn.ZIndex = 10
+CloseBtn.ZIndex = 30
 
 local CloseBtnCorner = Instance.new("UICorner")
 CloseBtnCorner.Parent = CloseBtn
@@ -717,8 +784,8 @@ MainWin.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainWin.BackgroundTransparency = 1
 
 local entranceTween = TweenService:Create(MainWin, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, 300, 0, 430),
-    Position = UDim2.new(0.5, -150, 0.5, -215),
+    Size = UDim2.new(0, 300, 0, 420),
+    Position = UDim2.new(0.5, -150, 0.5, -210),
     BackgroundTransparency = 0
 })
 entranceTween:Play()
@@ -748,101 +815,6 @@ local function updateStatus(color, text)
     StatusText.Text = text
     StatusText.TextColor3 = color
 end
-
-local function closeDropdown()
-    dropdownOpen = false
-    VersionList.Visible = false
-    VersionList.Size = UDim2.new(0, 180, 0, 0)
-    VersionArrow.Text = "▼"
-end
-
-local function openDropdown()
-    dropdownOpen = true
-    VersionList.Visible = true
-    VersionArrow.Text = "▲"
-    TweenService:Create(VersionList, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 180, 0, 64)
-    }):Play()
-end
-
-local function selectVersion(version)
-    currentVersion = version
-    VersionLabel.Text = version
-    if version == "付费版" then
-        WhitelistNote.Text = "卡密售价4元"
-        WhitelistNote.TextColor3 = Color3.fromRGB(255, 200, 80)
-        OptionPaid.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        OptionFree.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    else
-        WhitelistNote.Text = "当前选择的是免费版 卡密随便输入即可"
-        WhitelistNote.TextColor3 = Color3.fromRGB(100, 200, 255)
-        OptionPaid.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        OptionFree.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    end
-    closeDropdown()
-    playSound("rbxassetid://62339698", 0.3)
-end
-
-VersionClick.MouseButton1Click:Connect(function()
-    if dropdownOpen then
-        closeDropdown()
-    else
-        openDropdown()
-    end
-    playSound("rbxassetid://62339698", 0.2)
-end)
-
-OptionPaid.MouseEnter:Connect(function()
-    TweenService:Create(OptionPaid, TweenInfo.new(0.15), {
-        BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-    }):Play()
-end)
-
-OptionPaid.MouseLeave:Connect(function()
-    if currentVersion ~= "付费版" then
-        TweenService:Create(OptionPaid, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        }):Play()
-    else
-        TweenService:Create(OptionPaid, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        }):Play()
-    end
-end)
-
-OptionFree.MouseEnter:Connect(function()
-    TweenService:Create(OptionFree, TweenInfo.new(0.15), {
-        BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-    }):Play()
-end)
-
-OptionFree.MouseLeave:Connect(function()
-    if currentVersion ~= "免费版" then
-        TweenService:Create(OptionFree, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        }):Play()
-    else
-        TweenService:Create(OptionFree, TweenInfo.new(0.15), {
-            BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        }):Play()
-    end
-end)
-
-OptionPaid.MouseButton1Click:Connect(function()
-    if currentVersion ~= "付费版" then
-        selectVersion("付费版")
-    else
-        closeDropdown()
-    end
-end)
-
-OptionFree.MouseButton1Click:Connect(function()
-    if currentVersion ~= "免费版" then
-        selectVersion("免费版")
-    else
-        closeDropdown()
-    end
-end)
 
 Input.Focused:Connect(function()
     InputContainerStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -1085,26 +1057,35 @@ VerifyBtn.MouseButton1Click:Connect(function()
     if #key == 0 then
         showMessage("请输入卡密", Color3.fromRGB(255, 180, 80), 1.5)
         for i = 1, 3 do
-            InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 3 or -3), 0, 258)
+            InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 3 or -3), 0, 224)
             task.wait(0.05)
         end
-        InputContainer.Position = UDim2.new(0.5, -120, 0, 258)
+        InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
         return
     end
+
+    local verSnapshot = currentVersion
 
     VerifyBtn.Text = "验证中..."
     VerifyBtn.AutoButtonColor = false
 
     task.spawn(function()
-        if currentVersion == "免费版" then
-            updateStatus(Color3.fromRGB(100, 200, 255), "免费版")
-            showMessage("验证成功，正在加载wdfex-Hub免费版...", Color3.fromRGB(100, 200, 255), 2)
+        if verSnapshot == "free" then
+            updateStatus(Color3.fromRGB(80, 255, 80), "已验证")
+            showMessage("验证成功，正在加载wdfex-Hub免费版...", Color3.fromRGB(80, 255, 80), 2)
             VerifyBtn.Text = "✓ 成功"
             VerifyBtn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+            TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80)
+            }):Play()
+            TweenService:Create(WinGlow, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80),
+                Thickness = 2
+            }):Play()
             playSound("rbxassetid://62339698", 0.6)
             task.wait(1.5)
             ScreenGui:Destroy()
-            loadMainScript()
+            loadFreeScript()
             return
         end
 
@@ -1151,10 +1132,10 @@ VerifyBtn.MouseButton1Click:Connect(function()
             }):Play()
             playSound("rbxassetid://62339698", 0.3)
             for i = 1, 3 do
-                InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 4 or -4), 0, 258)
+                InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 4 or -4), 0, 224)
                 task.wait(0.05)
             end
-            InputContainer.Position = UDim2.new(0.5, -120, 0, 258)
+            InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
             for i = 1, 2 do
                 TweenService:Create(WarningStroke, TweenInfo.new(0.1), {
                     Color = Color3.fromRGB(255, 80, 80)
@@ -1275,7 +1256,7 @@ if isMobile then
     end
     local function onTextFieldFocusLost()
         TweenService:Create(MainWin, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-            Position = UDim2.new(0.5, -150, 0.5, -215)
+            Position = UDim2.new(0.5, -150, 0.5, -210)
         }):Play()
     end
     Input.Focused:Connect(onTextFieldFocused)
@@ -1300,10 +1281,11 @@ task.spawn(function()
 end)
 
 probeDomain()
+updateVersionUI()
 updateAttemptsDisplay()
 updateStatus(Color3.fromRGB(255, 100, 100), "未验证")
-selectVersion("付费版")
 
 print("[wdfex-Hub] 卡密验证 UI 已加载")
 print("[wdfex-Hub] 应用: " .. APP_NAME .. " | 用户: " .. USER_ID)
-print("[wdfex-Hub] 当前版本: " .. currentVersion)
+print("[wdfex-Hub] 付费版脚本: " .. LOAD_SCRIPT_URL)
+print("[wdfex-Hub] 免费版脚本: " .. LOAD_FREE_SCRIPT_URL)
