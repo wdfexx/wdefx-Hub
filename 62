@@ -1,58 +1,98 @@
--- WDFEX HUB / NEBULA CONTROL PANEL
--- Roblox Luau - LocalScript
--- Native Roblox UI implementation for the supplied reference design.
--- This file draws the dashboard directly so the layout can be tuned precisely.
--- It does not depend on undocumented methods from the hosted UI library.
+--[[
+    Synaptix Dashboard UI
+    A from-scratch Roblox Luau UI library inspired by the supplied dark-purple dashboard reference.
+    No external UI library required.
+
+    Example:
+        local Synaptix = loadstring(...)()
+        local Window = Synaptix.new({
+            Title = "San Aurie",
+            Subtitle = "CONTROL CENTER",
+            Width = 980,
+            Height = 620,
+        })
+
+        local General = Window:Category("General")
+        General:Section("Quick controls")
+        General:Toggle({ Text = "Example toggle", Default = true })
+        General:Button({ Text = "Run action", Callback = function() print("clicked") end })
+        General:Slider({ Text = "Intensity", Min = 0, Max = 100, Default = 50 })
+        General:Dropdown({ Text = "Mode", Options = {"Balanced", "Fast", "Quiet"} })
+        General:Input({ Text = "Player name", Placeholder = "Type here..." })
+        General:Keybind({ Text = "Toggle UI", Default = Enum.KeyCode.RightShift })
+
+    API:
+        Window:Category(name)
+        Window:SelectCategory(name)
+        Window:Minimize()
+        Window:Restore()
+        Window:Destroy()
+
+    Category controls:
+        :Section(text), :Label(text, dim), :Divider(), :Button(config),
+        :Toggle(config), :Slider(config), :Input(config), :Dropdown(config), :Keybind(config)
+]]
+
+--!nocheck
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
 
-local Theme = {
-    Background = Color3.fromRGB(5, 10, 21),
-    Surface = Color3.fromRGB(8, 15, 29),
-    Surface2 = Color3.fromRGB(12, 21, 39),
-    Surface3 = Color3.fromRGB(17, 28, 49),
-    Border = Color3.fromRGB(35, 51, 78),
-    Text = Color3.fromRGB(239, 245, 255),
-    Muted = Color3.fromRGB(153, 171, 201),
-    Dim = Color3.fromRGB(105, 125, 158),
-    Blue = Color3.fromRGB(57, 137, 255),
-    Blue2 = Color3.fromRGB(38, 83, 224),
-    Purple = Color3.fromRGB(111, 70, 255),
-    Purple2 = Color3.fromRGB(74, 42, 192),
-    Cyan = Color3.fromRGB(45, 205, 221),
-    Green = Color3.fromRGB(26, 218, 164),
-    Red = Color3.fromRGB(255, 105, 133),
+local Synaptix = {}
+
+local Palette = {
+    Background = Color3.fromRGB(12, 5, 22),
+    Sidebar = Color3.fromRGB(15, 7, 27),
+    Panel = Color3.fromRGB(22, 9, 38),
+    PanelSoft = Color3.fromRGB(30, 13, 48),
+    PanelHover = Color3.fromRGB(42, 19, 64),
+    Border = Color3.fromRGB(67, 36, 91),
+    Text = Color3.fromRGB(248, 244, 255),
+    Muted = Color3.fromRGB(174, 160, 192),
+    Dim = Color3.fromRGB(119, 104, 139),
+    Purple = Color3.fromRGB(158, 82, 245),
+    PurpleLight = Color3.fromRGB(194, 133, 255),
+    PurpleDeep = Color3.fromRGB(91, 35, 160),
+    Green = Color3.fromRGB(55, 220, 159),
+    Red = Color3.fromRGB(255, 93, 117),
+    Cyan = Color3.fromRGB(69, 218, 235),
+    Gold = Color3.fromRGB(255, 190, 91),
 }
 
-local function make(className, properties, parent)
-    local instance = Instance.new(className)
-    for key, value in pairs(properties or {}) do
-        instance[key] = value
+local FONT = Enum.Font.Gotham
+local FONT_MED = Enum.Font.GothamMedium
+local FONT_BOLD = Enum.Font.GothamBold
+
+local function make(className, props, parent)
+    local obj = Instance.new(className)
+    for key, value in pairs(props or {}) do
+        obj[key] = value
     end
-    instance.Parent = parent
-    return instance
+    obj.Parent = parent
+    return obj
 end
 
 local function round(parent, radius)
-    return make("UICorner", {CornerRadius = UDim.new(0, radius or 10)}, parent)
+    return make("UICorner", {
+        CornerRadius = UDim.new(0, radius or 12),
+    }, parent)
 end
 
-local function outline(parent, color, transparency, thickness)
+local function stroke(parent, color, transparency, thickness)
     return make("UIStroke", {
-        Color = color or Theme.Border,
-        Transparency = transparency or 0,
+        Color = color or Palette.Border,
+        Transparency = transparency == nil and 0.35 or transparency,
         Thickness = thickness or 1,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
     }, parent)
 end
 
-local function pad(parent, left, top, right, bottom)
+local function padding(parent, left, top, right, bottom)
     return make("UIPadding", {
         PaddingLeft = UDim.new(0, left or 0),
         PaddingTop = UDim.new(0, top or 0),
@@ -61,966 +101,1134 @@ local function pad(parent, left, top, right, bottom)
     }, parent)
 end
 
-local function gradient(parent, first, second, rotation)
+local function gradient(parent, c1, c2, rotation)
     return make("UIGradient", {
-        Color = ColorSequence.new(first, second),
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, c1 or Palette.Purple),
+            ColorSequenceKeypoint.new(1, c2 or Palette.PurpleDeep),
+        }),
         Rotation = rotation or 0,
     }, parent)
 end
 
-local function tween(object, duration, properties, style)
-    if not object or not object.Parent then return end
-    local anim = TweenService:Create(
-        object,
-        TweenInfo.new(duration or 0.16, style or Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-        properties
-    )
-    anim:Play()
-    return anim
+local function animate(obj, duration, props, style, direction)
+    if not obj or not obj.Parent then return end
+    local tw = TweenService:Create(obj, TweenInfo.new(
+        duration or 0.18,
+        style or Enum.EasingStyle.Quart,
+        direction or Enum.EasingDirection.Out
+    ), props)
+    tw:Play()
+    return tw
 end
 
-local function label(parent, value, size, color, font, align, wrapped)
+local function label(parent, text, size, color, font, xAlign)
     return make("TextLabel", {
         BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Text = value or "",
-        TextSize = size or 12,
-        TextColor3 = color or Theme.Text,
-        Font = font or Enum.Font.Gotham,
-        TextXAlignment = align or Enum.TextXAlignment.Left,
+        Text = tostring(text or ""),
+        TextColor3 = color or Palette.Text,
+        Font = font or FONT,
+        TextSize = size or 13,
+        TextXAlignment = xAlign or Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
-        TextWrapped = wrapped or false,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         RichText = false,
     }, parent)
 end
 
-local function button(parent, value, size, position, color)
-    return make("TextButton", {
+local function button(parent, text, size, bg, fg)
+    local b = make("TextButton", {
         Size = size,
-        Position = position or UDim2.new(),
-        BackgroundColor3 = color or Theme.Surface2,
+        BackgroundColor3 = bg or Palette.PanelSoft,
         BorderSizePixel = 0,
-        AutoButtonColor = false,
-        Text = value or "",
-        TextColor3 = Theme.Text,
+        Text = text or "",
+        TextColor3 = fg or Palette.Text,
+        Font = FONT_MED,
         TextSize = 12,
-        Font = Enum.Font.GothamMedium,
-        Active = true,
+        AutoButtonColor = false,
     }, parent)
-end
-
-local function formatNumber(value)
-    return tostring(value)
-end
-
--- Remove old copy if the script is run again.
-local previous = playerGui:FindFirstChild("WDFEX_NebulaDashboard")
-if previous then previous:Destroy() end
-
-local ScreenGui = make("ScreenGui", {
-    Name = "WDFEX_NebulaDashboard",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    DisplayOrder = 100,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-}, playerGui)
-
-local root = make("Frame", {
-    Name = "Root",
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-}, ScreenGui)
-
--- A restrained ambient backdrop behind the application window.
-local backdrop = make("Frame", {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundColor3 = Color3.fromRGB(13, 18, 34),
-    BorderSizePixel = 0,
-    ZIndex = 0,
-}, root)
-gradient(backdrop, Color3.fromRGB(7, 13, 28), Color3.fromRGB(31, 25, 48), 35)
-
-local window = make("Frame", {
-    Name = "DashboardWindow",
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.new(0.94, 0, 0.82, 0),
-    BackgroundColor3 = Theme.Background,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-    Active = true,
-    ZIndex = 2,
-}, root)
-round(window, 18)
-outline(window, Color3.fromRGB(44, 58, 86), 0.18, 1)
-gradient(window, Color3.fromRGB(9, 16, 32), Color3.fromRGB(4, 8, 18), 0)
-
-local windowConstraint = make("UISizeConstraint", {
-    MinSize = Vector2.new(680, 450),
-    MaxSize = Vector2.new(1500, 950),
-}, window)
-
--- Layout dimensions are scale-driven to fit common desktop resolutions.
-local sidebarWidth = 0.17
-local headerHeight = 0.092
-local rightWidth = 0.215
-
--- Sidebar
-local sidebar = make("Frame", {
-    Name = "Sidebar",
-    Size = UDim2.new(sidebarWidth, 0, 1, 0),
-    BackgroundColor3 = Color3.fromRGB(7, 13, 26),
-    BorderSizePixel = 0,
-    ZIndex = 3,
-}, window)
-make("Frame", {
-    Size = UDim2.new(0, 1, 1, 0),
-    Position = UDim2.new(1, -1, 0, 0),
-    BackgroundColor3 = Theme.Border,
-    BackgroundTransparency = 0.2,
-    BorderSizePixel = 0,
-}, sidebar)
-
--- Logo / brand
-local brandMark = make("Frame", {
-    Size = UDim2.new(0, 30, 0, 30),
-    Position = UDim2.new(0, 18, 0, 22),
-    BackgroundColor3 = Theme.Blue,
-    BorderSizePixel = 0,
-    ZIndex = 4,
-}, sidebar)
-round(brandMark, 9)
-gradient(brandMark, Theme.Cyan, Theme.Blue2, 45)
-label(brandMark, "N", 17, Color3.new(1,1,1), Enum.Font.GothamBold, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1,1)
-
-local brandName = label(sidebar, "Nebula", 16, Theme.Text, Enum.Font.GothamBold)
-brandName.Position = UDim2.new(0, 57, 0, 19)
-brandName.Size = UDim2.new(1, -66, 0, 22)
-local brandSub = label(sidebar, "Control Panel", 9, Theme.Dim, Enum.Font.Gotham)
-brandSub.Position = UDim2.new(0, 58, 0, 39)
-brandSub.Size = UDim2.new(1, -65, 0, 16)
-
-local navHost = make("Frame", {
-    Name = "Navigation",
-    Size = UDim2.new(1, -22, 0.61, 0),
-    Position = UDim2.new(0, 11, 0, 82),
-    BackgroundTransparency = 1,
-}, sidebar)
-make("UIListLayout", {
-    Padding = UDim.new(0, 7),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, navHost)
-
-local navNames = {
-    {"Dashboard", "⌂"},
-    {"Visuals", "◉"},
-    {"Tools", "⌕"},
-    {"Analytics", "⌁"},
-    {"Automation", "ϟ"},
-    {"Settings", "⚙"},
-    {"About", "ⓘ"},
-}
-local navButtons = {}
-local pages = {}
-local selectedPage = "Dashboard"
-local selectPage
-
-local function navButton(name, glyph, order)
-    local b = button(navHost, "", UDim2.new(1, 0, 0, 43), UDim2.new(), Theme.Surface)
-    b.LayoutOrder = order
-    b.BackgroundTransparency = 1
-    b.ZIndex = 4
-    round(b, 10)
-    local bar = make("Frame", {
-        Size = UDim2.new(0, 3, 0, 21),
-        Position = UDim2.new(0, 0, 0.5, -10.5),
-        BackgroundColor3 = Theme.Cyan,
-        BorderSizePixel = 0,
-        Visible = false,
-        ZIndex = 5,
-    }, b)
-    round(bar, 3)
-    local icon = label(b, glyph, 18, Theme.Muted, Enum.Font.GothamMedium, Enum.TextXAlignment.Center)
-    icon.Position = UDim2.new(0, 7, 0, 0)
-    icon.Size = UDim2.fromOffset(30, 43)
-    local title = label(b, name, 11, Theme.Muted, Enum.Font.GothamMedium)
-    title.Position = UDim2.new(0, 43, 0, 0)
-    title.Size = UDim2.new(1, -49, 1, 0)
-    navButtons[name] = {button = b, bar = bar, icon = icon, title = title}
-    b.MouseButton1Click:Connect(function()
-        if selectPage then selectPage(name) end
-    end)
-    b.MouseEnter:Connect(function()
-        if selectedPage ~= name then
-            tween(b, 0.12, {BackgroundTransparency = 0.42, BackgroundColor3 = Theme.Surface3})
-        end
-    end)
-    b.MouseLeave:Connect(function()
-        if selectedPage ~= name then
-            tween(b, 0.12, {BackgroundTransparency = 1, BackgroundColor3 = Theme.Surface})
-        end
-    end)
-end
-
-for i, item in ipairs(navNames) do
-    navButton(item[1], item[2], i)
-end
-
-local sideStatus = make("Frame", {
-    Size = UDim2.new(1, -26, 0, 56),
-    Position = UDim2.new(0, 13, 1, -72),
-    BackgroundColor3 = Theme.Surface,
-    BorderSizePixel = 0,
-}, sidebar)
-round(sideStatus, 10)
-outline(sideStatus, Theme.Border, 0.45, 1)
-local statusDot = make("Frame", {
-    Size = UDim2.fromOffset(7, 7),
-    Position = UDim2.new(0, 12, 0, 14),
-    BackgroundColor3 = Theme.Green,
-    BorderSizePixel = 0,
-}, sideStatus)
-round(statusDot, 5)
-label(sideStatus, "System Online", 10, Theme.Muted, Enum.Font.GothamMedium).Position = UDim2.new(0, 25, 0, 7)
-label(sideStatus, "All services running", 9, Theme.Dim, Enum.Font.Gotham).Position = UDim2.new(0, 12, 0, 28)
-
--- Main header
-local header = make("Frame", {
-    Name = "TopBar",
-    Size = UDim2.new(1 - sidebarWidth, 0, headerHeight, 0),
-    Position = UDim2.new(sidebarWidth, 0, 0, 0),
-    BackgroundColor3 = Theme.Background,
-    BorderSizePixel = 0,
-    ZIndex = 3,
-}, window)
-make("Frame", {
-    Size = UDim2.new(1, -30, 0, 1),
-    Position = UDim2.new(0, 15, 1, -1),
-    BackgroundColor3 = Theme.Border,
-    BackgroundTransparency = 0.25,
-    BorderSizePixel = 0,
-}, header)
-
-local search = make("Frame", {
-    Size = UDim2.new(0.37, 0, 0, 37),
-    Position = UDim2.new(0, 24, 0.5, -18),
-    BackgroundColor3 = Theme.Surface2,
-    BorderSizePixel = 0,
-}, header)
-round(search, 10)
-outline(search, Theme.Border, 0.5, 1)
-label(search, "⌕", 18, Theme.Muted, Enum.Font.Gotham, Enum.TextXAlignment.Center).Size = UDim2.new(0, 35, 1, 0)
-local searchBox = make("TextBox", {
-    Size = UDim2.new(1, -76, 1, 0),
-    Position = UDim2.new(0, 34, 0, 0),
-    BackgroundTransparency = 1,
-    Text = "",
-    PlaceholderText = "Search anything...",
-    PlaceholderColor3 = Theme.Dim,
-    TextColor3 = Theme.Text,
-    TextSize = 11,
-    Font = Enum.Font.Gotham,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ClearTextOnFocus = false,
-}, search)
-local shortcut = label(search, "Ctrl K", 9, Theme.Dim, Enum.Font.GothamMedium, Enum.TextXAlignment.Center)
-shortcut.Size = UDim2.new(0, 40, 0, 21)
-shortcut.Position = UDim2.new(1, -45, 0.5, -10)
-shortcut.BackgroundColor3 = Theme.Surface3
-round(shortcut, 5)
-
-local bellButton = button(header, "♧", UDim2.fromOffset(34, 34), UDim2.new(1, -225, 0.5, -17), Theme.Surface2)
-corner(bellButton, 9)
-local moonButton = button(header, "☾", UDim2.fromOffset(34, 34), UDim2.new(1, -184, 0.5, -17), Theme.Surface2)
-corner(moonButton, 9)
-local avatar = make("Frame", {
-    Size = UDim2.fromOffset(32, 32),
-    Position = UDim2.new(1, -140, 0.5, -16),
-    BackgroundColor3 = Theme.Surface3,
-    BorderSizePixel = 0,
-}, header)
-round(avatar, 16)
-outline(avatar, Theme.Border, 0.1, 1)
-label(avatar, string.upper(string.sub(player.Name, 1, 1)), 13, Theme.Text, Enum.Font.GothamBold, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1,1)
-local userName = label(header, player.Name, 10, Theme.Text, Enum.Font.GothamMedium)
-userName.Position = UDim2.new(1, -101, 0.5, -13)
-userName.Size = UDim2.new(0, 70, 0, 15)
-local userTier = label(header, "Premium", 9, Theme.Dim, Enum.Font.Gotham)
-userTier.Position = UDim2.new(1, -101, 0.5, 2)
-userTier.Size = UDim2.new(0, 70, 0, 13)
-
-local minimizeButton = button(header, "—", UDim2.fromOffset(20, 24), UDim2.new(1, -65, 0, 1), Theme.Background)
-minimizeButton.TextColor3 = Theme.Muted
-minimizeButton.TextSize = 14
-local closeButton = button(header, "×", UDim2.fromOffset(20, 24), UDim2.new(1, -25, 0, 1), Theme.Background)
-closeButton.TextColor3 = Theme.Muted
-closeButton.TextSize = 17
-
--- Content frame and right rail
-local body = make("Frame", {
-    Name = "Body",
-    Size = UDim2.new(1 - sidebarWidth, 0, 1 - headerHeight, 0),
-    Position = UDim2.new(sidebarWidth, 0, headerHeight, 0),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-}, window)
-
-local rightRail = make("Frame", {
-    Name = "RightRail",
-    Size = UDim2.new(rightWidth, -18, 1, -18),
-    Position = UDim2.new(1 - rightWidth, 0, 0, 9),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-}, body)
-make("UIListLayout", {
-    Padding = UDim.new(0, 12),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, rightRail)
-
-local mainArea = make("Frame", {
-    Name = "MainArea",
-    Size = UDim2.new(1 - rightWidth, -18, 1, -18),
-    Position = UDim2.new(0, 18, 0, 9),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-}, body)
-
-local function card(parent, name, size, position, order)
-    local frame = make("Frame", {
-        Name = name or "Card",
-        Size = size,
-        Position = position or UDim2.new(),
-        BackgroundColor3 = Theme.Surface,
-        BorderSizePixel = 0,
-        LayoutOrder = order or 1,
-    }, parent)
-    round(frame, 13)
-    outline(frame, Theme.Border, 0.42, 1)
-    return frame
-end
-
--- Page host; each page has its own scrolling canvas.
-local pageHost = make("Frame", {
-    Name = "PageHost",
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-}, mainArea)
-
-local function newPage(name)
-    local page = make("ScrollingFrame", {
-        Name = name .. "Page",
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = Theme.Blue,
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        Visible = false,
-    }, pageHost)
-    pad(page, 0, 0, 0, 12)
-    make("UIListLayout", {
-        Padding = UDim.new(0, 12),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-    }, page)
-    pages[name] = page
-    return page
-end
-
--- Dashboard page
-local dashboard = newPage("Dashboard")
-
-local welcome = card(dashboard, "WelcomeCard", UDim2.new(1, 0, 0, 100), UDim2.new(), 1)
-welcome.BackgroundColor3 = Color3.fromRGB(10, 19, 39)
-gradient(welcome, Color3.fromRGB(13, 24, 49), Color3.fromRGB(7, 13, 28), 0)
-label(welcome, "Good evening,", 12, Theme.Muted, Enum.Font.GothamMedium).Position = UDim2.new(0, 18, 0, 16)
-local greeting = label(welcome, player.Name .. "  👋", 24, Theme.Text, Enum.Font.GothamBold)
-greeting.Position = UDim2.new(0, 18, 0, 36)
-greeting.Size = UDim2.new(0.65, 0, 0, 32)
-label(welcome, "Here's what's happening with your system today.", 10, Theme.Muted, Enum.Font.Gotham).Position = UDim2.new(0, 19, 0, 70)
-local dateCard = make("Frame", {
-    Size = UDim2.new(0, 112, 0, 56),
-    Position = UDim2.new(1, -128, 0.5, -28),
-    BackgroundColor3 = Theme.Surface2,
-    BackgroundTransparency = 0.15,
-    BorderSizePixel = 0,
-}, welcome)
-round(dateCard, 9)
-outline(dateCard, Theme.Border, 0.55, 1)
-local dateText = label(dateCard, os.date("%Y-%m-%d"), 9, Theme.Muted, Enum.Font.Gotham, Enum.TextXAlignment.Center)
-dateText.Size = UDim2.new(1, 0, 0, 20)
-dateText.Position = UDim2.new(0, 0, 0, 5)
-local timeText = label(dateCard, os.date("%H:%M:%S"), 14, Theme.Text, Enum.Font.GothamMedium, Enum.TextXAlignment.Center)
-timeText.Size = UDim2.new(1, 0, 0, 22)
-timeText.Position = UDim2.new(0, 0, 0, 26)
-
-local metrics = make("Frame", {
-    Name = "MetricRow",
-    Size = UDim2.new(1, 0, 0, 102),
-    BackgroundTransparency = 1,
-    LayoutOrder = 2,
-}, dashboard)
-make("UIListLayout", {
-    FillDirection = Enum.FillDirection.Horizontal,
-    Padding = UDim.new(0, 10),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, metrics)
-
-local function metric(titleText, valueText, delta, glyph, accent, order)
-    local item = card(metrics, titleText, UDim2.new(0.25, -8, 1, 0), UDim2.new(), order)
-    local iconBox = make("Frame", {
-        Size = UDim2.fromOffset(39, 39),
-        Position = UDim2.new(0, 13, 0, 13),
-        BackgroundColor3 = accent:Lerp(Theme.Surface, 0.7),
-        BorderSizePixel = 0,
-    }, item)
-    round(iconBox, 20)
-    label(iconBox, glyph, 17, accent, Enum.Font.GothamBold, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1,1)
-    local title = label(item, titleText, 9, Theme.Muted, Enum.Font.Gotham)
-    title.Position = UDim2.new(0, 59, 0, 13)
-    title.Size = UDim2.new(1, -65, 0, 17)
-    local value = label(item, valueText, 18, Theme.Text, Enum.Font.GothamBold)
-    value.Position = UDim2.new(0, 59, 0, 31)
-    value.Size = UDim2.new(1, -65, 0, 24)
-    label(item, "↑ " .. delta, 9, Theme.Green, Enum.Font.GothamMedium).Position = UDim2.new(0, 59, 0, 57)
-    -- tiny understated sparkline
-    local spark = make("Frame", {
-        Size = UDim2.new(1, -24, 0, 15),
-        Position = UDim2.new(0, 12, 1, -20),
-        BackgroundTransparency = 1,
-    }, item)
-    local vals = {0.68, 0.55, 0.72, 0.48, 0.59, 0.32, 0.43, 0.18, 0.35, 0.12}
-    for i = 1, #vals - 1 do
-        local x1, y1 = (i-1)/(#vals-1), vals[i]
-        local x2, y2 = i/(#vals-1), vals[i+1]
-        local dx, dy = (x2-x1) * 100, (y2-y1) * 12
-        local line = make("Frame", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(x1, 0, y1, 0),
-            Size = UDim2.new(x2-x1, 0, 0, 1),
-            Rotation = math.deg(math.atan2(dy, dx)),
-            BackgroundColor3 = accent,
-            BackgroundTransparency = 0.15,
-            BorderSizePixel = 0,
-        }, spark)
-    end
-    return item
-end
-
-metric("Total Sessions", "12,458", "12.5%", "♟", Theme.Blue, 1)
-metric("Active Users", "3,249", "8.2%", "♟", Color3.fromRGB(83, 157, 255), 2)
-metric("Uptime", "99.8%", "0.1%", "◷", Theme.Purple, 3)
-metric("API Requests", "284K", "15.3%", "</>", Theme.Cyan, 4)
-
-local chartAndActions = make("Frame", {
-    Name = "ChartAndActions",
-    Size = UDim2.new(1, 0, 0, 220),
-    BackgroundTransparency = 1,
-    LayoutOrder = 3,
-}, dashboard)
-
-local chart = card(chartAndActions, "PerformanceChart", UDim2.new(0.65, -6, 1, 0), UDim2.new(), 1)
-label(chart, "⌁", 18, Theme.Blue, Enum.Font.GothamBold).Position = UDim2.new(0, 14, 0, 10)
-label(chart, "Performance Overview", 12, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 36, 0, 10)
-local timeTabs = make("Frame", {
-    Size = UDim2.new(0, 124, 0, 27),
-    Position = UDim2.new(1, -138, 0, 8),
-    BackgroundTransparency = 1,
-}, chart)
-local activeRange = "24h"
-for i, range in ipairs({"24h", "7d", "30d"}) do
-    local tab = button(timeTabs, range, UDim2.new(0, 38, 0, 25), UDim2.new(0, (i-1)*42, 0, 0), range == activeRange and Theme.Surface3 or Theme.Surface)
-    tab.TextColor3 = range == activeRange and Theme.Text or Theme.Muted
-    tab.TextSize = 10
-    round(tab, 7)
-    tab.MouseButton1Click:Connect(function()
-        activeRange = range
-        for _, sibling in ipairs(timeTabs:GetChildren()) do
-            if sibling:IsA("TextButton") then
-                local selected = sibling.Text == activeRange
-                tween(sibling, 0.12, {BackgroundColor3 = selected and Theme.Surface3 or Theme.Surface})
-                sibling.TextColor3 = selected and Theme.Text or Theme.Muted
-            end
-        end
-    end)
-end
-
-local plot = make("Frame", {
-    Name = "Plot",
-    Size = UDim2.new(1, -32, 1, -68),
-    Position = UDim2.new(0, 16, 0, 47),
-    BackgroundTransparency = 1,
-    ClipsDescendants = true,
-}, chart)
-for i = 0, 4 do
-    local y = i / 4
-    make("Frame", {
-        Size = UDim2.new(1, -24, 0, 1),
-        Position = UDim2.new(0, 24, 0, y * 145),
-        BackgroundColor3 = Theme.Border,
-        BackgroundTransparency = 0.65,
-        BorderSizePixel = 0,
-    }, plot)
-    label(plot, tostring(100 - i*25), 8, Theme.Muted, Enum.Font.Gotham, Enum.TextXAlignment.Right).Size = UDim2.new(0, 20, 0, 14)
-    plot:GetChildren()[#plot:GetChildren()].Position = UDim2.new(0, 0, 0, y * 145 - 7)
-end
-local chartPoints = {0.78,0.66,0.47,0.51,0.61,0.40,0.44,0.27,0.32,0.18,0.21,0.08}
-local function drawPerformance()
-    for _, child in ipairs(plot:GetChildren()) do
-        if child.Name == "LineSeg" or child.Name == "PointDot" then child:Destroy() end
-    end
-    local abs = plot.AbsoluteSize
-    local left = 28
-    local usableW = math.max(abs.X - left - 4, 1)
-    local usableH = math.max(abs.Y - 26, 1)
-    for i = 1, #chartPoints - 1 do
-        local x1 = left + (i-1)/(#chartPoints-1)*usableW
-        local x2 = left + i/(#chartPoints-1)*usableW
-        local y1 = 12 + chartPoints[i]*usableH
-        local y2 = 12 + chartPoints[i+1]*usableH
-        local dx, dy = x2-x1, y2-y1
-        local seg = make("Frame", {
-            Name = "LineSeg",
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.fromOffset(x1, y1),
-            Size = UDim2.fromOffset(math.sqrt(dx*dx+dy*dy), 2),
-            Rotation = math.deg(math.atan2(dy, dx)),
-            BackgroundColor3 = Theme.Purple,
-            BorderSizePixel = 0,
-            ZIndex = 2,
-        }, plot)
-    end
-    for i, val in ipairs(chartPoints) do
-        if i == #chartPoints then
-            local dot = make("Frame", {
-                Name = "PointDot",
-                Size = UDim2.fromOffset(7, 7),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Position = UDim2.new((i-1)/(#chartPoints-1), left, 0, 12 + val*usableH),
-                BackgroundColor3 = Theme.Text,
-                BorderSizePixel = 0,
-                ZIndex = 3,
-            }, plot)
-            round(dot, 5)
-            outline(dot, Theme.Purple, 0, 1)
-        end
-    end
-end
-task.defer(drawPerformance)
-plot:GetPropertyChangedSignal("AbsoluteSize"):Connect(drawPerformance)
-
-local timeLabels = make("Frame", {
-    Size = UDim2.new(1, -38, 0, 15),
-    Position = UDim2.new(0, 30, 1, -20),
-    BackgroundTransparency = 1,
-}, chart)
-for i, t in ipairs({"00:00","04:00","08:00","12:00","16:00","20:00"}) do
-    local tick = label(timeLabels, t, 8, Theme.Muted, Enum.Font.Gotham, Enum.TextXAlignment.Center)
-    tick.Size = UDim2.new(1/6, 0, 1, 0)
-    tick.Position = UDim2.new((i-1)/6, 0, 0, 0)
-end
-
-local quick = card(chartAndActions, "QuickActions", UDim2.new(0.35, -6, 1, 0), UDim2.new(0.65, 12, 0, 0), 2)
-label(quick, "ϟ", 18, Theme.Blue, Enum.Font.GothamBold).Position = UDim2.new(0, 14, 0, 10)
-label(quick, "Quick Actions", 12, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 36, 0, 10)
-
-local function quickAction(textValue, glyph, order, callback)
-    local b = button(quick, "", UDim2.new(1, -20, 0, 38), UDim2.new(0, 10, 0, 39 + (order-1)*42), Theme.Surface)
-    b.BackgroundTransparency = 1
-    local ic = make("Frame", {
-        Size = UDim2.fromOffset(28, 28),
-        Position = UDim2.new(0, 0, 0.5, -14),
-        BackgroundColor3 = Theme.Surface3,
-        BorderSizePixel = 0,
-    }, b)
-    round(ic, 14)
-    label(ic, glyph, 13, Theme.Muted, Enum.Font.GothamBold, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1,1)
-    label(b, textValue, 10, Theme.Text, Enum.Font.GothamMedium).Position = UDim2.new(0, 36, 0, 0)
-    label(b, "›", 20, Theme.Muted, Enum.Font.Gotham, Enum.TextXAlignment.Center).Position = UDim2.new(1, -20, 0, 0)
-    b.MouseEnter:Connect(function() tween(b, 0.1, {BackgroundTransparency = 0.4, BackgroundColor3 = Theme.Surface3}) end)
-    b.MouseLeave:Connect(function() tween(b, 0.1, {BackgroundTransparency = 1, BackgroundColor3 = Theme.Surface}) end)
-    b.MouseButton1Click:Connect(callback)
+    round(b, 9)
     return b
 end
 
--- Right-side panels
-local systemStatus = card(rightRail, "SystemStatus", UDim2.new(1, 0, 0, 145), UDim2.new(), 1)
-label(systemStatus, "▥  System Status", 12, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 15, 0, 13)
-local onlinePill = label(systemStatus, "◆ Online", 8, Theme.Green, Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-onlinePill.Size = UDim2.new(0, 55, 0, 22)
-onlinePill.Position = UDim2.new(1, -66, 0, 7)
-onlinePill.BackgroundColor3 = Color3.fromRGB(10, 45, 42)
-round(onlinePill, 11)
-
-local services = {
-    {"♧", "API Server"},
-    {"▤", "Database"},
-    {"⬡", "Cache"},
-    {"✣", "CDN"},
-}
-for i, item in ipairs(services) do
-    local y = 42 + (i-1)*24
-    label(systemStatus, item[1], 12, Theme.Muted, Enum.Font.GothamMedium, Enum.TextXAlignment.Center).Position = UDim2.new(0, 12, 0, y)
-    local serviceName = label(systemStatus, item[2], 9, Theme.Muted, Enum.Font.Gotham)
-    serviceName.Position = UDim2.new(0, 32, 0, y)
-    serviceName.Size = UDim2.new(0.55, 0, 0, 18)
-    local dot = make("Frame", {
-        Size = UDim2.fromOffset(6, 6),
-        Position = UDim2.new(1, -43, 0, y+6),
-        BackgroundColor3 = Theme.Green,
-        BorderSizePixel = 0,
-    }, systemStatus)
-    round(dot, 4)
-    label(systemStatus, "Online", 8, Theme.Green, Enum.Font.Gotham).Position = UDim2.new(1, -32, 0, y)
-end
-
-local recent = card(rightRail, "RecentActivity", UDim2.new(1, 0, 0, 164), UDim2.new(), 2)
-label(recent, "◷  Recent Activity", 12, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 15, 0, 13)
-local activities = {
-    {"System updated", "2m ago", Theme.Blue},
-    {"New user registered", "5m ago", Theme.Purple},
-    {"Analytics report ready", "12m ago", Theme.Blue},
-    {"Backup completed", "18m ago", Theme.Blue},
-}
-for i, activity in ipairs(activities) do
-    local y = 43 + (i-1)*29
-    local dot = make("Frame", {
-        Size = UDim2.fromOffset(7, 7),
-        Position = UDim2.new(0, 17, 0, y+5),
-        BackgroundColor3 = activity[3],
-        BorderSizePixel = 0,
-    }, recent)
-    round(dot, 5)
-    local act = label(recent, activity[1], 8, Theme.Muted, Enum.Font.Gotham)
-    act.Position = UDim2.new(0, 31, 0, y)
-    act.Size = UDim2.new(1, -75, 0, 18)
-    local ago = label(recent, activity[2], 8, Theme.Dim, Enum.Font.Gotham, Enum.TextXAlignment.Right)
-    ago.Position = UDim2.new(1, -48, 0, y)
-    ago.Size = UDim2.new(0, 38, 0, 18)
-end
-
-local loadCard = card(rightRail, "SystemLoad", UDim2.new(1, 0, 0, 126), UDim2.new(), 3)
-label(loadCard, "System Load", 11, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 94, 0, 20)
-label(loadCard, "● Normal", 9, Theme.Green, Enum.Font.GothamMedium).Position = UDim2.new(0, 94, 0, 42)
-local ringBack = make("Frame", {
-    Size = UDim2.fromOffset(68, 68),
-    Position = UDim2.new(0, 16, 0.5, -34),
-    BackgroundColor3 = Theme.Surface3,
-    BorderSizePixel = 0,
-}, loadCard)
-round(ringBack, 40)
-outline(ringBack, Theme.Border, 0.2, 5)
-local ring = make("Frame", {
-    Size = UDim2.fromOffset(58, 58),
-    Position = UDim2.new(0, 5, 0, 5),
-    BackgroundColor3 = Theme.Surface,
-    BorderSizePixel = 0,
-}, ringBack)
-round(ring, 30)
-local ringValue = label(ring, "78%", 14, Theme.Text, Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-ringValue.Size = UDim2.fromScale(1,1)
-local loadBarBg = make("Frame", {
-    Size = UDim2.new(1, -110, 0, 4),
-    Position = UDim2.new(0, 94, 0, 76),
-    BackgroundColor3 = Theme.Surface3,
-    BorderSizePixel = 0,
-}, loadCard)
-round(loadBarBg, 3)
-local loadBar = make("Frame", {
-    Size = UDim2.new(0.78, 0, 1, 0),
-    BackgroundColor3 = Theme.Blue,
-    BorderSizePixel = 0,
-}, loadBarBg)
-round(loadBar, 3)
-
--- Lower feature banner
-local feature = card(dashboard, "FeatureBanner", UDim2.new(1, 0, 0, 130), UDim2.new(), 4)
-feature.BackgroundColor3 = Color3.fromRGB(10, 18, 39)
-gradient(feature, Color3.fromRGB(15, 24, 51), Color3.fromRGB(8, 12, 28), 0)
-label(feature, "✦  NEXT GENERATION", 8, Theme.Muted, Enum.Font.GothamBold).Position = UDim2.new(0, 16, 0, 14)
-label(feature, "Smarter Tools. Greater Control.", 17, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 16, 0, 35)
-local featureSub = label(feature, "Explore powerful features designed to give you the best experience.", 9, Theme.Muted, Enum.Font.Gotham)
-featureSub.Position = UDim2.new(0, 16, 0, 61)
-featureSub.Size = UDim2.new(0.74, 0, 0, 20)
-local getStarted = button(feature, "Get Started   →", UDim2.fromOffset(112, 30), UDim2.new(0, 16, 1, -42), Theme.Blue2)
-corner(getStarted, 8)
-gradient(getStarted, Theme.Purple, Theme.Blue, 0)
-local learnMore = button(feature, "Learn More", UDim2.fromOffset(82, 30), UDim2.new(0, 137, 1, -42), Theme.Surface)
-learnMore.BackgroundTransparency = 1
-learnMore.TextColor3 = Theme.Muted
-
--- Utility pages have the same restrained design language.
-local function simplePage(name, heading, subtitle)
-    local page = newPage(name)
-    local hero = card(page, "PageHero", UDim2.new(1, 0, 0, 88), UDim2.new(), 1)
-    label(hero, heading, 22, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 18, 0, 14)
-    local sub = label(hero, subtitle, 10, Theme.Muted, Enum.Font.Gotham)
-    sub.Position = UDim2.new(0, 18, 0, 47)
-    sub.Size = UDim2.new(1, -36, 0, 20)
-
-    local section = label(page, "WORKSPACE", 9, Theme.Blue, Enum.Font.GothamBold)
-    section.Size = UDim2.new(1, 0, 0, 18)
-    section.LayoutOrder = 2
-
-    local rows = {
-        {"Quick overview", "Review the current workspace state."},
-        {"Recent configuration", "Adjust the options for this section."},
-        {"Available actions", "Use the buttons below to test interactions."},
-    }
-    for i, row in ipairs(rows) do
-        local item = card(page, "Option" .. i, UDim2.new(1, 0, 0, 64), UDim2.new(), i+2)
-        label(item, row[1], 11, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 15, 0, 9)
-        local desc = label(item, row[2], 9, Theme.Muted, Enum.Font.Gotham)
-        desc.Position = UDim2.new(0, 15, 0, 32)
-        desc.Size = UDim2.new(1, -30, 0, 18)
-    end
-    return page
-end
-
-simplePage("Visuals", "Visual Preferences", "Appearance options for your workspace.")
-simplePage("Tools", "Tools", "Quick utilities and interface demonstrations.")
-simplePage("Analytics", "Analytics", "Session information and sample metrics.")
-simplePage("Automation", "Automation", "Local preferences for automation workflows.")
-simplePage("Settings", "Settings", "General settings and keyboard preferences.")
-simplePage("About", "About Nebula", "WDFEX HUB control panel interface.")
-
--- Functional quick actions
-quickAction("Open Tools", "⚒", 1, function() selectPage("Tools") end)
-quickAction("View Analytics", "▥", 2, function() selectPage("Analytics") end)
-quickAction("Settings", "⚙", 3, function() selectPage("Settings") end)
-quickAction("Help Center", "?", 4, function() selectPage("About") end)
-
-getStarted.MouseButton1Click:Connect(function() selectPage("Tools") end)
-learnMore.MouseButton1Click:Connect(function() selectPage("About") end)
-bellButton.MouseButton1Click:Connect(function()
-    local original = bellButton.Text
-    bellButton.Text = "✓"
-    task.delay(1, function()
-        if bellButton.Parent then bellButton.Text = original end
+local function getGuiParent()
+    local ok, hui = pcall(function()
+        if typeof(gethui) == "function" then return gethui() end
+        return nil
     end)
-end)
-
--- Search routes to a matching page or shows a small visual response.
-searchBox.FocusLost:Connect(function()
-    local query = string.lower(searchBox.Text)
-    if query == "" then return end
-    for name in pairs(pages) do
-        if string.find(string.lower(name), query, 1, true) then
-            selectPage(name)
-            return
-        end
-    end
-end)
-
-selectPage = function(name)
-    if not pages[name] then return end
-    selectedPage = name
-    for pageName, page in pairs(pages) do
-        page.Visible = pageName == name
-    end
-    for pageName, item in pairs(navButtons) do
-        local selected = pageName == name
-        item.bar.Visible = selected
-        item.title.TextColor3 = selected and Theme.Text or Theme.Muted
-        item.icon.TextColor3 = selected and Theme.Text or Theme.Muted
-        tween(item.button, 0.16, {
-            BackgroundColor3 = selected and Theme.Blue2 or Theme.Surface,
-            BackgroundTransparency = selected and 0 or 1,
-        })
-        if selected then
-            local grad = item.button:FindFirstChildOfClass("UIGradient")
-            if grad then grad:Destroy() end
-            gradient(item.button, Theme.Purple2, Color3.fromRGB(25, 56, 130), 0)
-        else
-            local grad = item.button:FindFirstChildOfClass("UIGradient")
-            if grad then grad:Destroy() end
-        end
-    end
+    if ok and hui then return hui end
+    if not LocalPlayer then return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+    return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Floating orb, used to minimize and restore the dashboard.
-local orb = button(root, "⌃", UDim2.fromOffset(58, 58), UDim2.new(1, -84, 1, -82), Theme.Blue2)
-orb.Name = "NebulaFloatingOrb"
-orb.Visible = false
-orb.ZIndex = 30
-orb.TextSize = 25
-orb.Font = Enum.Font.GothamBold
-corner(orb, 30)
-outline(orb, Theme.Purple, 0, 1.5)
-gradient(orb, Theme.Purple, Theme.Blue2, 45)
-
-local minimized = false
-local closed = false
-local function minimize()
-    if minimized or closed then return end
-    minimized = true
-    orb.Visible = true
-    orb.Size = UDim2.fromOffset(0, 0)
-    window.Visible = false
-    tween(orb, 0.22, {Size = UDim2.fromOffset(58, 58)}, Enum.EasingStyle.Back)
-end
-
-local function restore()
-    if not minimized or closed then return end
-    minimized = false
-    orb.Visible = false
-    window.Visible = true
-    window.Size = UDim2.new(0.94, 0, 0.82, 0)
-    tween(window, 0.22, {Size = UDim2.new(0.94, 0, 0.82, 0)}, Enum.EasingStyle.Back)
-end
-
-minimizeButton.MouseButton1Click:Connect(minimize)
-orb.MouseButton1Click:Connect(restore)
-
--- Dragging the window from the top bar.
-do
+local function attachDrag(handle, target)
     local dragging = false
     local dragStart
     local startPosition
-    header.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPosition = window.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        local delta = input.Position - dragStart
-        window.Position = UDim2.new(
-            startPosition.X.Scale, startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
-        )
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-end
+    local activeInput
 
--- Dragging the orb; simple click restores.
-do
-    local dragging = false
-    local moved = false
-    local dragStart
-    local startPosition
-    orb.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            moved = false
             dragStart = input.Position
-            startPosition = orb.Position
+            startPosition = target.Position
+            activeInput = input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    activeInput = nil
+                end
+            end)
         end
     end)
+
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        local delta = input.Position - dragStart
-        if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then moved = true end
-        if moved then
-            orb.Position = UDim2.new(
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            target.Position = UDim2.new(
                 startPosition.X.Scale, startPosition.X.Offset + delta.X,
                 startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
             )
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            dragging = false
-            if not moved then restore() end
-        end
-    end)
 end
 
--- Close confirmation
-closeButton.MouseButton1Click:Connect(function()
-    if root:FindFirstChild("CloseDialog") then return end
-    local shade = make("Frame", {
-        Name = "CloseDialog",
+local function createScroll(parent, props)
+    local frame = make("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Palette.Purple,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+    }, parent)
+    for k, v in pairs(props or {}) do frame[k] = v end
+    return frame
+end
+
+local function addListLayout(parent, gap)
+    return make("UIListLayout", {
+        Padding = UDim.new(0, gap or 8),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, parent)
+end
+
+local function setCanvasFromLayout(scroll, layout, extra)
+    local function update()
+        if scroll and scroll.Parent and layout and layout.Parent then
+            scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + (extra or 20))
+        end
+    end
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(update)
+    task.defer(update)
+end
+
+local function addGlow(parent, transparency)
+    local glow = make("Frame", {
+        Name = "AccentGlow",
+        BackgroundColor3 = Palette.Purple,
+        BackgroundTransparency = transparency or 0.9,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 0, 0),
+    }, parent)
+    gradient(glow, Palette.PurpleLight, Palette.PurpleDeep, 0)
+    return glow
+end
+
+function Synaptix.new(config)
+    config = config or {}
+    local titleText = config.Title or "Synaptix"
+    local subtitleText = config.Subtitle or "CONTROL CENTER"
+    local width = math.clamp(config.Width or 980, 650, 1200)
+    local height = math.clamp(config.Height or 620, 430, 850)
+    local sideWidth = 205
+    local headerHeight = 66
+
+    local self = {}
+    local categories = {}
+    local activeCategory
+    local minimized = false
+    local destroyed = false
+    local connections = {}
+
+    local screen = make("ScreenGui", {
+        Name = "Synaptix_" .. HttpService:GenerateGUID(false):gsub("%-", ""):sub(1, 8),
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 900,
+    }, getGuiParent())
+
+    -- Subtle ambient background behind the app.
+    local ambient = make("Frame", {
+        Name = "Ambient",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(10, 3, 18),
+        BackgroundTransparency = 0.18,
+        BorderSizePixel = 0,
+    }, screen)
+    local ambientGradient = gradient(ambient, Color3.fromRGB(64, 15, 103), Color3.fromRGB(11, 4, 22), 25)
+    ambientGradient.Offset = Vector2.new(-0.25, 0)
+
+    local main = make("Frame", {
+        Name = "Dashboard",
+        Size = UDim2.new(0, width, 0, height),
+        Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2),
+        BackgroundColor3 = Palette.Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Active = true,
+    }, screen)
+    round(main, 20)
+    stroke(main, Color3.fromRGB(111, 54, 153), 0.28, 1.2)
+    addGlow(main, 0.2)
+
+    local sidebar = make("Frame", {
+        Name = "Sidebar",
+        Size = UDim2.new(0, sideWidth, 1, 0),
+        BackgroundColor3 = Palette.Sidebar,
+        BorderSizePixel = 0,
+    }, main)
+    local sideLine = make("Frame", {
+        Size = UDim2.new(0, 1, 1, -32),
+        Position = UDim2.new(1, -1, 0, 16),
+        BackgroundColor3 = Palette.Border,
+        BackgroundTransparency = 0.55,
+        BorderSizePixel = 0,
+    }, sidebar)
+
+    -- Brand
+    local brand = make("Frame", {
+        Size = UDim2.new(1, -28, 0, 52),
+        Position = UDim2.new(0, 14, 0, 12),
+        BackgroundTransparency = 1,
+    }, sidebar)
+    local logo = make("Frame", {
+        Size = UDim2.new(0, 34, 0, 34),
+        Position = UDim2.new(0, 0, 0.5, -17),
+        BackgroundColor3 = Palette.Purple,
+        BorderSizePixel = 0,
+    }, brand)
+    round(logo, 11)
+    gradient(logo, Color3.fromRGB(207, 143, 255), Color3.fromRGB(105, 41, 194), 45)
+    label(logo, "S", 21, Color3.new(1, 1, 1), FONT_BOLD, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1, 1)
+    local brandTitle = label(brand, titleText, 19, Palette.Text, FONT_BOLD)
+    brandTitle.Position = UDim2.new(0, 44, 0, 1)
+    brandTitle.Size = UDim2.new(1, -44, 0, 27)
+    local brandSub = label(brand, subtitleText, 8, Palette.Dim, FONT_BOLD)
+    brandSub.Position = UDim2.new(0, 45, 0, 27)
+    brandSub.Size = UDim2.new(1, -45, 0, 16)
+
+    local navCaption = label(sidebar, "WORKSPACE", 9, Palette.Dim, FONT_BOLD)
+    navCaption.Position = UDim2.new(0, 22, 0, 82)
+    navCaption.Size = UDim2.new(1, -40, 0, 18)
+
+    local nav = make("Frame", {
+        Name = "Navigation",
+        Size = UDim2.new(1, -20, 1, -202),
+        Position = UDim2.new(0, 10, 0, 106),
+        BackgroundTransparency = 1,
+    }, sidebar)
+    addListLayout(nav, 5)
+
+    -- Sidebar upgrade card
+    local upgrade = make("Frame", {
+        Name = "UpgradeCard",
+        Size = UDim2.new(1, -24, 0, 76),
+        Position = UDim2.new(0, 12, 1, -91),
+        BackgroundColor3 = Palette.Panel,
+        BorderSizePixel = 0,
+    }, sidebar)
+    round(upgrade, 13)
+    stroke(upgrade, Palette.Purple, 0.58, 1)
+    gradient(upgrade, Color3.fromRGB(55, 20, 83), Color3.fromRGB(25, 10, 40), 25)
+    local upgradeTitle = label(upgrade, "Synaptix Plus", 12, Palette.Text, FONT_BOLD)
+    upgradeTitle.Position = UDim2.new(0, 12, 0, 10)
+    upgradeTitle.Size = UDim2.new(1, -24, 0, 18)
+    local upgradeDesc = label(upgrade, "Unlock your full workflow", 9, Palette.Muted, FONT)
+    upgradeDesc.Position = UDim2.new(0, 12, 0, 29)
+    upgradeDesc.Size = UDim2.new(1, -24, 0, 15)
+    local upgradeLine = make("Frame", {
+        Size = UDim2.new(0, 48, 0, 3),
+        Position = UDim2.new(0, 12, 1, -11),
+        BackgroundColor3 = Palette.PurpleLight,
+        BorderSizePixel = 0,
+    }, upgrade)
+    round(upgradeLine, 3)
+
+    -- Main top bar
+    local topbar = make("Frame", {
+        Name = "Topbar",
+        Size = UDim2.new(1, -sideWidth, 0, headerHeight),
+        Position = UDim2.new(0, sideWidth, 0, 0),
+        BackgroundColor3 = Palette.Background,
+        BackgroundTransparency = 0.12,
+        BorderSizePixel = 0,
+    }, main)
+    local topDivider = make("Frame", {
+        Size = UDim2.new(1, -28, 0, 1),
+        Position = UDim2.new(0, 14, 1, -1),
+        BackgroundColor3 = Palette.Border,
+        BackgroundTransparency = 0.55,
+        BorderSizePixel = 0,
+    }, topbar)
+
+    local search = make("Frame", {
+        Name = "Search",
+        Size = UDim2.new(0, math.min(310, width * 0.34), 0, 36),
+        Position = UDim2.new(0, 24, 0.5, -18),
+        BackgroundColor3 = Palette.Panel,
+        BorderSizePixel = 0,
+    }, topbar)
+    round(search, 11)
+    stroke(search, Palette.Border, 0.45, 1)
+    label(search, "⌕", 23, Palette.Muted, FONT).Position = UDim2.new(0, 12, 0, 0)
+    local searchText = make("TextBox", {
+        Size = UDim2.new(1, -42, 1, 0),
+        Position = UDim2.new(0, 37, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        PlaceholderText = "Search tools, controls, or pages...",
+        PlaceholderColor3 = Palette.Dim,
+        TextColor3 = Palette.Text,
+        Font = FONT,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+    }, search)
+
+    local status = make("Frame", {
+        Size = UDim2.new(0, 104, 0, 32),
+        Position = UDim2.new(1, -148, 0.5, -16),
+        BackgroundColor3 = Color3.fromRGB(16, 48, 43),
+        BorderSizePixel = 0,
+    }, topbar)
+    round(status, 16)
+    local statusDot = make("Frame", {
+        Size = UDim2.new(0, 6, 0, 6),
+        Position = UDim2.new(0, 11, 0.5, -3),
+        BackgroundColor3 = Palette.Green,
+        BorderSizePixel = 0,
+    }, status)
+    round(statusDot, 3)
+    local statusLabel = label(status, "SYSTEM READY", 8, Palette.Green, FONT_BOLD)
+    statusLabel.Position = UDim2.new(0, 23, 0, 0)
+    statusLabel.Size = UDim2.new(1, -27, 1, 0)
+
+    local minimizeBtn = button(topbar, "−", UDim2.new(0, 30, 0, 30), Palette.PanelSoft, Palette.Muted)
+    minimizeBtn.Position = UDim2.new(1, -39, 0.5, -15)
+    minimizeBtn.TextSize = 18
+    minimizeBtn.MouseEnter:Connect(function() animate(minimizeBtn, 0.12, {BackgroundColor3 = Palette.PanelHover}) end)
+    minimizeBtn.MouseLeave:Connect(function() animate(minimizeBtn, 0.12, {BackgroundColor3 = Palette.PanelSoft}) end)
+
+    local content = make("Frame", {
+        Name = "Content",
+        Size = UDim2.new(1, -sideWidth, 1, -headerHeight),
+        Position = UDim2.new(0, sideWidth, 0, headerHeight),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+    }, main)
+
+    -- Dashboard overview is a real built-in landing page.
+    local overview = createScroll(content, {
+        Name = "Overview",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.35,
+        Visible = true,
+    })
+    padding(overview, 22, 17, 22, 20)
+    local overviewLayout = addListLayout(overview, 15)
+
+    local welcomeRow = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 66),
+        BackgroundTransparency = 1,
+        LayoutOrder = 1,
+    }, overview)
+    local welcomeTitle = label(welcomeRow, "Welcome back", 25, Palette.Text, FONT_BOLD)
+    welcomeTitle.Size = UDim2.new(1, -170, 0, 34)
+    welcomeTitle.Position = UDim2.new(0, 0, 0, 2)
+    local welcomeSub = label(welcomeRow, "Your workspace is ready. Here's your activity at a glance.", 11, Palette.Muted, FONT)
+    welcomeSub.Size = UDim2.new(1, -150, 0, 20)
+    welcomeSub.Position = UDim2.new(0, 1, 0, 38)
+
+    local livePill = make("Frame", {
+        Size = UDim2.new(0, 132, 0, 32),
+        Position = UDim2.new(1, -132, 0, 13),
+        BackgroundColor3 = Palette.PanelSoft,
         BorderSizePixel = 0,
-        ZIndex = 100,
-    }, root)
-    local dialog = make("Frame", {
-        Size = UDim2.fromOffset(310, 145),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        BackgroundColor3 = Theme.Surface2,
+    }, welcomeRow)
+    round(livePill, 16)
+    stroke(livePill, Palette.Purple, 0.5, 1)
+    gradient(livePill, Color3.fromRGB(117, 51, 185), Color3.fromRGB(57, 24, 95), 0)
+    label(livePill, "✦  WORKSPACE LIVE", 9, Palette.Text, FONT_BOLD, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1, 1)
+
+    -- Metrics cards
+    local metrics = make("Frame", {
+        Name = "Metrics",
+        Size = UDim2.new(1, 0, 0, 116),
+        BackgroundTransparency = 1,
+        LayoutOrder = 2,
+    }, overview)
+    local metricsLayout = make("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Left,
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+        Padding = UDim.new(0, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, metrics)
+
+    local metricData = {
+        {Icon = "⌁", Title = "SESSIONS", Value = "24.5K", Trend = "+12.5%", Color = Palette.Gold},
+        {Icon = "✧", Title = "ACTIONS", Value = "1,847", Trend = "+8.2%", Color = Palette.PurpleLight},
+        {Icon = "◎", Title = "ACCURACY", Value = "98.5%", Trend = "+2.1%", Color = Palette.Cyan},
+    }
+    local metricCards = {}
+    for i, data in ipairs(metricData) do
+        local card = make("Frame", {
+            Name = "Metric_" .. i,
+            Size = UDim2.new(1 / 3, -7, 1, 0),
+            BackgroundColor3 = Palette.Panel,
+            BorderSizePixel = 0,
+            LayoutOrder = i,
+        }, metrics)
+        round(card, 15)
+        stroke(card, Palette.Border, 0.42, 1)
+        local tint = make("Frame", {
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3 = data.Color,
+            BackgroundTransparency = 0.94,
+            BorderSizePixel = 0,
+        }, card)
+        round(tint, 15)
+        local iconBox = make("Frame", {
+            Size = UDim2.new(0, 31, 0, 31),
+            Position = UDim2.new(0, 13, 0, 12),
+            BackgroundColor3 = data.Color,
+            BackgroundTransparency = 0.84,
+            BorderSizePixel = 0,
+        }, card)
+        round(iconBox, 9)
+        label(iconBox, data.Icon, 19, data.Color, FONT_BOLD, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1, 1)
+        local cap = label(card, data.Title, 9, Palette.Muted, FONT_BOLD)
+        cap.Position = UDim2.new(0, 54, 0, 13)
+        cap.Size = UDim2.new(1, -62, 0, 28)
+        local val = label(card, data.Value, 25, Palette.Text, FONT_BOLD)
+        val.Position = UDim2.new(0, 14, 0, 52)
+        val.Size = UDim2.new(1, -28, 0, 30)
+        local trend = label(card, data.Trend .. " this month", 9, Palette.Green, FONT_MED)
+        trend.Position = UDim2.new(0, 14, 1, -24)
+        trend.Size = UDim2.new(1, -24, 0, 15)
+        metricCards[i] = {Value = val, Trend = trend, Card = card}
+        card.MouseEnter:Connect(function() animate(card, 0.14, {BackgroundColor3 = Palette.PanelSoft}) end)
+        card.MouseLeave:Connect(function() animate(card, 0.14, {BackgroundColor3 = Palette.Panel}) end)
+    end
+
+    -- Chart + side insights row
+    local analyticsRow = make("Frame", {
+        Name = "AnalyticsRow",
+        Size = UDim2.new(1, 0, 0, 240),
+        BackgroundTransparency = 1,
+        LayoutOrder = 3,
+    }, overview)
+
+    local chart = make("Frame", {
+        Name = "PerformanceCard",
+        Size = UDim2.new(0.66, -6, 1, 0),
+        BackgroundColor3 = Palette.Panel,
         BorderSizePixel = 0,
-        ZIndex = 101,
-    }, shade)
-    round(dialog, 14)
-    outline(dialog, Theme.Border, 0, 1)
-    label(dialog, "Close dashboard?", 15, Theme.Text, Enum.Font.GothamBold).Position = UDim2.new(0, 18, 0, 15)
-    local desc = label(dialog, "The dashboard will be removed from your screen.", 10, Theme.Muted, Enum.Font.Gotham)
-    desc.Position = UDim2.new(0, 18, 0, 44)
-    desc.Size = UDim2.new(1, -36, 0, 24)
-    local cancel = button(dialog, "Cancel", UDim2.new(0.5, -24, 0, 34), UDim2.new(0, 18, 1, -48), Theme.Surface3)
-    corner(cancel, 8)
-    local confirm = button(dialog, "Close UI", UDim2.new(0.5, -24, 0, 34), UDim2.new(0.5, 6, 1, -48), Theme.Red)
-    corner(confirm, 8)
-    cancel.MouseButton1Click:Connect(function() shade:Destroy() end)
-    confirm.MouseButton1Click:Connect(function()
-        closed = true
-        ScreenGui:Destroy()
+    }, analyticsRow)
+    round(chart, 15)
+    stroke(chart, Palette.Border, 0.4, 1)
+    local chartTitle = label(chart, "Performance overview", 14, Palette.Text, FONT_BOLD)
+    chartTitle.Position = UDim2.new(0, 17, 0, 14)
+    chartTitle.Size = UDim2.new(1, -34, 0, 22)
+    local chartSubtitle = label(chart, "ACTIVITY THROUGHOUT THE YEAR", 8, Palette.Dim, FONT_BOLD)
+    chartSubtitle.Position = UDim2.new(0, 18, 0, 37)
+    chartSubtitle.Size = UDim2.new(1, -36, 0, 15)
+    local chartValue = label(chart, "64,345", 27, Palette.Text, FONT_BOLD)
+    chartValue.Position = UDim2.new(0, 17, 0, 57)
+    chartValue.Size = UDim2.new(0, 170, 0, 35)
+    local chartGain = make("TextLabel", {
+        Size = UDim2.new(0, 50, 0, 18),
+        Position = UDim2.new(0, 132, 0, 66),
+        BackgroundColor3 = Color3.fromRGB(20, 69, 52),
+        BorderSizePixel = 0,
+        Text = "+14.3%",
+        TextColor3 = Palette.Green,
+        Font = FONT_BOLD,
+        TextSize = 9,
+    }, chart)
+    round(chartGain, 5)
+
+    local graph = make("Frame", {
+        Name = "Graph",
+        Size = UDim2.new(1, -34, 0, 105),
+        Position = UDim2.new(0, 17, 0, 111),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+    }, chart)
+    for i = 1, 4 do
+        local line = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 1),
+            Position = UDim2.new(0, 0, (i - 1) / 3, 0),
+            BackgroundColor3 = Palette.Border,
+            BackgroundTransparency = 0.72,
+            BorderSizePixel = 0,
+        }, graph)
+    end
+    local graphPoints = {
+        Vector2.new(0.02, 0.34), Vector2.new(0.22, 0.34),
+        Vector2.new(0.37, 0.74), Vector2.new(0.55, 0.68),
+        Vector2.new(0.68, 0.28), Vector2.new(0.83, 0.74),
+        Vector2.new(0.98, 0.35),
+    }
+    for i = 1, #graphPoints - 1 do
+        local a, b = graphPoints[i], graphPoints[i + 1]
+        local p1 = Vector2.new(a.X * 1000, a.Y * 1000)
+        local p2 = Vector2.new(b.X * 1000, b.Y * 1000)
+        local length = (p2 - p1).Magnitude
+        local segment = make("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(a.X, 0, a.Y, 0),
+            Size = UDim2.new(b.X - a.X, 0, 0, 2),
+            BackgroundColor3 = Palette.PurpleLight,
+            BorderSizePixel = 0,
+            Rotation = math.deg(math.atan2((b.Y - a.Y) * graph.AbsoluteSize.Y, (b.X - a.X) * graph.AbsoluteSize.X)),
+        }, graph)
+        segment.Size = UDim2.new(b.X - a.X, 0, 0, 2)
+        segment.AnchorPoint = Vector2.new(0, 0.5)
+        segment.Position = UDim2.new(a.X, 0, a.Y, 0)
+        segment.Rotation = math.deg(math.atan2((b.Y - a.Y) * 105, (b.X - a.X) * 600))
+        round(segment, 2)
+    end
+    for _, point in ipairs(graphPoints) do
+        local dot = make("Frame", {
+            Size = UDim2.new(0, 7, 0, 7),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(point.X, 0, point.Y, 0),
+            BackgroundColor3 = Palette.Text,
+            BorderSizePixel = 0,
+        }, graph)
+        round(dot, 4)
+        stroke(dot, Palette.PurpleLight, 0.1, 1.5)
+    end
+    local monthRow = make("Frame", {
+        Size = UDim2.new(1, -34, 0, 16),
+        Position = UDim2.new(0, 17, 1, -23),
+        BackgroundTransparency = 1,
+    }, chart)
+    for i, month in ipairs({"JAN", "APR", "JUL", "OCT", "DEC"}) do
+        local m = label(monthRow, month, 8, Palette.Dim, FONT_MED, Enum.TextXAlignment.Center)
+        m.Size = UDim2.new(0.2, 0, 1, 0)
+        m.Position = UDim2.new((i - 1) * 0.2, 0, 0, 0)
+    end
+
+    local insight = make("Frame", {
+        Name = "InsightCard",
+        Size = UDim2.new(0.34, -4, 1, 0),
+        Position = UDim2.new(0.66, 6, 0, 0),
+        BackgroundColor3 = Palette.Panel,
+        BorderSizePixel = 0,
+    }, analyticsRow)
+    round(insight, 15)
+    stroke(insight, Palette.Border, 0.4, 1)
+    local insightTitle = label(insight, "System insights", 14, Palette.Text, FONT_BOLD)
+    insightTitle.Position = UDim2.new(0, 15, 0, 14)
+    insightTitle.Size = UDim2.new(1, -30, 0, 22)
+    local insightSub = label(insight, "CURRENT WORKSPACE HEALTH", 8, Palette.Dim, FONT_BOLD)
+    insightSub.Position = UDim2.new(0, 16, 0, 37)
+    insightSub.Size = UDim2.new(1, -32, 0, 15)
+
+    local gauge = make("Frame", {
+        Size = UDim2.new(0, 118, 0, 82),
+        Position = UDim2.new(0.5, -59, 0, 66),
+        BackgroundTransparency = 1,
+    }, insight)
+    for i = 1, 17 do
+        local angle = math.rad(180 + (i - 1) * (180 / 16))
+        local segment = make("Frame", {
+            Size = UDim2.new(0, 5, 0, 15),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, math.cos(angle) * 49, 0.82, math.sin(angle) * 39),
+            Rotation = math.deg(angle) + 90,
+            BackgroundColor3 = i < 12 and Palette.Cyan or Palette.Purple,
+            BorderSizePixel = 0,
+        }, gauge)
+        round(segment, 3)
+    end
+    local gaugeValue = label(gauge, "98", 27, Palette.Text, FONT_BOLD, Enum.TextXAlignment.Center)
+    gaugeValue.Size = UDim2.new(1, 0, 0, 31)
+    gaugeValue.Position = UDim2.new(0, 0, 0, 39)
+    local gaugeCaption = label(gauge, "HEALTH SCORE", 7, Palette.Muted, FONT_BOLD, Enum.TextXAlignment.Center)
+    gaugeCaption.Size = UDim2.new(1, 0, 0, 14)
+    gaugeCaption.Position = UDim2.new(0, 0, 0, 64)
+
+    local function insightLine(y, color, name, value)
+        local dot = make("Frame", {
+            Size = UDim2.new(0, 7, 0, 7),
+            Position = UDim2.new(0, 16, 0, y + 4),
+            BackgroundColor3 = color,
+            BorderSizePixel = 0,
+        }, insight)
+        round(dot, 4)
+        local nameLabel = label(insight, name, 10, Palette.Muted, FONT_MED)
+        nameLabel.Position = UDim2.new(0, 29, 0, y)
+        nameLabel.Size = UDim2.new(1, -85, 0, 17)
+        local valueLabel = label(insight, value, 10, Palette.Text, FONT_BOLD, Enum.TextXAlignment.Right)
+        valueLabel.Position = UDim2.new(1, -53, 0, y)
+        valueLabel.Size = UDim2.new(0, 37, 0, 17)
+    end
+    insightLine(168, Palette.Cyan, "Performance", "94%")
+    insightLine(192, Palette.PurpleLight, "Efficiency", "87%")
+
+    local toolsHeading = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 36),
+        BackgroundTransparency = 1,
+        LayoutOrder = 4,
+    }, overview)
+    local toolsTitle = label(toolsHeading, "Quick access", 15, Palette.Text, FONT_BOLD)
+    toolsTitle.Size = UDim2.new(1, -140, 1, 0)
+    local toolsSub = label(toolsHeading, "Your most-used workspace sections", 9, Palette.Muted, FONT)
+    toolsSub.Size = UDim2.new(1, -140, 0, 15)
+    toolsSub.Position = UDim2.new(0, 0, 0, 20)
+
+    local quickGrid = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 96),
+        BackgroundTransparency = 1,
+        LayoutOrder = 5,
+    }, overview)
+    local quickLayout = make("UIGridLayout", {
+        CellPadding = UDim2.new(0, 10, 0, 0),
+        CellSize = UDim2.new(1 / 3, -7, 1, 0),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, quickGrid)
+    local quickData = {
+        {"✦", "Tools library", "Explore available controls", Palette.PurpleLight},
+        {"⌁", "Activity logs", "Review recent events", Palette.Cyan},
+        {"⚙", "Preferences", "Customize your workspace", Palette.Gold},
+    }
+    local quickCards = {}
+    for i, item in ipairs(quickData) do
+        local card = button(quickGrid, "", UDim2.new(1, 0, 1, 0), Palette.Panel, Palette.Text)
+        card.LayoutOrder = i
+        card.Text = ""
+        round(card, 13)
+        stroke(card, Palette.Border, 0.42, 1)
+        local icon = label(card, item[1], 21, item[4], FONT_BOLD, Enum.TextXAlignment.Center)
+        icon.Position = UDim2.new(0, 12, 0, 13)
+        icon.Size = UDim2.new(0, 28, 0, 28)
+        local title = label(card, item[2], 11, Palette.Text, FONT_BOLD)
+        title.Position = UDim2.new(0, 48, 0, 11)
+        title.Size = UDim2.new(1, -56, 0, 22)
+        local desc = label(card, item[3], 8, Palette.Muted, FONT)
+        desc.Position = UDim2.new(0, 48, 0, 34)
+        desc.Size = UDim2.new(1, -56, 0, 20)
+        card.MouseEnter:Connect(function() animate(card, 0.12, {BackgroundColor3 = Palette.PanelHover}) end)
+        card.MouseLeave:Connect(function() animate(card, 0.12, {BackgroundColor3 = Palette.Panel}) end)
+        quickCards[item[2]] = card
+    end
+
+    setCanvasFromLayout(overview, overviewLayout, 24)
+
+    -- Floating restore button
+    local orb = button(screen, "S", UDim2.new(0, 54, 0, 54), Palette.PurpleDeep, Palette.Text)
+    orb.Name = "SynaptixOrb"
+    orb.Position = UDim2.new(1, -78, 1, -100)
+    orb.Visible = false
+    orb.TextSize = 21
+    orb.Font = FONT_BOLD
+    round(orb, 27)
+    stroke(orb, Palette.PurpleLight, 0.12, 2)
+    gradient(orb, Palette.PurpleLight, Palette.PurpleDeep, 45)
+    attachDrag(orb, orb)
+
+    local function minimize()
+        if minimized or destroyed then return end
+        minimized = true
+        animate(main, 0.2, {Size = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
+        task.delay(0.2, function()
+            if main.Parent then main.Visible = false end
+            if orb.Parent then
+                orb.Visible = true
+                orb.Size = UDim2.new(0, 0, 0, 0)
+                animate(orb, 0.2, {Size = UDim2.new(0, 54, 0, 54)}, Enum.EasingStyle.Back)
+            end
+        end)
+    end
+
+    local function restore()
+        if not minimized or destroyed then return end
+        minimized = false
+        orb.Visible = false
+        main.Visible = true
+        main.Size = UDim2.new(0, 0, 0, 0)
+        animate(main, 0.24, {Size = UDim2.new(0, width, 0, height)}, Enum.EasingStyle.Back)
+    end
+    minimizeBtn.MouseButton1Click:Connect(minimize)
+    orb.MouseButton1Click:Connect(restore)
+    attachDrag(topbar, main)
+
+    -- Categories and custom pages
+    local function selectCategory(cat)
+        if not cat or activeCategory == cat then return end
+        activeCategory = cat
+        overview.Visible = false
+        for _, other in ipairs(categories) do
+            other.Page.Visible = other == cat
+            if other == cat then
+                animate(other.NavButton, 0.16, {BackgroundColor3 = Palette.PurpleDeep, BackgroundTransparency = 0.08})
+                other.Indicator.Visible = true
+                other.Icon.TextColor3 = Palette.Text
+                other.NameLabel.TextColor3 = Palette.Text
+            else
+                animate(other.NavButton, 0.16, {BackgroundColor3 = Palette.Sidebar, BackgroundTransparency = 1})
+                other.Indicator.Visible = false
+                other.Icon.TextColor3 = Palette.Muted
+                other.NameLabel.TextColor3 = Palette.Muted
+            end
+        end
+        welcomeTitle.Text = cat.Name
+        welcomeSub.Text = "Manage your " .. string.lower(cat.Name) .. " workspace settings."
+    end
+
+    local function makeControlRow(cat, heightPx)
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, heightPx or 48),
+            BackgroundColor3 = Palette.Panel,
+            BorderSizePixel = 0,
+            LayoutOrder = cat.Order + 1,
+        }, cat.Page)
+        cat.Order += 1
+        round(row, 11)
+        stroke(row, Palette.Border, 0.63, 1)
+        return row
+    end
+
+    local function addSection(cat, text)
+        local holder = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 31),
+            BackgroundTransparency = 1,
+            LayoutOrder = cat.Order + 1,
+        }, cat.Page)
+        cat.Order += 1
+        local txt = label(holder, string.upper(text or "GENERAL"), 10, Palette.PurpleLight, FONT_BOLD)
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        local line = make("Frame", {
+            Size = UDim2.new(0, 42, 0, 2),
+            Position = UDim2.new(0, 0, 1, -3),
+            BackgroundColor3 = Palette.Purple,
+            BorderSizePixel = 0,
+        }, holder)
+        round(line, 2)
+        return holder
+    end
+
+    local function addLabel(cat, text, dim)
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 26),
+            BackgroundTransparency = 1,
+            LayoutOrder = cat.Order + 1,
+        }, cat.Page)
+        cat.Order += 1
+        local txt = label(row, text or "", 11, dim and Palette.Muted or Palette.Text, FONT_MED)
+        txt.Size = UDim2.fromScale(1, 1)
+        return txt
+    end
+
+    local function addDivider(cat)
+        local d = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 1),
+            BackgroundColor3 = Palette.Border,
+            BackgroundTransparency = 0.48,
+            BorderSizePixel = 0,
+            LayoutOrder = cat.Order + 1,
+        }, cat.Page)
+        cat.Order += 1
+        return d
+    end
+
+    local function addButton(cat, cfg)
+        cfg = cfg or {}
+        local row = makeControlRow(cat, 46)
+        row.BackgroundColor3 = cfg.Color or Palette.PanelSoft
+        local b = button(row, cfg.Text or "Run action", UDim2.new(1, -12, 1, -10), cfg.Color or Palette.PanelSoft, Palette.Text)
+        b.Position = UDim2.new(0, 6, 0, 5)
+        b.Font = FONT_BOLD
+        b.TextSize = 11
+        stroke(b, Palette.Purple, 0.58, 1)
+        b.MouseEnter:Connect(function() animate(b, 0.12, {BackgroundColor3 = Palette.PanelHover}) end)
+        b.MouseLeave:Connect(function() animate(b, 0.12, {BackgroundColor3 = cfg.Color or Palette.PanelSoft}) end)
+        if cfg.Callback then b.MouseButton1Click:Connect(function() pcall(cfg.Callback) end) end
+        return b
+    end
+
+    local function addToggle(cat, cfg)
+        cfg = cfg or {}
+        local state = cfg.Default == true
+        local row = makeControlRow(cat, 48)
+        local txt = label(row, cfg.Text or "Toggle", 12, Palette.Text, FONT_MED)
+        txt.Position = UDim2.new(0, 15, 0, 0)
+        txt.Size = UDim2.new(1, -88, 1, 0)
+        local track = make("Frame", {
+            Size = UDim2.new(0, 40, 0, 22),
+            Position = UDim2.new(1, -56, 0.5, -11),
+            BackgroundColor3 = state and Palette.Purple or Palette.PanelSoft,
+            BorderSizePixel = 0,
+        }, row)
+        round(track, 12)
+        local knob = make("Frame", {
+            Size = UDim2.new(0, 16, 0, 16),
+            Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
+            BackgroundColor3 = Palette.Text,
+            BorderSizePixel = 0,
+        }, track)
+        round(knob, 8)
+        local hit = make("TextButton", {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            Text = "",
+        }, row)
+        local function set(value, fire)
+            state = value == true
+            animate(track, 0.15, {BackgroundColor3 = state and Palette.Purple or Palette.PanelSoft})
+            animate(knob, 0.15, {Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)})
+            if fire ~= false and cfg.Callback then pcall(cfg.Callback, state) end
+        end
+        hit.MouseButton1Click:Connect(function() set(not state) end)
+        return {Set = set, Get = function() return state end, Instance = row}
+    end
+
+    local function addSlider(cat, cfg)
+        cfg = cfg or {}
+        local minV, maxV = cfg.Min or 0, cfg.Max or 100
+        if maxV <= minV then maxV = minV + 1 end
+        local step = cfg.Step or 1
+        local value = math.clamp(cfg.Default or minV, minV, maxV)
+        local row = makeControlRow(cat, 66)
+        local txt = label(row, cfg.Text or "Value", 11, Palette.Text, FONT_MED)
+        txt.Position = UDim2.new(0, 15, 0, 7)
+        txt.Size = UDim2.new(1, -90, 0, 18)
+        local number = label(row, tostring(value), 11, Palette.PurpleLight, FONT_BOLD, Enum.TextXAlignment.Right)
+        number.Position = UDim2.new(1, -74, 0, 7)
+        number.Size = UDim2.new(0, 58, 0, 18)
+        local track = make("Frame", {
+            Size = UDim2.new(1, -30, 0, 5),
+            Position = UDim2.new(0, 15, 0, 43),
+            BackgroundColor3 = Palette.PanelSoft,
+            BorderSizePixel = 0,
+        }, row)
+        round(track, 3)
+        local fill = make("Frame", {
+            Size = UDim2.new((value - minV) / (maxV - minV), 0, 1, 0),
+            BackgroundColor3 = Palette.Purple,
+            BorderSizePixel = 0,
+        }, track)
+        round(fill, 3)
+        gradient(fill, Palette.PurpleLight, Palette.PurpleDeep)
+        local knob = make("Frame", {
+            Size = UDim2.new(0, 13, 0, 13),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new((value - minV) / (maxV - minV), 0, 0.5, 0),
+            BackgroundColor3 = Palette.Text,
+            BorderSizePixel = 0,
+        }, track)
+        round(knob, 7)
+        stroke(knob, Palette.PurpleLight, 0.05, 1)
+        local dragging = false
+        local function setFromX(x, fire)
+            local ratio = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+            value = minV + ratio * (maxV - minV)
+            value = math.clamp(math.floor(value / step + 0.5) * step, minV, maxV)
+            ratio = (value - minV) / (maxV - minV)
+            fill.Size = UDim2.new(ratio, 0, 1, 0)
+            knob.Position = UDim2.new(ratio, 0, 0.5, 0)
+            number.Text = tostring(value)
+            if fire ~= false and cfg.Callback then pcall(cfg.Callback, value) end
+        end
+        track.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                setFromX(input.Position.X)
+            end
+        end)
+        table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                setFromX(input.Position.X)
+            end
+        end))
+        table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+        end))
+        return {
+            Set = function(v) setFromX(track.AbsolutePosition.X + math.clamp((v - minV) / (maxV - minV), 0, 1) * track.AbsoluteSize.X, false) end,
+            Get = function() return value end,
+            Instance = row,
+        }
+    end
+
+    local function addInput(cat, cfg)
+        cfg = cfg or {}
+        local row = makeControlRow(cat, 48)
+        local txt = label(row, cfg.Text or "Input", 11, Palette.Muted, FONT_MED)
+        txt.Position = UDim2.new(0, 15, 0, 0)
+        txt.Size = UDim2.new(0.36, -10, 1, 0)
+        local box = make("TextBox", {
+            Size = UDim2.new(0.6, -12, 0, 30),
+            Position = UDim2.new(0.4, 0, 0.5, -15),
+            BackgroundColor3 = Palette.Background,
+            BorderSizePixel = 0,
+            Text = cfg.Default or "",
+            PlaceholderText = cfg.Placeholder or "Enter a value...",
+            PlaceholderColor3 = Palette.Dim,
+            TextColor3 = Palette.Text,
+            Font = FONT,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ClearTextOnFocus = false,
+        }, row)
+        round(box, 8)
+        stroke(box, Palette.Border, 0.42, 1)
+        padding(box, 10, 0, 8, 0)
+        box.FocusLost:Connect(function(enter)
+            if enter and cfg.Callback then pcall(cfg.Callback, box.Text) end
+        end)
+        return {Set = function(v) box.Text = tostring(v) end, Get = function() return box.Text end, Box = box}
+    end
+
+    local function addDropdown(cat, cfg)
+        cfg = cfg or {}
+        local options = cfg.Options or {}
+        local current = cfg.Default or options[1] or ""
+        local isOpen = false
+        local row = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 48),
+            BackgroundTransparency = 1,
+            LayoutOrder = cat.Order + 1,
+            ZIndex = 10,
+        }, cat.Page)
+        cat.Order += 1
+        local head = make("TextButton", {
+            Size = UDim2.new(1, 0, 0, 48),
+            BackgroundColor3 = Palette.Panel,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            ZIndex = 10,
+        }, row)
+        round(head, 11)
+        stroke(head, Palette.Border, 0.55, 1)
+        local txt = label(head, cfg.Text or "Select option", 11, Palette.Muted, FONT_MED)
+        txt.Position = UDim2.new(0, 15, 0, 0)
+        txt.Size = UDim2.new(0.52, -10, 1, 0)
+        local val = label(head, tostring(current), 11, Palette.Text, FONT_BOLD, Enum.TextXAlignment.Right)
+        val.Position = UDim2.new(0.45, 0, 0, 0)
+        val.Size = UDim2.new(0.48, -28, 1, 0)
+        local arrow = label(head, "⌄", 18, Palette.PurpleLight, FONT_BOLD, Enum.TextXAlignment.Center)
+        arrow.Position = UDim2.new(1, -30, 0, 0)
+        arrow.Size = UDim2.new(0, 22, 1, 0)
+
+        local list = make("Frame", {
+            Size = UDim2.new(1, 0, 0, math.min(#options * 32 + 8, 168)),
+            Position = UDim2.new(0, 0, 0, 52),
+            BackgroundColor3 = Palette.PanelSoft,
+            BorderSizePixel = 0,
+            Visible = false,
+            ZIndex = 30,
+        }, row)
+        round(list, 10)
+        stroke(list, Palette.Purple, 0.42, 1)
+        padding(list, 5, 4, 5, 4)
+        local listLayout = addListLayout(list, 2)
+        listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        local itemButtons = {}
+        for i, option in ipairs(options) do
+            local item = button(list, tostring(option), UDim2.new(1, 0, 0, 28), option == current and Palette.PurpleDeep or Palette.PanelSoft, Palette.Text)
+            item.LayoutOrder = i
+            item.TextXAlignment = Enum.TextXAlignment.Left
+            item.TextSize = 10
+            padding(item, 9, 0, 4, 0)
+            item.ZIndex = 31
+            itemButtons[i] = item
+        end
+        local function setOpen(v)
+            isOpen = v
+            list.Visible = v
+            arrow.Text = v and "⌃" or "⌄"
+            row.Size = UDim2.new(1, 0, 0, v and (52 + list.Size.Y.Offset) or 48)
+        end
+        head.MouseButton1Click:Connect(function() setOpen(not isOpen) end)
+        for i, item in ipairs(itemButtons) do
+            item.MouseButton1Click:Connect(function()
+                current = options[i]
+                val.Text = tostring(current)
+                for j, other in ipairs(itemButtons) do
+                    other.BackgroundColor3 = options[j] == current and Palette.PurpleDeep or Palette.PanelSoft
+                end
+                setOpen(false)
+                if cfg.Callback then pcall(cfg.Callback, current) end
+            end)
+        end
+        return {
+            Set = function(v)
+                for i, option in ipairs(options) do
+                    if option == v then
+                        current = v
+                        val.Text = tostring(v)
+                        for j, other in ipairs(itemButtons) do other.BackgroundColor3 = options[j] == v and Palette.PurpleDeep or Palette.PanelSoft end
+                        break
+                    end
+                end
+            end,
+            Get = function() return current end,
+        }
+    end
+
+    local function addKeybind(cat, cfg)
+        cfg = cfg or {}
+        local current = cfg.Default or Enum.KeyCode.RightShift
+        local waiting = false
+        local row = makeControlRow(cat, 48)
+        local txt = label(row, cfg.Text or "Keybind", 11, Palette.Text, FONT_MED)
+        txt.Position = UDim2.new(0, 15, 0, 0)
+        txt.Size = UDim2.new(1, -120, 1, 0)
+        local key = button(row, current.Name, UDim2.new(0, 84, 0, 29), Palette.Background, Palette.PurpleLight)
+        key.Position = UDim2.new(1, -99, 0.5, -14.5)
+        key.TextSize = 10
+        stroke(key, Palette.Border, 0.35, 1)
+        key.MouseButton1Click:Connect(function()
+            waiting = true
+            key.Text = "Press key..."
+            key.TextColor3 = Palette.Gold
+        end)
+        table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
+            if not waiting or processed then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                current = input.KeyCode
+                waiting = false
+                key.Text = current.Name
+                key.TextColor3 = Palette.PurpleLight
+                if cfg.Callback then pcall(cfg.Callback, current) end
+            end
+        end))
+        return {Get = function() return current end, Instance = row}
+    end
+
+    local function createCategory(name)
+        local navBtn = make("TextButton", {
+            Size = UDim2.new(1, 0, 0, 41),
+            BackgroundColor3 = Palette.Sidebar,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            LayoutOrder = #categories + 1,
+        }, nav)
+        round(navBtn, 10)
+        local indicator = make("Frame", {
+            Size = UDim2.new(0, 3, 0, 21),
+            Position = UDim2.new(0, 0, 0.5, -10.5),
+            BackgroundColor3 = Palette.PurpleLight,
+            BorderSizePixel = 0,
+            Visible = false,
+        }, navBtn)
+        round(indicator, 2)
+        local icon = label(navBtn, "◇", 17, Palette.Muted, FONT_BOLD, Enum.TextXAlignment.Center)
+        icon.Position = UDim2.new(0, 8, 0, 0)
+        icon.Size = UDim2.new(0, 28, 1, 0)
+        local nameLabel = label(navBtn, name, 11, Palette.Muted, FONT_MED)
+        nameLabel.Position = UDim2.new(0, 43, 0, 0)
+        nameLabel.Size = UDim2.new(1, -50, 1, 0)
+
+        local page = createScroll(content, {
+            Name = "Page_" .. tostring(name),
+            Size = UDim2.fromScale(1, 1),
+            Visible = false,
+            ZIndex = 3,
+        })
+        padding(page, 22, 17, 22, 20)
+        local layout = addListLayout(page, 8)
+        setCanvasFromLayout(page, layout, 22)
+
+        local cat = {Name = name, NavButton = navBtn, Indicator = indicator, Icon = icon, NameLabel = nameLabel, Page = page, Order = 0, Layout = layout}
+        table.insert(categories, cat)
+        navBtn.MouseButton1Click:Connect(function() selectCategory(cat) end)
+        if #categories == 1 then
+            -- Keep the dashboard overview as the initial view.
+            navBtn.MouseButton1Click:Connect(function()
+                overview.Visible = false
+            end)
+        end
+
+        return {
+            Section = function(_, text) return addSection(cat, text) end,
+            Label = function(_, text, dim) return addLabel(cat, text, dim) end,
+            Divider = function() return addDivider(cat) end,
+            Button = function(_, cfg) return addButton(cat, cfg) end,
+            Toggle = function(_, cfg) return addToggle(cat, cfg) end,
+            Slider = function(_, cfg) return addSlider(cat, cfg) end,
+            Input = function(_, cfg) return addInput(cat, cfg) end,
+            Dropdown = function(_, cfg) return addDropdown(cat, cfg) end,
+            Keybind = function(_, cfg) return addKeybind(cat, cfg) end,
+        }
+    end
+
+    -- Search filters category navigation entries.
+    searchText:GetPropertyChangedSignal("Text"):Connect(function()
+        local query = string.lower(searchText.Text)
+        for _, cat in ipairs(categories) do
+            cat.NavButton.Visible = query == "" or string.find(string.lower(cat.Name), query, 1, true) ~= nil
+        end
     end)
-end)
 
--- Theme toggle for a small interactive response.
-local lightMode = false
-moonButton.MouseButton1Click:Connect(function()
-    lightMode = not lightMode
-    if lightMode then
-        Theme.Background = Color3.fromRGB(231, 238, 249)
-        Theme.Surface = Color3.fromRGB(248, 250, 255)
-        Theme.Surface2 = Color3.fromRGB(238, 243, 252)
-        Theme.Surface3 = Color3.fromRGB(221, 231, 247)
-        Theme.Text = Color3.fromRGB(20, 33, 57)
-        Theme.Muted = Color3.fromRGB(77, 94, 122)
-        window.BackgroundColor3 = Theme.Background
-        sidebar.BackgroundColor3 = Theme.Surface
-        header.BackgroundColor3 = Theme.Background
-        moonButton.Text = "☀"
-    else
-        Theme.Background = Color3.fromRGB(5, 10, 21)
-        Theme.Surface = Color3.fromRGB(8, 15, 29)
-        Theme.Surface2 = Color3.fromRGB(12, 21, 39)
-        Theme.Surface3 = Color3.fromRGB(17, 28, 49)
-        Theme.Text = Color3.fromRGB(239, 245, 255)
-        Theme.Muted = Color3.fromRGB(153, 171, 201)
-        window.BackgroundColor3 = Theme.Background
-        sidebar.BackgroundColor3 = Color3.fromRGB(7, 13, 26)
-        header.BackgroundColor3 = Theme.Background
-        moonButton.Text = "☾"
+    function self:Category(name)
+        return createCategory(name)
     end
-end)
 
--- Keep the clock live.
-task.spawn(function()
-    while ScreenGui.Parent do
-        if dateText.Parent then dateText.Text = os.date("%Y-%m-%d") end
-        if timeText.Parent then timeText.Text = os.date("%H:%M:%S") end
-        task.wait(1)
+    function self:SelectCategory(name)
+        for _, cat in ipairs(categories) do
+            if cat.Name == name then
+                selectCategory(cat)
+                return true
+            end
+        end
+        if name == "Dashboard" or name == "Overview" then
+            activeCategory = nil
+            overview.Visible = true
+            for _, cat in ipairs(categories) do
+                cat.Page.Visible = false
+                cat.Indicator.Visible = false
+                cat.NavButton.BackgroundTransparency = 1
+                cat.Icon.TextColor3 = Palette.Muted
+                cat.NameLabel.TextColor3 = Palette.Muted
+            end
+            welcomeTitle.Text = "Welcome back"
+            welcomeSub.Text = "Your workspace is ready. Here's your activity at a glance."
+            return true
+        end
+        return false
     end
-end)
 
--- First paint / entrance
-selectPage("Dashboard")
-local targetPosition = window.Position
-window.Position = UDim2.new(targetPosition.X.Scale, targetPosition.X.Offset, targetPosition.Y.Scale, targetPosition.Y.Offset + 12)
-window.BackgroundTransparency = 1
-tween(window, 0.3, {
-    Position = targetPosition,
-    BackgroundTransparency = 0,
-}, Enum.EasingStyle.Quart)
+    function self:Minimize() minimize() end
+    function self:Restore() restore() end
+    function self:Destroy()
+        if destroyed then return end
+        destroyed = true
+        for _, connection in ipairs(connections) do
+            pcall(function() connection:Disconnect() end)
+        end
+        if screen and screen.Parent then screen:Destroy() end
+    end
 
-print("[WDFEX HUB] Nebula Control Panel loaded.")
+    -- Start on overview. Navigation categories are added by the caller.
+    return self
+end
+
+Synaptix.Theme = Palette
+Synaptix.Config = {}
+
+return Synaptix
