@@ -2117,15 +2117,7 @@ function createUI()
                             if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
                                 local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
                                 if event then
-                                    local ok = pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end)
-                                    if ok then
-                                        task.wait(0.1)
-                                        local char2 = player.Character
-                                        local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
-                                        if root2 then
-                                            root2.CFrame = CFrame.new(-1570.57, -337.08, 1268.78)
-                                        end
-                                    end
+                                    task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
                                     task.wait(0.1)
                                 end
                             end
