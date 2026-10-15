@@ -1847,24 +1847,42 @@ function createUI()
             end
         end
     })
-    local PoliceSettings = { range = 200, delay = 0.5, combatCheck = false, teleport = false }
+    local PoliceSettings = { range = 1000, delay = 0.05, teleport = false }
     _G.PoliceSettings = PoliceSettings
     task.spawn(function()
         while true do
             if PoliceSettings.teleport then
-                local _, _, myRoot = fn40_interact(player)
+                local char = player.Character
+                local myRoot = char and char:FindFirstChild("HumanoidRootPart")
                 if myRoot then
                     local closest, closestDist = nil, nil
                     for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= player and plr.Team and plr.Team.Name == "Civilian" and (plr:GetAttribute("WantedLevel") or 0) > 0 then
-                            local _, _, targetRoot = fn40_interact(plr)
-                            if targetRoot then
-                                local dist = (targetRoot.Position - myRoot.Position).Magnitude
-                                if dist <= PoliceSettings.range and (not closestDist or dist < closestDist) then closest = targetRoot; closestDist = dist end
+                        if plr ~= player and plr.Character then
+                            local isWanted = false
+                            if (plr:GetAttribute("WantedLevel") or 0) > 0 then
+                                isWanted = true
+                            end
+                            if not isWanted and plr.Team then
+                                local tn = plr.Team.Name
+                                if (tn == "Civilian" or tn == "Citizen" or tn == "平民") and (plr:GetAttribute("WantedLevel") or 0) > 0 then
+                                    isWanted = true
+                                end
+                            end
+                            if isWanted then
+                                local targetRoot = plr.Character:FindFirstChild("HumanoidRootPart")
+                                if targetRoot then
+                                    local dist = (targetRoot.Position - myRoot.Position).Magnitude
+                                    if dist <= PoliceSettings.range and (not closestDist or dist < closestDist) then
+                                        closest = targetRoot
+                                        closestDist = dist
+                                    end
+                                end
                             end
                         end
                     end
-                    if closest then myRoot.CFrame = closest.CFrame + Vector3.new(0, 3, 0) end
+                    if closest then
+                        myRoot.CFrame = closest.CFrame + Vector3.new(0, 3, 0)
+                    end
                 end
             end
             task.wait(PoliceSettings.delay)
@@ -1872,8 +1890,8 @@ function createUI()
     end)
     PoliceTab:Toggle({ Title = "自动传送通缉玩家", Default = false, Callback = function(teleport) PoliceSettings.teleport = teleport end })
     PoliceTab:Toggle({ Title = "战斗检测", Default = false, Callback = function(combatCheck) PoliceSettings.combatCheck = combatCheck end })
-    PoliceTab:Slider({ Title = "范围", Value = { Min = 10, Max = 500, Default = 200 }, Step = 5, Callback = function(range) PoliceSettings.range = range end })
-    PoliceTab:Slider({ Title = "间隔", Value = { Min = 0.1, Max = 3, Default = 0.5 }, Step = 0.1, Callback = function(delay) PoliceSettings.delay = delay end })
+    PoliceTab:Slider({ Title = "范围", Value = { Min = 10, Max = 1000, Default = 1000 }, Step = 5, Callback = function(range) PoliceSettings.range = range end })
+    PoliceTab:Slider({ Title = "间隔", Value = { Min = 0.01, Max = 3, Default = 0.05 }, Step = 0.01, Callback = function(delay) PoliceSettings.delay = delay end })
 
     local autoHealEnabled = false
     local healRadius = 30
@@ -2099,7 +2117,15 @@ function createUI()
                             if hum and hum.Health > 0 and head and (head.Position - myRoot.Position).Magnitude < 15 then
                                 local event = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
                                 if event then
-                                    task.spawn(function() pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end) end)
+                                    local ok = pcall(function() event:InvokeServer("escortPlayer", "Arrested", p) end)
+                                    if ok then
+                                        task.wait(0.1)
+                                        local char2 = player.Character
+                                        local root2 = char2 and char2:FindFirstChild("HumanoidRootPart")
+                                        if root2 then
+                                            root2.CFrame = CFrame.new(-1570.57, -337.08, 1268.78)
+                                        end
+                                    end
                                     task.wait(0.1)
                                 end
                             end
