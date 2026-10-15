@@ -136,12 +136,12 @@ local function transMsg(code)
         already_online = "该卡密已在线",
         online_limit_reached = "在线设备数已满",
         activate = "激活成功",
-        valid = "验证通过",
-        permanent = "终身有效",
+        valid = "验证成功",
+        permanent = "永久有效",
         heartbeat = "心跳正常",
         bypass = "验证已关闭",
         unbind_ok = "解绑成功",
-        invalid_card = "卡密无效",
+        invalid_card = "卡密错误",
         expired = "卡密已过期",
         banned = "卡密已被禁用",
         device_mismatch = "设备不匹配",
@@ -1098,7 +1098,7 @@ VerifyBtn.MouseButton1Click:Connect(function()
     task.spawn(function()
         if currentVersion == "免费版" then
             updateStatus(Color3.fromRGB(100, 200, 255), "免费版")
-            showMessage("免费版无需验证，正在加载...", Color3.fromRGB(100, 200, 255), 2)
+            showMessage("验证成功，正在加载wdfex-Hub免费版...", Color3.fromRGB(100, 200, 255), 2)
             VerifyBtn.Text = "✓ 成功"
             VerifyBtn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
             playSound("rbxassetid://62339698", 0.6)
