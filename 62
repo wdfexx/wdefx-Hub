@@ -1,6 +1,6 @@
 --[[
-    Synaptix Dashboard UI
-    A from-scratch Roblox Luau UI library inspired by the supplied dark-purple dashboard reference.
+    NOVA Control Center — Full UI Library
+    A standalone Roblox Luau UI library styled after the selected NOVA purple-black floating dashboard mockup.
     No external UI library required.
 
     Example:
@@ -243,7 +243,7 @@ end
 
 function Synaptix.new(config)
     config = config or {}
-    local titleText = config.Title or "Synaptix"
+    local titleText = config.Title or "NOVA"
     local subtitleText = config.Subtitle or "CONTROL CENTER"
     local width = math.clamp(config.Width or 980, 650, 1200)
     local height = math.clamp(config.Height or 620, 430, 850)
@@ -258,7 +258,7 @@ function Synaptix.new(config)
     local connections = {}
 
     local screen = make("ScreenGui", {
-        Name = "Synaptix_" .. HttpService:GenerateGUID(false):gsub("%-", ""):sub(1, 8),
+        Name = "NOVA_" .. HttpService:GenerateGUID(false):gsub("%-", ""):sub(1, 8),
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -317,7 +317,7 @@ function Synaptix.new(config)
     }, brand)
     round(logo, 11)
     gradient(logo, Color3.fromRGB(207, 143, 255), Color3.fromRGB(105, 41, 194), 45)
-    label(logo, "S", 21, Color3.new(1, 1, 1), FONT_BOLD, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1, 1)
+    label(logo, "A", 21, Color3.new(1, 1, 1), FONT_BOLD, Enum.TextXAlignment.Center).Size = UDim2.fromScale(1, 1)
     local brandTitle = label(brand, titleText, 19, Palette.Text, FONT_BOLD)
     brandTitle.Position = UDim2.new(0, 44, 0, 1)
     brandTitle.Size = UDim2.new(1, -44, 0, 27)
@@ -348,10 +348,10 @@ function Synaptix.new(config)
     round(upgrade, 13)
     stroke(upgrade, Palette.Purple, 0.58, 1)
     gradient(upgrade, Color3.fromRGB(55, 20, 83), Color3.fromRGB(25, 10, 40), 25)
-    local upgradeTitle = label(upgrade, "Synaptix Plus", 12, Palette.Text, FONT_BOLD)
+    local upgradeTitle = label(upgrade, "NOVA v2.3.0", 12, Palette.Text, FONT_BOLD)
     upgradeTitle.Position = UDim2.new(0, 12, 0, 10)
     upgradeTitle.Size = UDim2.new(1, -24, 0, 18)
-    local upgradeDesc = label(upgrade, "Unlock your full workflow", 9, Palette.Muted, FONT)
+    local upgradeDesc = label(upgrade, "Better. Faster. Stronger.", 9, Palette.Muted, FONT)
     upgradeDesc.Position = UDim2.new(0, 12, 0, 29)
     upgradeDesc.Size = UDim2.new(1, -24, 0, 15)
     local upgradeLine = make("Frame", {
@@ -417,7 +417,7 @@ function Synaptix.new(config)
         BorderSizePixel = 0,
     }, status)
     round(statusDot, 3)
-    local statusLabel = label(status, "SYSTEM READY", 8, Palette.Green, FONT_BOLD)
+    local statusLabel = label(status, "ONLINE", 8, Palette.Green, FONT_BOLD)
     statusLabel.Position = UDim2.new(0, 23, 0, 0)
     statusLabel.Size = UDim2.new(1, -27, 1, 0)
 
@@ -449,10 +449,10 @@ function Synaptix.new(config)
         BackgroundTransparency = 1,
         LayoutOrder = 1,
     }, overview)
-    local welcomeTitle = label(welcomeRow, "Welcome back", 25, Palette.Text, FONT_BOLD)
+    local welcomeTitle = label(welcomeRow, "Welcome back, " .. (LocalPlayer and LocalPlayer.DisplayName or "Player"), 25, Palette.Text, FONT_BOLD)
     welcomeTitle.Size = UDim2.new(1, -170, 0, 34)
     welcomeTitle.Position = UDim2.new(0, 0, 0, 2)
-    local welcomeSub = label(welcomeRow, "Your workspace is ready. Here's your activity at a glance.", 11, Palette.Muted, FONT)
+    local welcomeSub = label(welcomeRow, "Good to see you again. Here's what's happening today.", 11, Palette.Muted, FONT)
     welcomeSub.Size = UDim2.new(1, -150, 0, 20)
     welcomeSub.Position = UDim2.new(0, 1, 0, 38)
 
@@ -737,7 +737,7 @@ function Synaptix.new(config)
 
     -- Floating restore button
     local orb = button(screen, "S", UDim2.new(0, 54, 0, 54), Palette.PurpleDeep, Palette.Text)
-    orb.Name = "SynaptixOrb"
+    orb.Name = "NOVAOrb"
     orb.Position = UDim2.new(1, -78, 1, -100)
     orb.Visible = false
     orb.TextSize = 21
@@ -1206,8 +1206,8 @@ function Synaptix.new(config)
                 cat.Icon.TextColor3 = Palette.Muted
                 cat.NameLabel.TextColor3 = Palette.Muted
             end
-            welcomeTitle.Text = "Welcome back"
-            welcomeSub.Text = "Your workspace is ready. Here's your activity at a glance."
+            welcomeTitle.Text = "Welcome back, " .. (LocalPlayer and LocalPlayer.DisplayName or "Player")
+            welcomeSub.Text = "Good to see you again. Here's what's happening today."
             return true
         end
         return false
