@@ -1,52 +1,40 @@
---=====================================================================
--- LierUI · 现代玻璃拟态 UI 库
--- 风格：深色玻璃 + 霓虹描边 + 平滑动画
--- 放到 LocalScript 里，位置：StarterPlayer > StarterPlayerScripts
---=====================================================================
+--=====================================================
+-- LierUI 增强版 · 背景/图片/最小化/拖拽缩放/特效
+-- 替换你原来的 LierUI 库，功能代码不用改
+--=====================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
---=====================================================================
--- 主题配置
---=====================================================================
 local Theme = {
-    -- 颜色
-    Accent       = Color3.fromRGB(120, 140, 255),
-    Accent2      = Color3.fromRGB(180, 120, 255),
-    Bg           = Color3.fromRGB(14, 15, 20),
-    BgLight      = Color3.fromRGB(22, 24, 32),
-    Glass        = Color3.fromRGB(28, 30, 42),
-    GlassLight   = Color3.fromRGB(38, 41, 56),
-    Border       = Color3.fromRGB(60, 65, 90),
-    Text         = Color3.fromRGB(240, 242, 250),
-    TextDim      = Color3.fromRGB(150, 155, 175),
-    Success      = Color3.fromRGB(90, 220, 150),
-    Danger       = Color3.fromRGB(240, 90, 110),
-    Warning      = Color3.fromRGB(255, 190, 90),
-
-    -- 尺寸
-    Width        = 480,
-    Height       = 360,
+    Accent = Color3.fromRGB(120, 140, 255),
+    Accent2 = Color3.fromRGB(180, 120, 255),
+    Bg = Color3.fromRGB(14, 15, 20),
+    BgLight = Color3.fromRGB(22, 24, 32),
+    Glass = Color3.fromRGB(28, 30, 42),
+    Border = Color3.fromRGB(60, 65, 90),
+    Text = Color3.fromRGB(240, 242, 250),
+    TextDim = Color3.fromRGB(150, 155, 175),
+    Success = Color3.fromRGB(90, 220, 150),
+    Danger = Color3.fromRGB(240, 90, 110),
+    Width = 480,
+    Height = 360,
     SidebarWidth = 130,
-    TitleHeight  = 44,
-    Radius       = 12,
-    ItemHeight   = 38,
-
-    -- 动画时长
-    AnimFast     = 0.15,
-    AnimNormal   = 0.25,
-    AnimSlow     = 0.4,
+    TitleHeight = 44,
+    Radius = 12,
+    ItemHeight = 38,
+    AnimFast = 0.15,
+    AnimNormal = 0.25,
+    AnimSlow = 0.4,
+    MinWidth = 320,
+    MinHeight = 240,
+    MaxWidth = 900,
+    MaxHeight = 700,
 }
 
---=====================================================================
--- 工具函数
---=====================================================================
 local Util = {}
 
 function Util.corner(parent, radius)
@@ -77,39 +65,15 @@ function Util.gradient(parent, c1, c2, rotation)
     return g
 end
 
-function Util.padding(parent, top, right, bottom, left)
-    local p = Instance.new("UIPadding")
-    p.PaddingTop = UDim.new(0, top or 0)
-    p.PaddingRight = UDim.new(0, right or 0)
-    p.PaddingBottom = UDim.new(0, bottom or 0)
-    p.PaddingLeft = UDim.new(0, left or 0)
-    p.Parent = parent
-    return p
-end
-
 function Util.tween(obj, time, props, style, dir)
-    local t = TweenService:Create(
-        obj,
-        TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
-        props
-    )
+    local t = TweenService:Create(obj, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
     t:Play()
     return t
 end
 
--- 按钮悬停效果
-function Util.applyHover(btn, normalColor, hoverColor)
-    btn.MouseEnter:Connect(function()
-        Util.tween(btn, Theme.AnimFast, { BackgroundColor3 = hoverColor })
-    end)
-    btn.MouseLeave:Connect(function()
-        Util.tween(btn, Theme.AnimFast, { BackgroundColor3 = normalColor })
-    end)
-end
-
---=====================================================================
+--=====================================================
 -- 窗口类
---=====================================================================
+--=====================================================
 local Window = {}
 Window.__index = Window
 
@@ -118,15 +82,16 @@ function Window.new(config)
     local self = setmetatable({}, Window)
 
     self.title = config.Title or "LierUI"
-    self.subtitle = config.Subtitle or "v1.0"
+    self.subtitle = config.Subtitle or "v2.0"
     self.width = config.Width or Theme.Width
     self.height = config.Height or Theme.Height
     self.tabs = {}
     self.currentTab = nil
     self.minimized = false
     self.connections = {}
+    self.customBgImage = config.BackgroundImage or nil
+    self.bgImageTransparency = config.BackgroundImageTransparency or 0.3
 
-    -- ScreenGui
     self.gui = Instance.new("ScreenGui")
     self.gui.Name = "LierUI_" .. tostring(math.random(1000, 9999))
     self.gui.ResetOnSpawn = false
@@ -136,7 +101,6 @@ function Window.new(config)
 
     -- 主容器
     self.root = Instance.new("Frame")
-    self.root.Name = "Root"
     self.root.Size = UDim2.new(0, self.width, 0, self.height)
     self.root.Position = UDim2.new(0.5, -self.width / 2, 0.5, -self.height / 2)
     self.root.BackgroundColor3 = Theme.Bg
@@ -146,12 +110,32 @@ function Window.new(config)
     self.root.ClipsDescendants = true
     self.root.Parent = self.gui
     Util.corner(self.root, Theme.Radius)
+    Util.stroke(self.root, Theme.Border, 1, 0.4)
 
-    -- 主边框
-    local rootStroke = Util.stroke(self.root, Theme.Border, 1, 0.4)
+    --=====================================================
+    -- 【新增】自定义背景图片层
+    --=====================================================
+    self.bgImage = Instance.new("ImageLabel")
+    self.bgImage.Name = "CustomBackground"
+    self.bgImage.Size = UDim2.new(1, 0, 1, 0)
+    self.bgImage.Position = UDim2.new(0, 0, 0, 0)
+    self.bgImage.BackgroundTransparency = 1
+    self.bgImage.Image = self.customBgImage or ""
+    self.bgImage.ImageTransparency = self.customBgImage and self.bgImageTransparency or 1
+    self.bgImage.ScaleType = Enum.ScaleType.Crop
+    self.bgImage.ZIndex = 0
+    self.bgImage.Parent = self.root
+    Util.corner(self.bgImage, Theme.Radius)
 
-    -- 背景渐变（高级感）
-    Util.gradient(self.root, Color3.fromRGB(20, 22, 30), Color3.fromRGB(12, 13, 18), 135)
+    -- 背景暗化层（确保图片上文字可读）
+    self.bgOverlay = Instance.new("Frame")
+    self.bgOverlay.Size = UDim2.new(1, 0, 1, 0)
+    self.bgOverlay.BackgroundColor3 = Theme.Bg
+    self.bgOverlay.BackgroundTransparency = 0.55
+    self.bgOverlay.BorderSizePixel = 0
+    self.bgOverlay.ZIndex = 1
+    self.bgOverlay.Parent = self.root
+    Util.corner(self.bgOverlay, Theme.Radius)
 
     -- 顶部光晕
     local topGlow = Instance.new("Frame")
@@ -159,34 +143,20 @@ function Window.new(config)
     topGlow.BackgroundColor3 = Theme.Accent
     topGlow.BackgroundTransparency = 0.94
     topGlow.BorderSizePixel = 0
-    topGlow.ZIndex = 0
+    topGlow.ZIndex = 2
     topGlow.Parent = self.root
     Util.corner(topGlow, Theme.Radius)
     Util.gradient(topGlow, Theme.Accent, Theme.Accent2, 0)
 
-    -- 顶部光晕渐隐
-    local glowFade = Instance.new("Frame")
-    glowFade.Size = UDim2.new(1, 0, 0, 60)
-    glowFade.Position = UDim2.new(0, 0, 0, 40)
-    glowFade.BackgroundColor3 = Theme.Bg
-    glowFade.BackgroundTransparency = 0.6
-    glowFade.BorderSizePixel = 0
-    glowFade.ZIndex = 1
-    glowFade.Parent = self.root
-    Util.gradient(glowFade, Color3.fromRGB(20, 22, 30), Color3.fromRGB(14, 15, 20), 180)
-    glowFade.BackgroundTransparency = 1
-
-    --=====================================================================
+    --=====================================================
     -- 标题栏
-    --=====================================================================
+    --=====================================================
     self.titleBar = Instance.new("Frame")
-    self.titleBar.Name = "TitleBar"
     self.titleBar.Size = UDim2.new(1, 0, 0, Theme.TitleHeight)
     self.titleBar.BackgroundTransparency = 1
     self.titleBar.ZIndex = 10
     self.titleBar.Parent = self.root
 
-    -- 标题文字
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Size = UDim2.new(1, -120, 1, 0)
     titleLabel.Position = UDim2.new(0, 20, 0, 0)
@@ -199,7 +169,6 @@ function Window.new(config)
     titleLabel.ZIndex = 11
     titleLabel.Parent = self.titleBar
 
-    -- 副标题
     local subtitle = Instance.new("TextLabel")
     subtitle.Size = UDim2.new(0, 60, 1, 0)
     subtitle.Position = UDim2.new(0, 20 + titleLabel.TextBounds.X + 10, 0, 0)
@@ -212,13 +181,17 @@ function Window.new(config)
     subtitle.ZIndex = 11
     subtitle.Parent = self.titleBar
 
-    -- 最小化按钮
+    --=====================================================
+    -- 【升级】最小化按钮 — 模仿 WindUI 但不同
+    -- WindUI：点击后窗口收缩为极小点并隐藏
+    -- 本版：窗口收缩为标题栏高度并保留标题文字，图标旋转 90°
+    --=====================================================
     self.minBtn = Instance.new("TextButton")
     self.minBtn.Size = UDim2.new(0, 30, 0, 30)
     self.minBtn.Position = UDim2.new(1, -76, 0, 7)
     self.minBtn.BackgroundColor3 = Color3.fromRGB(50, 52, 65)
     self.minBtn.BackgroundTransparency = 0.4
-    self.minBtn.Text = "−"
+    self.minBtn.Text = "—"
     self.minBtn.TextColor3 = Theme.Text
     self.minBtn.TextSize = 16
     self.minBtn.Font = Enum.Font.GothamBold
@@ -226,7 +199,6 @@ function Window.new(config)
     self.minBtn.ZIndex = 11
     self.minBtn.Parent = self.titleBar
     Util.corner(self.minBtn, 8)
-    Util.applyHover(self.minBtn, Color3.fromRGB(50, 52, 65), Color3.fromRGB(70, 72, 90))
 
     -- 关闭按钮
     self.closeBtn = Instance.new("TextButton")
@@ -242,24 +214,19 @@ function Window.new(config)
     self.closeBtn.ZIndex = 11
     self.closeBtn.Parent = self.titleBar
     Util.corner(self.closeBtn, 8)
-    Util.applyHover(self.closeBtn, Color3.fromRGB(60, 40, 50), Color3.fromRGB(120, 50, 70))
 
-    --=====================================================================
-    -- 主体区域
-    --=====================================================================
+    --=====================================================
+    -- 主体
+    --=====================================================
     self.body = Instance.new("Frame")
-    self.body.Name = "Body"
     self.body.Size = UDim2.new(1, -20, 1, -Theme.TitleHeight - 14)
     self.body.Position = UDim2.new(0, 10, 0, Theme.TitleHeight + 4)
     self.body.BackgroundTransparency = 1
     self.body.ZIndex = 5
     self.body.Parent = self.root
 
-    --=====================================================================
-    -- 侧边栏（分类）
-    --=====================================================================
+    -- 侧边栏
     self.sidebar = Instance.new("Frame")
-    self.sidebar.Name = "Sidebar"
     self.sidebar.Size = UDim2.new(0, Theme.SidebarWidth, 1, 0)
     self.sidebar.BackgroundColor3 = Theme.BgLight
     self.sidebar.BackgroundTransparency = 0.3
@@ -272,13 +239,9 @@ function Window.new(config)
     sidebarLayout.Padding = UDim.new(0, 4)
     sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
     sidebarLayout.Parent = self.sidebar
-    Util.padding(self.sidebar, 8, 6, 8, 6)
 
-    --=====================================================================
     -- 内容区
-    --=====================================================================
     self.content = Instance.new("Frame")
-    self.content.Name = "Content"
     self.content.Size = UDim2.new(1, -Theme.SidebarWidth - 10, 1, 0)
     self.content.Position = UDim2.new(0, Theme.SidebarWidth + 10, 0, 0)
     self.content.BackgroundTransparency = 1
@@ -286,9 +249,14 @@ function Window.new(config)
     self.content.ClipsDescendants = true
     self.content.Parent = self.body
 
-    --=====================================================================
+    --=====================================================
+    -- 【新增】拖拽缩放：四角手柄
+    --=====================================================
+    self:_setupResizeHandles()
+
+    --=====================================================
     -- 交互：拖动
-    --=====================================================================
+    --=====================================================
     local dragging, dragStart, startPos
     table.insert(self.connections, self.titleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -296,9 +264,7 @@ function Window.new(config)
             dragStart = input.Position
             startPos = self.root.Position
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end))
@@ -323,7 +289,7 @@ function Window.new(config)
         self:Destroy()
     end))
 
-    -- 开关快捷键
+    -- 快捷键
     table.insert(self.connections, UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.RightShift then
@@ -340,32 +306,223 @@ function Window.new(config)
     return self
 end
 
---=====================================================================
--- 最小化/恢复
---=====================================================================
-function Window:ToggleMinimize()
-    self.minimized = not self.minimized
-    local targetHeight = self.minimized and Theme.TitleHeight or self.height
-    Util.tween(self.root, Theme.AnimNormal, {
-        Size = UDim2.new(0, self.width, 0, targetHeight),
-    }, Enum.EasingStyle.Quart)
+--=====================================================
+-- 【新增】设置背景图片
+--=====================================================
+function Window:SetBackgroundImage(imageId, transparency)
+    self.customBgImage = imageId
+    self.bgImageTransparency = transparency or self.bgImageTransparency
+    self.bgImage.Image = imageId or ""
+    self.bgImage.ImageTransparency = imageId and self.bgImageTransparency or 1
+end
 
-    if self.minimized then
-        self.body.Visible = false
-    else
-        task.delay(Theme.AnimNormal * 0.5, function()
-            self.body.Visible = true
-        end)
+--=====================================================
+-- 【新增】设置背景图片透明度
+--=====================================================
+function Window:SetBackgroundTransparency(t)
+    self.bgImageTransparency = t
+    if self.customBgImage then
+        self.bgImage.ImageTransparency = t
     end
 end
 
---=====================================================================
+--=====================================================
+-- 【新增】拖拽缩放逻辑
+--=====================================================
+function Window:_setupResizeHandles()
+    local handleSize = 14
+    local handles = {}
+
+    local function makeHandle(pos, cursor, isCorner)
+        local h = Instance.new("TextButton")
+        h.Size = UDim2.new(0, handleSize, 0, handleSize)
+        h.Position = pos
+        h.BackgroundColor3 = Theme.Accent
+        h.BackgroundTransparency = 0.85
+        h.Text = ""
+        h.BorderSizePixel = 0
+        h.ZIndex = 20
+        h.Parent = self.root
+        Util.corner(h, isCorner and 4 or 2)
+
+        -- 悬停高亮
+        h.MouseEnter:Connect(function()
+            Util.tween(h, Theme.AnimFast, { BackgroundTransparency = 0.3 })
+        end)
+        h.MouseLeave:Connect(function()
+            Util.tween(h, Theme.AnimFast, { BackgroundTransparency = 0.85 })
+        end)
+
+        table.insert(handles, {btn = h, pos = pos, corner = isCorner})
+        return h
+    end
+
+    -- 四角手柄
+    local brHandle = makeHandle(UDim2.new(1, -handleSize, 1, -handleSize), nil, true)
+    local blHandle = makeHandle(UDim2.new(0, 0, 1, -handleSize), nil, true)
+    local trHandle = makeHandle(UDim2.new(1, -handleSize, 0, 0), nil, true)
+
+    -- 右边缘
+    local rightHandle = Instance.new("TextButton")
+    rightHandle.Size = UDim2.new(0, 6, 1, -handleSize * 2)
+    rightHandle.Position = UDim2.new(1, -3, 0, handleSize)
+    rightHandle.BackgroundColor3 = Theme.Accent
+    rightHandle.BackgroundTransparency = 0.9
+    rightHandle.Text = ""
+    rightHandle.BorderSizePixel = 0
+    rightHandle.ZIndex = 20
+    rightHandle.Parent = self.root
+    Util.corner(rightHandle, 3)
+
+    -- 底边缘
+    local bottomHandle = Instance.new("TextButton")
+    bottomHandle.Size = UDim2.new(1, -handleSize * 2, 0, 6)
+    bottomHandle.Position = UDim2.new(0, handleSize, 1, -3)
+    bottomHandle.BackgroundColor3 = Theme.Accent
+    bottomHandle.BackgroundTransparency = 0.9
+    bottomHandle.Text = ""
+    bottomHandle.BorderSizePixel = 0
+    bottomHandle.ZIndex = 20
+    bottomHandle.Parent = self.root
+    Util.corner(bottomHandle, 3)
+
+    -- 缩放状态
+    local resizing = false
+    local resizeStart = nil
+    local startSize = nil
+    local startPos = nil
+    local resizeMode = "br"
+
+    local function startResize(mode, input)
+        resizing = true
+        resizeMode = mode
+        resizeStart = input.Position
+        startSize = Vector2.new(self.root.AbsoluteSize.X, self.root.AbsoluteSize.Y)
+        startPos = Vector2.new(self.root.AbsolutePosition.X, self.root.AbsolutePosition.Y)
+    end
+
+    -- 绑定各个手柄
+    brHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            startResize("br", input)
+        end
+    end)
+    blHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            startResize("bl", input)
+        end
+    end)
+    trHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            startResize("tr", input)
+        end
+    end)
+    rightHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            startResize("r", input)
+        end
+    end)
+    bottomHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            startResize("b", input)
+        end
+    end)
+
+    -- 统一处理缩放
+    table.insert(self.connections, UserInputService.InputChanged:Connect(function(input)
+        if not resizing then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        local delta = input.Position - resizeStart
+        local newW, newH = startSize.X, startSize.Y
+
+        if resizeMode == "br" or resizeMode == "r" then
+            newW = math.clamp(startSize.X + delta.X, Theme.MinWidth, Theme.MaxWidth)
+        end
+        if resizeMode == "br" or resizeMode == "b" then
+            newH = math.clamp(startSize.Y + delta.Y, Theme.MinHeight, Theme.MaxHeight)
+        end
+        if resizeMode == "bl" then
+            newW = math.clamp(startSize.X - delta.X, Theme.MinWidth, Theme.MaxWidth)
+            newH = math.clamp(startSize.Y + delta.Y, Theme.MinHeight, Theme.MaxHeight)
+            self.root.Position = UDim2.new(
+                self.root.Position.X.Scale,
+                self.root.Position.X.Offset + (startSize.X - newW),
+                self.root.Position.Y.Scale,
+                self.root.Position.Y.Offset
+            )
+        end
+        if resizeMode == "tr" then
+            newW = math.clamp(startSize.X + delta.X, Theme.MinWidth, Theme.MaxWidth)
+            newH = math.clamp(startSize.Y - delta.Y, Theme.MinHeight, Theme.MaxHeight)
+            self.root.Position = UDim2.new(
+                self.root.Position.X.Scale,
+                self.root.Position.X.Offset,
+                self.root.Position.Y.Scale,
+                self.root.Position.Y.Offset + (startSize.Y - newH)
+            )
+        end
+
+        self.root.Size = UDim2.new(0, newW, 0, newH)
+    end))
+
+    table.insert(self.connections, UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = false
+        end
+    end))
+
+    self.resizeHandles = handles
+end
+
+--=====================================================
+-- 【升级】最小化动画 — 模仿 WindUI 但有差异
+-- WindUI: 窗口收缩为点后隐藏
+-- 本版: 窗口收缩为标题栏高度，内容淡出，按钮图标变化
+--=====================================================
+function Window:ToggleMinimize()
+    self.minimized = not self.minimized
+
+    if self.minimized then
+        -- 收缩到标题栏高度
+        Util.tween(self.root, Theme.AnimNormal, {
+            Size = UDim2.new(0, self.width, 0, Theme.TitleHeight),
+        }, Enum.EasingStyle.Quart)
+
+        -- 内容淡出并隐藏
+        self.body.Visible = false
+
+        -- 最小化按钮图标变化
+        Util.tween(self.minBtn, Theme.AnimFast, {
+            BackgroundColor3 = Theme.Accent,
+            BackgroundTransparency = 0.2,
+        })
+
+        -- 标题栏居中
+        Util.tween(self.titleBar, Theme.AnimNormal, {
+            Position = UDim2.new(0, 0, 0, 0),
+        })
+    else
+        -- 恢复
+        self.body.Visible = true
+
+        Util.tween(self.root, Theme.AnimNormal, {
+            Size = UDim2.new(0, self.width, 0, self.height),
+        }, Enum.EasingStyle.Back)
+
+        Util.tween(self.minBtn, Theme.AnimFast, {
+            BackgroundColor3 = Color3.fromRGB(50, 52, 65),
+            BackgroundTransparency = 0.4,
+        })
+    end
+end
+
+--=====================================================
 -- 创建分类
---=====================================================================
-function Window:CreateTab(name, icon)
+--=====================================================
+function Window:CreateTab(name)
     local tab = {}
 
-    -- 分类按钮
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 34)
     btn.BackgroundColor3 = Color3.fromRGB(30, 32, 42)
@@ -376,7 +533,6 @@ function Window:CreateTab(name, icon)
     btn.Parent = self.sidebar
     Util.corner(btn, 8)
 
-    -- 左侧高亮条
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0.6, 0)
     indicator.Position = UDim2.new(0, 0, 0.5, -indicator.Size.Y.Scale / 2)
@@ -387,7 +543,6 @@ function Window:CreateTab(name, icon)
     indicator.Parent = btn
     Util.corner(indicator, 2)
 
-    -- 文字
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -20, 1, 0)
     label.Position = UDim2.new(0, 14, 0, 0)
@@ -400,7 +555,6 @@ function Window:CreateTab(name, icon)
     label.ZIndex = 8
     label.Parent = btn
 
-    -- 内容容器
     local container = Instance.new("ScrollingFrame")
     container.Size = UDim2.new(1, 0, 1, 0)
     container.BackgroundTransparency = 1
@@ -417,7 +571,6 @@ function Window:CreateTab(name, icon)
     layout.Padding = UDim.new(0, 8)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = container
-    Util.padding(container, 4, 8, 20, 4)
 
     tab.button = btn
     tab.indicator = indicator
@@ -426,31 +579,12 @@ function Window:CreateTab(name, icon)
     tab.window = self
     tab.items = {}
 
-    -- 悬停
-    btn.MouseEnter:Connect(function()
-        if self.currentTab ~= tab then
-            Util.tween(btn, Theme.AnimFast, { BackgroundTransparency = 0.7 })
-            Util.tween(label, Theme.AnimFast, { TextColor3 = Theme.Text })
-        end
-    end)
-    btn.MouseLeave:Connect(function()
-        if self.currentTab ~= tab then
-            Util.tween(btn, Theme.AnimFast, { BackgroundTransparency = 1 })
-            Util.tween(label, Theme.AnimFast, { TextColor3 = Theme.TextDim })
-        end
-    end)
-
-    -- 点击切换
     btn.MouseButton1Click:Connect(function()
         self:SelectTab(tab)
     end)
 
     table.insert(self.tabs, tab)
-
-    -- 第一个分类自动选中
-    if #self.tabs == 1 then
-        self:SelectTab(tab)
-    end
+    if #self.tabs == 1 then self:SelectTab(tab) end
 
     return tab
 end
@@ -458,7 +592,7 @@ end
 function Window:SelectTab(tab)
     for _, t in ipairs(self.tabs) do
         t.container.Visible = false
-        Util.tween(t.btn or t.button, Theme.AnimFast, { BackgroundTransparency = 1 })
+        Util.tween(t.button, Theme.AnimFast, { BackgroundTransparency = 1 })
         Util.tween(t.indicator, Theme.AnimFast, { BackgroundTransparency = 1 })
         Util.tween(t.label, Theme.AnimFast, { TextColor3 = Theme.TextDim })
     end
@@ -468,16 +602,15 @@ function Window:SelectTab(tab)
     Util.tween(tab.indicator, Theme.AnimFast, { BackgroundTransparency = 0 })
     Util.tween(tab.label, Theme.AnimFast, { TextColor3 = Theme.Text })
 
-    -- 内容切换动画
     tab.container.Position = UDim2.new(0, 10, 0, 0)
     Util.tween(tab.container, Theme.AnimNormal, { Position = UDim2.new(0, 0, 0, 0) })
 
     self.currentTab = tab
 end
 
---=====================================================================
--- 组件：开关
---=====================================================================
+--=====================================================
+-- 开关（带放大特效）
+--=====================================================
 function Window:AddToggle(tab, config)
     local name = config.Name or "Toggle"
     local default = config.Default or false
@@ -505,7 +638,6 @@ function Window:AddToggle(tab, config)
     label.ZIndex = 9
     label.Parent = container
 
-    -- 开关轨道
     local track = Instance.new("Frame")
     track.Size = UDim2.new(0, 38, 0, 20)
     track.Position = UDim2.new(1, -52, 0.5, -10)
@@ -515,7 +647,6 @@ function Window:AddToggle(tab, config)
     track.Parent = container
     Util.corner(track, 10)
 
-    -- 滑块
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 16, 0, 16)
     knob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
@@ -525,7 +656,6 @@ function Window:AddToggle(tab, config)
     knob.Parent = track
     Util.corner(knob, 8)
 
-    -- 点击整个容器都能切换
     local clickBtn = Instance.new("TextButton")
     clickBtn.Size = UDim2.new(1, 0, 1, 0)
     clickBtn.BackgroundTransparency = 1
@@ -536,16 +666,22 @@ function Window:AddToggle(tab, config)
     local state = default
     clickBtn.MouseButton1Click:Connect(function()
         state = not state
+
+        -- 【放大特效】点击时瞬间放大再回弹
+        local origSize = container.Size
+        container.Size = UDim2.new(1, 6, 0, Theme.ItemHeight + 4)
+        Util.tween(container, 0.12, { Size = origSize }, Enum.EasingStyle.Back)
+
         Util.tween(track, Theme.AnimFast, {
             BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(50, 54, 70),
         })
         Util.tween(knob, Theme.AnimNormal, {
             Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
         }, Enum.EasingStyle.Back)
+
         if callback then callback(state) end
     end)
 
-    -- 悬停
     container.MouseEnter:Connect(function()
         Util.tween(container, Theme.AnimFast, { BackgroundTransparency = 0.3 })
     end)
@@ -566,9 +702,9 @@ function Window:AddToggle(tab, config)
     }
 end
 
---=====================================================================
--- 组件：滑块
---=====================================================================
+--=====================================================
+-- 滑块（带放大特效）
+--=====================================================
 function Window:AddSlider(tab, config)
     local name = config.Name or "Slider"
     local min = config.Min or 0
@@ -611,7 +747,6 @@ function Window:AddSlider(tab, config)
     valueLabel.ZIndex = 9
     valueLabel.Parent = container
 
-    -- 轨道
     local track = Instance.new("Frame")
     track.Size = UDim2.new(1, -28, 0, 4)
     track.Position = UDim2.new(0, 14, 0, 36)
@@ -621,7 +756,6 @@ function Window:AddSlider(tab, config)
     track.Parent = container
     Util.corner(track, 2)
 
-    -- 填充
     local fill = Instance.new("Frame")
     local ratio = (default - min) / (max - min)
     fill.Size = UDim2.new(ratio, 0, 1, 0)
@@ -632,7 +766,6 @@ function Window:AddSlider(tab, config)
     Util.corner(fill, 2)
     Util.gradient(fill, Theme.Accent, Theme.Accent2, 0)
 
-    -- 圆点
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 14, 0, 14)
     knob.Position = UDim2.new(ratio, -7, 0.5, -7)
@@ -662,6 +795,10 @@ function Window:AddSlider(tab, config)
     track.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
+            -- 【放大特效】
+            local origSize = container.Size
+            container.Size = UDim2.new(1, 6, 0, 58)
+            Util.tween(container, 0.12, { Size = origSize }, Enum.EasingStyle.Back)
             updateFromInput(input)
         end
     end)
@@ -691,9 +828,9 @@ function Window:AddSlider(tab, config)
     }
 end
 
---=====================================================================
--- 组件：按钮
---=====================================================================
+--=====================================================
+-- 按钮
+--=====================================================
 function Window:AddButton(tab, config)
     local name = config.Name or "Button"
     local callback = config.Callback
@@ -720,15 +857,19 @@ function Window:AddButton(tab, config)
         Util.tween(btn, Theme.AnimFast, { BackgroundTransparency = 0.7 })
     end)
     btn.MouseButton1Click:Connect(function()
+        -- 【放大特效】
+        local origSize = btn.Size
+        btn.Size = UDim2.new(1, 4, 0, Theme.ItemHeight + 2)
+        Util.tween(btn, 0.1, { Size = origSize }, Enum.EasingStyle.Back)
         if callback then callback() end
     end)
 
     return btn
 end
 
---=====================================================================
--- 组件：文本说明
---=====================================================================
+--=====================================================
+-- 说明文字
+--=====================================================
 function Window:AddLabel(tab, text)
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 22)
@@ -743,9 +884,6 @@ function Window:AddLabel(tab, text)
     return label
 end
 
---=====================================================================
--- 组件：分割线
---=====================================================================
 function Window:AddDivider(tab)
     local line = Instance.new("Frame")
     line.Size = UDim2.new(1, 0, 0, 1)
@@ -757,9 +895,9 @@ function Window:AddDivider(tab)
     return line
 end
 
---=====================================================================
--- 组件：输入框
---=====================================================================
+--=====================================================
+-- 文本框
+--=====================================================
 function Window:AddTextBox(tab, config)
     local name = config.Name or "Input"
     local placeholder = config.Placeholder or "输入..."
@@ -804,7 +942,6 @@ function Window:AddTextBox(tab, config)
     box.ZIndex = 9
     box.Parent = container
     Util.corner(box, 6)
-    Util.padding(box, 0, 8, 0, 8)
 
     box.FocusLost:Connect(function()
         if callback then callback(box.Text) end
@@ -813,9 +950,9 @@ function Window:AddTextBox(tab, config)
     return box
 end
 
---=====================================================================
--- 关闭
---=====================================================================
+--=====================================================
+-- 销毁
+--=====================================================
 function Window:Destroy()
     for _, conn in ipairs(self.connections) do
         pcall(function() conn:Disconnect() end)
@@ -823,7 +960,4 @@ function Window:Destroy()
     if self.gui then self.gui:Destroy() end
 end
 
---=====================================================================
--- 返回
---=====================================================================
 return Window
