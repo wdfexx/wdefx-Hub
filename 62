@@ -1,1110 +1,489 @@
---[[
-    AETHER / CUSTOM UI
-    Original Roblox Luau interface framework
-    Single-file LocalScript, no third-party UI libraries.
-
-    Features:
-    - Custom dark glass visual style with teal/violet accents
-    - Responsive scaling and draggable window
-    - Sidebar navigation and animated page transitions
-    - Toggle, button, slider, dropdown, and section components
-    - Minimize and close controls
-    - Callbacks for connecting your own game systems
-
-    Put this in a LocalScript under StarterPlayerScripts or StarterGui.
-    This is a UI framework/demo. Connect callbacks to your own game logic.
-]]
-
---!strict
+-- 3D立体灵动岛悬浮窗 UI 库
+-- 功能：3D透视立体窗口、灵动岛折叠/展开、基础组件、可调尺寸
+-- 放到 LocalScript 里，位置：StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Remove an older copy of this UI.
-local previous = PlayerGui:FindFirstChild("AetherCustomUI")
-if previous then
-    previous:Destroy()
-end
-
-local Theme = {
-    Background = Color3.fromRGB(12, 15, 22),
-    Surface = Color3.fromRGB(18, 22, 32),
-    SurfaceRaised = Color3.fromRGB(25, 30, 43),
-    SurfaceHover = Color3.fromRGB(32, 39, 54),
-    Stroke = Color3.fromRGB(54, 64, 83),
-    Text = Color3.fromRGB(241, 245, 252),
-    Muted = Color3.fromRGB(142, 153, 174),
-    Accent = Color3.fromRGB(105, 221, 202),
-    AccentDeep = Color3.fromRGB(78, 155, 190),
-    AccentAlt = Color3.fromRGB(155, 130, 255),
-    Good = Color3.fromRGB(112, 225, 166),
-    Danger = Color3.fromRGB(255, 112, 130),
+--------------------------------------------------
+-- UI 配置
+--------------------------------------------------
+local UIConfig = {
+    AccentColor = Color3.fromRGB(80, 140, 255),
+    BgColor = Color3.fromRGB(20, 20, 28),
+    BgTransparency = 0.15,
+    TextColor = Color3.fromRGB(255, 255, 255),
+    SubTextColor = Color3.fromRGB(160, 160, 180),
+    BorderColor = Color3.fromRGB(60, 60, 80),
+    WindowWidth = 320,
+    WindowHeight = 420,
+    IslandWidth = 200,
+    IslandHeight = 36,
+    IslandTopOffset = 8,
+    AnimationSpeed = 0.35,
 }
 
-local function create(className: string, properties: {[string]: any}?, parent: Instance?): Instance
-    local object = Instance.new(className)
-    for key, value in pairs(properties or {}) do
-        (object :: any)[key] = value
-    end
-    if parent then
-        object.Parent = parent
-    end
-    return object
+--------------------------------------------------
+-- 工具函数：创建圆角
+--------------------------------------------------
+local function addCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 8)
+    corner.Parent = parent
+    return corner
 end
 
-local function corner(parent: Instance, radius: number)
-    return create("UICorner", {
-        CornerRadius = UDim.new(0, radius),
-    }, parent)
+local function addStroke(parent, color, thickness, transparency)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or UIConfig.BorderColor
+    stroke.Thickness = thickness or 1
+    stroke.Transparency = transparency or 0.5
+    stroke.Parent = parent
+    return stroke
 end
 
-local function stroke(parent: Instance, color: Color3?, transparency: number?)
-    return create("UIStroke", {
-        Color = color or Theme.Stroke,
-        Transparency = transparency or 0,
-        Thickness = 1,
-    }, parent)
-end
-
-local function padding(parent: Instance, left: number?, right: number?, top: number?, bottom: number?)
-    return create("UIPadding", {
-        PaddingLeft = UDim.new(0, left or 0),
-        PaddingRight = UDim.new(0, right or 0),
-        PaddingTop = UDim.new(0, top or 0),
-        PaddingBottom = UDim.new(0, bottom or 0),
-    }, parent)
-end
-
-local function tween(object: Instance, properties: {[string]: any}, duration: number?)
-    local info = TweenInfo.new(
-        duration or 0.2,
-        Enum.EasingStyle.Quint,
-        Enum.EasingDirection.Out
-    )
-    local animation = TweenService:Create(object, info, properties)
-    animation:Play()
-    return animation
-end
-
-local function textLabel(parent: Instance, text: string, size: number, color: Color3?, bold: boolean?)
-    return create("TextLabel", {
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = color or Theme.Text,
-        TextSize = size,
-        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        TextWrapped = false,
-    }, parent)
-end
-
-local function addGradient(parent: Instance, first: Color3, second: Color3, rotation: number?)
-    return create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, first),
-            ColorSequenceKeypoint.new(1, second),
-        }),
-        Rotation = rotation or 0,
-    }, parent)
-end
-
--- Root GUI
-local ScreenGui = create("ScreenGui", {
-    Name = "AetherCustomUI",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-    DisplayOrder = 20,
-}, PlayerGui) :: ScreenGui
-
-local Root = create("Frame", {
-    Name = "Root",
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.fromOffset(790, 520),
-    BackgroundColor3 = Theme.Background,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-}, ScreenGui) :: Frame
-corner(Root, 18)
-stroke(Root, Theme.Stroke, 0.12)
-
-local rootGradient = addGradient(Root, Color3.fromRGB(17, 23, 34), Color3.fromRGB(10, 13, 20), 35)
-
-local RootScale = create("UIScale", {Scale = 1}, Root) :: UIScale
-
-local function updateScale()
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    local viewport = camera.ViewportSize
-    local scaleX = (viewport.X - 24) / 790
-    local scaleY = (viewport.Y - 24) / 520
-    RootScale.Scale = math.clamp(math.min(scaleX, scaleY, 1), 0.48, 1)
-end
-
-updateScale()
-if workspace.CurrentCamera then
-    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-end
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-    task.defer(updateScale)
-    local camera = workspace.CurrentCamera
-    if camera then
-        camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-    end
-end)
-
--- Header
-local Header = create("Frame", {
-    Name = "Header",
-    Size = UDim2.new(1, 0, 0, 68),
-    BackgroundColor3 = Theme.Surface,
-    BackgroundTransparency = 0.08,
-    BorderSizePixel = 0,
-}, Root) :: Frame
-corner(Header, 18)
-local HeaderMask = create("Frame", {
-    Position = UDim2.new(0, 0, 1, -18),
-    Size = UDim2.new(1, 0, 0, 18),
-    BackgroundColor3 = Theme.Surface,
-    BackgroundTransparency = 0.08,
-    BorderSizePixel = 0,
-}, Header)
-
-local BrandMark = create("Frame", {
-    Position = UDim2.new(0, 22, 0, 17),
-    Size = UDim2.fromOffset(34, 34),
-    BackgroundColor3 = Theme.Accent,
-    BorderSizePixel = 0,
-}, Header) :: Frame
-corner(BrandMark, 11)
-addGradient(BrandMark, Theme.Accent, Theme.AccentAlt, 45)
-
-local Mark = textLabel(BrandMark, "A", 19, Color3.fromRGB(10, 20, 28), true) :: TextLabel
-Mark.Size = UDim2.fromScale(1, 1)
-Mark.TextXAlignment = Enum.TextXAlignment.Center
-
-local Brand = textLabel(Header, "AETHER", 16, Theme.Text, true) :: TextLabel
-Brand.Position = UDim2.new(0, 67, 0, 14)
-Brand.Size = UDim2.fromOffset(150, 23)
-
-local BrandCaption = textLabel(Header, "CUSTOM CONTROL CENTER", 9, Theme.Muted, true) :: TextLabel
-BrandCaption.Position = UDim2.new(0, 68, 0, 37)
-BrandCaption.Size = UDim2.fromOffset(190, 14)
-
-local StatusPill = create("Frame", {
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -104, 0.5, 0),
-    Size = UDim2.fromOffset(82, 27),
-    BackgroundColor3 = Theme.SurfaceRaised,
-    BorderSizePixel = 0,
-}, Header) :: Frame
-corner(StatusPill, 14)
-stroke(StatusPill, Theme.Stroke, 0.5)
-
-local StatusDot = create("Frame", {
-    Position = UDim2.new(0, 10, 0.5, -3),
-    Size = UDim2.fromOffset(6, 6),
-    BackgroundColor3 = Theme.Good,
-    BorderSizePixel = 0,
-}, StatusPill)
-corner(StatusDot, 6)
-
-local StatusText = textLabel(StatusPill, "READY", 9, Theme.Muted, true) :: TextLabel
-StatusText.Position = UDim2.new(0, 23, 0, 0)
-StatusText.Size = UDim2.new(1, -25, 1, 0)
-
-local MinimizeButton = create("TextButton", {
-    Name = "Minimize",
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -58, 0.5, 0),
-    Size = UDim2.fromOffset(30, 30),
-    BackgroundColor3 = Theme.SurfaceRaised,
-    Text = "—",
-    TextColor3 = Theme.Text,
-    TextSize = 14,
-    Font = Enum.Font.GothamBold,
-    AutoButtonColor = false,
-    BorderSizePixel = 0,
-}, Header) :: TextButton
-corner(MinimizeButton, 9)
-
-local CloseButton = create("TextButton", {
-    Name = "Close",
-    AnchorPoint = Vector2.new(1, 0.5),
-    Position = UDim2.new(1, -18, 0.5, 0),
-    Size = UDim2.fromOffset(30, 30),
-    BackgroundColor3 = Color3.fromRGB(51, 31, 43),
-    Text = "×",
-    TextColor3 = Theme.Danger,
-    TextSize = 20,
-    Font = Enum.Font.Gotham,
-    AutoButtonColor = false,
-    BorderSizePixel = 0,
-}, Header) :: TextButton
-corner(CloseButton, 9)
-
--- Main body
-local Sidebar = create("Frame", {
-    Name = "Sidebar",
-    Position = UDim2.new(0, 0, 0, 68),
-    Size = UDim2.new(0, 190, 1, -68),
-    BackgroundColor3 = Color3.fromRGB(15, 19, 28),
-    BackgroundTransparency = 0.12,
-    BorderSizePixel = 0,
-}, Root) :: Frame
-
-local SidebarTitle = textLabel(Sidebar, "NAVIGATION", 9, Theme.Muted, true) :: TextLabel
-SidebarTitle.Position = UDim2.new(0, 22, 0, 20)
-SidebarTitle.Size = UDim2.new(1, -35, 0, 18)
-
-local NavContainer = create("Frame", {
-    Position = UDim2.new(0, 12, 0, 48),
-    Size = UDim2.new(1, -24, 0, 230),
-    BackgroundTransparency = 1,
-}, Sidebar) :: Frame
-
-create("UIListLayout", {
-    Padding = UDim.new(0, 7),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-}, NavContainer)
-
-local SidebarBottom = create("Frame", {
-    AnchorPoint = Vector2.new(0, 1),
-    Position = UDim2.new(0, 12, 1, -14),
-    Size = UDim2.new(1, -24, 0, 60),
-    BackgroundColor3 = Theme.SurfaceRaised,
-    BorderSizePixel = 0,
-}, Sidebar) :: Frame
-corner(SidebarBottom, 12)
-stroke(SidebarBottom, Theme.Stroke, 0.65)
-
-local UserInitial = create("Frame", {
-    Position = UDim2.new(0, 10, 0.5, -16),
-    Size = UDim2.fromOffset(32, 32),
-    BackgroundColor3 = Color3.fromRGB(45, 66, 80),
-    BorderSizePixel = 0,
-}, SidebarBottom)
-corner(UserInitial, 10)
-addGradient(UserInitial, Theme.AccentDeep, Theme.AccentAlt, 40)
-
-local UserInitialText = textLabel(UserInitial, string.upper(string.sub(LocalPlayer.DisplayName or LocalPlayer.Name, 1, 1)), 14, Theme.Text, true) :: TextLabel
-UserInitialText.Size = UDim2.fromScale(1, 1)
-UserInitialText.TextXAlignment = Enum.TextXAlignment.Center
-
-local UserName = textLabel(SidebarBottom, LocalPlayer.DisplayName or LocalPlayer.Name, 10, Theme.Text, true) :: TextLabel
-UserName.Position = UDim2.new(0, 50, 0, 13)
-UserName.Size = UDim2.new(1, -58, 0, 16)
-UserName.TextTruncate = Enum.TextTruncate.AtEnd
-
-local UserSub = textLabel(SidebarBottom, "PERSONAL WORKSPACE", 7, Theme.Muted, true) :: TextLabel
-UserSub.Position = UDim2.new(0, 50, 0, 30)
-UserSub.Size = UDim2.new(1, -58, 0, 12)
-
-local Content = create("Frame", {
-    Name = "Content",
-    Position = UDim2.new(0, 190, 0, 68),
-    Size = UDim2.new(1, -190, 1, -68),
-    BackgroundTransparency = 1,
-    ClipsDescendants = true,
-}, Root) :: Frame
-
--- Small footer line
-local FooterLine = create("Frame", {
-    Position = UDim2.new(0, 22, 1, -28),
-    Size = UDim2.new(1, -44, 0, 1),
-    BackgroundColor3 = Theme.Stroke,
-    BackgroundTransparency = 0.45,
-    BorderSizePixel = 0,
-}, Content)
-
-local Footer = textLabel(Content, "AETHER  /  PERSONAL UI", 8, Theme.Muted, true) :: TextLabel
-Footer.Position = UDim2.new(0, 22, 1, -23)
-Footer.Size = UDim2.new(1, -44, 0, 14)
-
--- Window dragging
-local dragging = false
-local dragStart: Vector2? = nil
-local startPosition: UDim2? = nil
-
-Header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPosition = Root.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if not dragging or not dragStart or not startPosition then return end
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch then
-        local delta = input.Position - dragStart
-        Root.Position = UDim2.new(
-            startPosition.X.Scale,
-            startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale,
-            startPosition.Y.Offset + delta.Y
-        )
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
--- Minimize / close
-local minimized = false
-local savedSize = Root.Size
-
-MinimizeButton.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        savedSize = Root.Size
-        tween(Root, {Size = UDim2.fromOffset(790, 68)}, 0.24)
-        MinimizeButton.Text = "+"
-    else
-        tween(Root, {Size = savedSize}, 0.24)
-        MinimizeButton.Text = "—"
-    end
-end)
-
-CloseButton.MouseButton1Click:Connect(function()
-    tween(Root, {Position = Root.Position + UDim2.fromOffset(0, 12)}, 0.12)
-    tween(Root, {BackgroundTransparency = 1}, 0.16)
-    task.delay(0.18, function()
-        if ScreenGui then ScreenGui:Destroy() end
-    end)
-end)
-
-MinimizeButton.MouseEnter:Connect(function()
-    tween(MinimizeButton, {BackgroundColor3 = Theme.SurfaceHover}, 0.12)
-end)
-MinimizeButton.MouseLeave:Connect(function()
-    tween(MinimizeButton, {BackgroundColor3 = Theme.SurfaceRaised}, 0.12)
-end)
-CloseButton.MouseEnter:Connect(function()
-    tween(CloseButton, {BackgroundColor3 = Color3.fromRGB(77, 37, 51)}, 0.12)
-end)
-CloseButton.MouseLeave:Connect(function()
-    tween(CloseButton, {BackgroundColor3 = Color3.fromRGB(51, 31, 43)}, 0.12)
-end)
-
--- Framework API
-local Aether = {}
-Aether.Theme = Theme
-Aether.Pages = {}
-Aether.CurrentPage = nil
-
-local pageOrder = 0
-local selectedNav: TextButton? = nil
-
-local function createPage(title: string, subtitle: string, iconText: string)
-    pageOrder += 1
-
-    local page = create("ScrollingFrame", {
-        Name = title:gsub("%s+", "") .. "Page",
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = Theme.Accent,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        Visible = false,
-    }, Content) :: ScrollingFrame
-
-    padding(page, 22, 22, 20, 45)
-
-    create("UIListLayout", {
-        Padding = UDim.new(0, 13),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-    }, page)
-
-    local pageHeader = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 60),
-        BackgroundTransparency = 1,
-        LayoutOrder = 1,
-    }, page)
-
-    local titleLabel = textLabel(pageHeader, title, 22, Theme.Text, true) :: TextLabel
-    titleLabel.Size = UDim2.new(1, 0, 0, 30)
-
-    local subtitleLabel = textLabel(pageHeader, subtitle, 10, Theme.Muted, false) :: TextLabel
-    subtitleLabel.Position = UDim2.new(0, 1, 0, 32)
-    subtitleLabel.Size = UDim2.new(1, 0, 0, 18)
-
-    local nav = create("TextButton", {
-        Name = title .. "Nav",
-        Size = UDim2.new(1, 0, 0, 39),
-        BackgroundColor3 = Theme.Surface,
-        BackgroundTransparency = 1,
-        Text = "",
-        AutoButtonColor = false,
-        BorderSizePixel = 0,
-        LayoutOrder = pageOrder,
-    }, NavContainer) :: TextButton
-    corner(nav, 10)
-
-    local navIcon = textLabel(nav, iconText, 14, Theme.Muted, true) :: TextLabel
-    navIcon.Position = UDim2.new(0, 12, 0, 0)
-    navIcon.Size = UDim2.fromOffset(20, 39)
-    navIcon.TextXAlignment = Enum.TextXAlignment.Center
-
-    local navLabel = textLabel(nav, title, 11, Theme.Muted, true) :: TextLabel
-    navLabel.Position = UDim2.new(0, 41, 0, 0)
-    navLabel.Size = UDim2.new(1, -48, 1, 0)
-
-    local navIndicator = create("Frame", {
-        Position = UDim2.new(0, 0, 0.5, -9),
-        Size = UDim2.fromOffset(3, 18),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-    }, nav)
-    corner(navIndicator, 3)
-
-    local function selectPage()
-        if Aether.CurrentPage == page then return end
-
-        if Aether.CurrentPage then
-            Aether.CurrentPage.Visible = false
-        end
-
-        if selectedNav then
-            selectedNav.BackgroundTransparency = 1
-            local oldIcon = selectedNav:FindFirstChild("NavIcon")
-            local oldLabel = selectedNav:FindFirstChild("NavLabel")
-            local oldIndicator = selectedNav:FindFirstChild("NavIndicator")
-            if oldIcon and oldIcon:IsA("TextLabel") then oldIcon.TextColor3 = Theme.Muted end
-            if oldLabel and oldLabel:IsA("TextLabel") then oldLabel.TextColor3 = Theme.Muted end
-            if oldIndicator and oldIndicator:IsA("Frame") then
-                oldIndicator.BackgroundTransparency = 1
-            end
-        end
-
-        Aether.CurrentPage = page
-        selectedNav = nav
-        page.Visible = true
-        page.CanvasPosition = Vector2.new(0, 0)
-        page.Position = UDim2.new(0, 8, 0, 0)
-        tween(page, {Position = UDim2.new(0, 0, 0, 0)}, 0.22)
-
-        nav.BackgroundTransparency = 0
-        nav.BackgroundColor3 = Theme.SurfaceRaised
-        navIcon.TextColor3 = Theme.Accent
-        navLabel.TextColor3 = Theme.Text
-        navIndicator.BackgroundTransparency = 0
-    end
-
-    nav.Name = title .. "Nav"
-    navIcon.Name = "NavIcon"
-    navLabel.Name = "NavLabel"
-    navIndicator.Name = "NavIndicator"
-
-    nav.MouseButton1Click:Connect(selectPage)
-    nav.MouseEnter:Connect(function()
-        if selectedNav ~= nav then
-            tween(nav, {BackgroundTransparency = 0.45}, 0.12)
-        end
-    end)
-    nav.MouseLeave:Connect(function()
-        if selectedNav ~= nav then
-            tween(nav, {BackgroundTransparency = 1}, 0.12)
-        end
-    end)
-
-    local pageApi = {
-        Frame = page,
-        Order = 0,
+local function addGradient(parent, color1, color2, rotation)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, color1),
+        ColorSequenceKeypoint.new(1, color2),
     }
+    gradient.Rotation = rotation or 90
+    gradient.Parent = parent
+    return gradient
+end
 
-    local function nextOrder()
-        pageApi.Order += 1
-        return pageApi.Order + 1
-    end
+--------------------------------------------------
+-- 3D 立体窗口核心类
+--------------------------------------------------
+local Window3D = {}
+Window3D.__index = Window3D
 
-    function pageApi:Section(sectionTitle: string, description: string?)
-        local section = create("Frame", {
-            Name = "Section",
-            Size = UDim2.new(1, 0, 0, 34),
-            BackgroundTransparency = 1,
-            LayoutOrder = nextOrder(),
-        }, page)
+function Window3D.new(title, options)
+    local self = setmetatable({}, Window3D)
+    options = options or {}
 
-        local sectionName = textLabel(section, string.upper(sectionTitle), 9, Theme.Accent, true) :: TextLabel
-        sectionName.Size = UDim2.new(1, 0, 0, 16)
+    self.title = title or "3D悬浮窗"
+    self.isExpanded = false
+    self.isDragging = false
+    self.dragOffset = Vector2.new(0, 0)
+    self.connections = {}
 
-        local sectionDesc = textLabel(section, description or "", 9, Theme.Muted, false) :: TextLabel
-        sectionDesc.Position = UDim2.new(0, 0, 0, 17)
-        sectionDesc.Size = UDim2.new(1, 0, 0, 15)
-        sectionDesc.Visible = description ~= nil and description ~= ""
+    self.windowWidth = options.width or UIConfig.WindowWidth
+    self.windowHeight = options.height or UIConfig.WindowHeight
 
-        return section
-    end
+    -- 创建 ScreenGui
+    self.screenGui = Instance.new("ScreenGui")
+    self.screenGui.Name = "Lier3DWindow"
+    self.screenGui.ResetOnSpawn = false
+    self.screenGui.IgnoreGuiInset = true
+    self.screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.screenGui.Parent = playerGui
 
-    function pageApi:Label(labelText: string, detail: string?)
-        local card = create("Frame", {
-            Name = "InfoLabel",
-            Size = UDim2.new(1, 0, 0, detail and 62 or 42),
-            BackgroundColor3 = Theme.Surface,
-            BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, page)
-        corner(card, 11)
-        stroke(card, Theme.Stroke, 0.7)
-        padding(card, 14, 14, 8, 8)
+    -- 灵动岛（折叠态）
+    self.islandFrame = Instance.new("Frame")
+    self.islandFrame.Name = "Island"
+    self.islandFrame.Size = UDim2.new(0, UIConfig.IslandWidth, 0, UIConfig.IslandHeight)
+    self.islandFrame.Position = UDim2.new(0.5, -UIConfig.IslandWidth / 2, 0, UIConfig.IslandTopOffset)
+    self.islandFrame.BackgroundColor3 = UIConfig.BgColor
+    self.islandFrame.BackgroundTransparency = 0.1
+    self.islandFrame.BorderSizePixel = 0
+    self.islandFrame.Active = true
+    self.islandFrame.ZIndex = 10
+    self.islandFrame.Parent = self.screenGui
 
-        local mainText = textLabel(card, labelText, 11, Theme.Text, true) :: TextLabel
-        mainText.Position = UDim2.new(0, 0, 0, detail and 5 or 0)
-        mainText.Size = UDim2.new(1, 0, 0, 20)
+    addCorner(self.islandFrame, UIConfig.IslandHeight / 2)
+    local islandStroke = addStroke(self.islandFrame, UIConfig.AccentColor, 1.5, 0.3)
+    addGradient(self.islandFrame, Color3.fromRGB(30, 35, 50), Color3.fromRGB(15, 15, 25), 135)
 
-        if detail then
-            local detailText = textLabel(card, detail, 9, Theme.Muted, false) :: TextLabel
-            detailText.Position = UDim2.new(0, 0, 0, 27)
-            detailText.Size = UDim2.new(1, 0, 0, 18)
+    self.islandLabel = Instance.new("TextLabel")
+    self.islandLabel.Size = UDim2.new(1, -40, 1, 0)
+    self.islandLabel.Position = UDim2.new(0, 20, 0, 0)
+    self.islandLabel.BackgroundTransparency = 1
+    self.islandLabel.Text = self.title
+    self.islandLabel.TextColor3 = UIConfig.TextColor
+    self.islandLabel.TextSize = 13
+    self.islandLabel.Font = Enum.Font.GothamBold
+    self.islandLabel.TextXAlignment = Enum.TextXAlignment.Left
+    self.islandLabel.ZIndex = 11
+    self.islandLabel.Parent = self.islandFrame
+
+    -- 灵动岛状态指示点
+    self.islandDot = Instance.new("Frame")
+    self.islandDot.Size = UDim2.new(0, 8, 0, 8)
+    self.islandDot.Position = UDim2.new(1, -20, 0.5, -4)
+    self.islandDot.BackgroundColor3 = UIConfig.AccentColor
+    self.islandDot.BorderSizePixel = 0
+    self.islandDot.ZIndex = 11
+    self.islandDot.Parent = self.islandFrame
+    addCorner(self.islandDot, 4)
+
+    -- 主窗口（展开态）
+    self.mainFrame = Instance.new("Frame")
+    self.mainFrame.Name = "MainWindow"
+    self.mainFrame.Size = UDim2.new(0, self.windowWidth, 0, 10)
+    self.mainFrame.Position = UDim2.new(0.5, -self.windowWidth / 2, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6)
+    self.mainFrame.BackgroundColor3 = UIConfig.BgColor
+    self.mainFrame.BackgroundTransparency = UIConfig.BgTransparency
+    self.mainFrame.BorderSizePixel = 0
+    self.mainFrame.ClipsDescendants = true
+    self.mainFrame.Visible = false
+    self.mainFrame.ZIndex = 5
+    self.mainFrame.Parent = self.screenGui
+
+    addCorner(self.mainFrame, 12)
+    addStroke(self.mainFrame, UIConfig.BorderColor, 1, 0.5)
+    addGradient(self.mainFrame, Color3.fromRGB(28, 32, 45), Color3.fromRGB(14, 14, 22), 135)
+
+    -- 3D 立体效果：左侧高光
+    self.highlightBar = Instance.new("Frame")
+    self.highlightBar.Size = UDim2.new(0, 3, 1, -24)
+    self.highlightBar.Position = UDim2.new(0, 0, 0, 12)
+    self.highlightBar.BackgroundColor3 = UIConfig.AccentColor
+    self.highlightBar.BackgroundTransparency = 0.2
+    self.highlightBar.BorderSizePixel = 0
+    self.highlightBar.ZIndex = 6
+    self.highlightBar.Parent = self.mainFrame
+    addCorner(self.highlightBar, 2)
+
+    -- 底部阴影（3D 悬浮感）
+    self.shadow = Instance.new("Frame")
+    self.shadow.Name = "Shadow"
+    self.shadow.Size = UDim2.new(0, self.windowWidth - 20, 0, 8)
+    self.shadow.Position = UDim2.new(0, 10, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6 + 4)
+    self.shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    self.shadow.BackgroundTransparency = 0.75
+    self.shadow.BorderSizePixel = 0
+    self.shadow.ZIndex = 4
+    self.shadow.Parent = self.screenGui
+    addCorner(self.shadow, 4)
+
+    -- 标题栏
+    self.titleBar = Instance.new("Frame")
+    self.titleBar.Name = "TitleBar"
+    self.titleBar.Size = UDim2.new(1, 0, 0, 38)
+    self.titleBar.BackgroundTransparency = 1
+    self.titleBar.ZIndex = 7
+    self.titleBar.Parent = self.mainFrame
+
+    self.titleLabel = Instance.new("TextLabel")
+    self.titleLabel.Size = UDim2.new(1, -80, 1, 0)
+    self.titleLabel.Position = UDim2.new(0, 16, 0, 0)
+    self.titleLabel.BackgroundTransparency = 1
+    self.titleLabel.Text = self.title
+    self.titleLabel.TextColor3 = UIConfig.TextColor
+    self.titleLabel.TextSize = 14
+    self.titleLabel.Font = Enum.Font.GothamBold
+    self.titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    self.titleLabel.ZIndex = 8
+    self.titleLabel.Parent = self.titleBar
+
+    -- 最小化按钮（折叠回灵动岛）
+    self.minimizeBtn = Instance.new("TextButton")
+    self.minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
+    self.minimizeBtn.Position = UDim2.new(1, -58, 0, 7)
+    self.minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    self.minimizeBtn.BackgroundTransparency = 0.5
+    self.minimizeBtn.Text = "—"
+    self.minimizeBtn.TextColor3 = UIConfig.TextColor
+    self.minimizeBtn.TextSize = 14
+    self.minimizeBtn.Font = Enum.Font.GothamBold
+    self.minimizeBtn.BorderSizePixel = 0
+    self.minimizeBtn.ZIndex = 8
+    self.minimizeBtn.Parent = self.titleBar
+    addCorner(self.minimizeBtn, 6)
+
+    -- 关闭按钮
+    self.closeBtn = Instance.new("TextButton")
+    self.closeBtn.Size = UDim2.new(0, 24, 0, 24)
+    self.closeBtn.Position = UDim2.new(1, -30, 0, 7)
+    self.closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    self.closeBtn.BackgroundTransparency = 0.4
+    self.closeBtn.Text = "×"
+    self.closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    self.closeBtn.TextSize = 16
+    self.closeBtn.Font = Enum.Font.GothamBold
+    self.closeBtn.BorderSizePixel = 0
+    self.closeBtn.ZIndex = 8
+    self.closeBtn.Parent = self.titleBar
+    addCorner(self.closeBtn, 6)
+
+    -- 内容容器
+    self.contentFrame = Instance.new("Frame")
+    self.contentFrame.Name = "Content"
+    self.contentFrame.Size = UDim2.new(1, -20, 1, -50)
+    self.contentFrame.Position = UDim2.new(0, 10, 0, 44)
+    self.contentFrame.BackgroundTransparency = 1
+    self.contentFrame.ZIndex = 6
+    self.contentFrame.Parent = self.mainFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = self.contentFrame
+
+    -- 绑定交互
+    self:_bindInteractions()
+
+    return self
+end
+
+--------------------------------------------------
+-- 展开/折叠动画
+--------------------------------------------------
+function Window3D:_expand()
+    if self.isExpanded then return end
+    self.isExpanded = true
+
+    self.islandFrame.Visible = false
+    self.mainFrame.Visible = true
+    self.shadow.Visible = true
+
+    local tweenInfo = TweenInfo.new(UIConfig.AnimationSpeed, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+    -- 主窗口展开
+    TweenService:Create(self.mainFrame, tweenInfo, {
+        Size = UDim2.new(0, self.windowWidth, 0, self.windowHeight),
+    }):Play()
+
+    -- 阴影同步
+    TweenService:Create(self.shadow, tweenInfo, {
+        Size = UDim2.new(0, self.windowWidth - 20, 0, 12),
+        Position = UDim2.new(0, 10, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6 + self.windowHeight - 4),
+    }):Play()
+end
+
+function Window3D:_collapse()
+    if not self.isExpanded then return end
+    self.isExpanded = false
+
+    self.islandFrame.Visible = true
+    self.shadow.Visible = false
+
+    local tweenInfo = TweenInfo.new(UIConfig.AnimationSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+    TweenService:Create(self.mainFrame, tweenInfo, {
+        Size = UDim2.new(0, self.windowWidth, 0, 10),
+    }):Play()
+
+    task.delay(UIConfig.AnimationSpeed, function()
+        if not self.isExpanded then
+            self.mainFrame.Visible = false
         end
+    end)
+end
 
-        return card
-    end
-
-    function pageApi:Button(options)
-        options = options or {}
-        local buttonTitle = options.Name or "Action"
-        local description = options.Description
-        local callback = options.Callback or function() end
-
-        local card = create("TextButton", {
-            Name = "Button",
-            Size = UDim2.new(1, 0, 0, description and 65 or 48),
-            BackgroundColor3 = Theme.Surface,
-            Text = "",
-            AutoButtonColor = false,
-            BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, page) :: TextButton
-        corner(card, 11)
-        stroke(card, Theme.Stroke, 0.7)
-
-        local titleText = textLabel(card, buttonTitle, 11, Theme.Text, true) :: TextLabel
-        titleText.Position = UDim2.new(0, 14, 0, description and 10 or 0)
-        titleText.Size = UDim2.new(1, -62, 0, 20)
-
-        if description then
-            local descText = textLabel(card, description, 9, Theme.Muted, false) :: TextLabel
-            descText.Position = UDim2.new(0, 14, 0, 32)
-            descText.Size = UDim2.new(1, -65, 0, 16)
+--------------------------------------------------
+-- 拖拽与点击交互
+--------------------------------------------------
+function Window3D:_bindInteractions()
+    -- 灵动岛点击展开
+    local islandClickConn = self.islandFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            self:_expand()
         end
+    end)
+    table.insert(self.connections, islandClickConn)
 
-        local action = create("Frame", {
-            AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -13, 0.5, 0),
-            Size = UDim2.fromOffset(28, 28),
-            BackgroundColor3 = Color3.fromRGB(36, 58, 67),
-            BorderSizePixel = 0,
-        }, card)
-        corner(action, 9)
-
-        local arrow = textLabel(action, "›", 21, Theme.Accent, true) :: TextLabel
-        arrow.Size = UDim2.fromScale(1, 1)
-        arrow.TextXAlignment = Enum.TextXAlignment.Center
-
-        card.MouseEnter:Connect(function()
-            tween(card, {BackgroundColor3 = Theme.SurfaceHover}, 0.13)
-            tween(action, {BackgroundColor3 = Color3.fromRGB(47, 79, 86)}, 0.13)
-        end)
-        card.MouseLeave:Connect(function()
-            tween(card, {BackgroundColor3 = Theme.Surface}, 0.13)
-            tween(action, {BackgroundColor3 = Color3.fromRGB(36, 58, 67)}, 0.13)
-        end)
-        card.MouseButton1Click:Connect(function()
-            tween(action, {Size = UDim2.fromOffset(24, 24)}, 0.07)
-            task.delay(0.08, function()
-                if action.Parent then tween(action, {Size = UDim2.fromOffset(28, 28)}, 0.12) end
-            end)
-            local ok, err = pcall(callback)
-            if not ok then warn("[Aether] Button callback error:", err) end
-        end)
-
-        return card
-    end
-
-    function pageApi:Toggle(options)
-        options = options or {}
-        local toggleName = options.Name or "Toggle"
-        local description = options.Description
-        local state = options.Default == true
-        local callback = options.Callback or function() end
-
-        local card = create("TextButton", {
-            Name = "Toggle",
-            Size = UDim2.new(1, 0, 0, description and 65 or 52),
-            BackgroundColor3 = Theme.Surface,
-            Text = "",
-            AutoButtonColor = false,
-            BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, page) :: TextButton
-        corner(card, 11)
-        stroke(card, Theme.Stroke, 0.7)
-
-        local titleText = textLabel(card, toggleName, 11, Theme.Text, true) :: TextLabel
-        titleText.Position = UDim2.new(0, 14, 0, description and 10 or 0)
-        titleText.Size = UDim2.new(1, -80, 0, 20)
-
-        if description then
-            local descText = textLabel(card, description, 9, Theme.Muted, false) :: TextLabel
-            descText.Position = UDim2.new(0, 14, 0, 32)
-            descText.Size = UDim2.new(1, -80, 0, 16)
-        end
-
-        local switch = create("Frame", {
-            AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -14, 0.5, 0),
-            Size = UDim2.fromOffset(38, 22),
-            BackgroundColor3 = state and Theme.AccentDeep or Color3.fromRGB(58, 64, 78),
-            BorderSizePixel = 0,
-        }, card)
-        corner(switch, 12)
-
-        local knob = create("Frame", {
-            Position = state and UDim2.new(1, -19, 0.5, -7) or UDim2.new(0, 5, 0.5, -7),
-            Size = UDim2.fromOffset(14, 14),
-            BackgroundColor3 = Theme.Text,
-            BorderSizePixel = 0,
-        }, switch)
-        corner(knob, 10)
-
-        local function setState(value: boolean, fireCallback: boolean?)
-            state = value
-            tween(switch, {
-                BackgroundColor3 = state and Theme.AccentDeep or Color3.fromRGB(58, 64, 78)
-            }, 0.17)
-            tween(knob, {
-                Position = state and UDim2.new(1, -19, 0.5, -7) or UDim2.new(0, 5, 0.5, -7)
-            }, 0.17)
-            if fireCallback ~= false then
-                local ok, err = pcall(callback, state)
-                if not ok then warn("[Aether] Toggle callback error:", err) end
-            end
-        end
-
-        card.MouseEnter:Connect(function()
-            tween(card, {BackgroundColor3 = Theme.SurfaceHover}, 0.13)
-        end)
-        card.MouseLeave:Connect(function()
-            tween(card, {BackgroundColor3 = Theme.Surface}, 0.13)
-        end)
-        card.MouseButton1Click:Connect(function()
-            setState(not state)
-        end)
-
-        local api = {}
-        function api:Set(value: boolean) setState(value) end
-        function api:Get() return state end
-        return api
-    end
-
-    function pageApi:Slider(options)
-        options = options or {}
-        local sliderName = options.Name or "Slider"
-        local minValue = options.Min or 0
-        local maxValue = options.Max or 100
-        local increment = options.Increment or 1
-        local value = math.clamp(options.Default or minValue, minValue, maxValue)
-        local callback = options.Callback or function() end
-
-        local card = create("Frame", {
-            Name = "Slider",
-            Size = UDim2.new(1, 0, 0, 76),
-            BackgroundColor3 = Theme.Surface,
-            BorderSizePixel = 0,
-            LayoutOrder = nextOrder(),
-        }, page)
-        corner(card, 11)
-        stroke(card, Theme.Stroke, 0.7)
-        padding(card, 14, 14, 10, 8)
-
-        local titleText = textLabel(card, sliderName, 11, Theme.Text, true) :: TextLabel
-        titleText.Position = UDim2.new(0, 0, 0, 0)
-        titleText.Size = UDim2.new(1, -70, 0, 20)
-
-        local valueText = textLabel(card, tostring(value), 10, Theme.Accent, true) :: TextLabel
-        valueText.AnchorPoint = Vector2.new(1, 0)
-        valueText.Position = UDim2.new(1, 0, 0, 0)
-        valueText.Size = UDim2.fromOffset(65, 20)
-        valueText.TextXAlignment = Enum.TextXAlignment.Right
-
-        local track = create("Frame", {
-            Position = UDim2.new(0, 0, 0, 42),
-            Size = UDim2.new(1, 0, 0, 5),
-            BackgroundColor3 = Color3.fromRGB(53, 61, 76),
-            BorderSizePixel = 0,
-        }, card)
-        corner(track, 5)
-
-        local fraction = (value - minValue) / math.max(maxValue - minValue, 0.0001)
-        local fill = create("Frame", {
-            Size = UDim2.new(fraction, 0, 1, 0),
-            BackgroundColor3 = Theme.Accent,
-            BorderSizePixel = 0,
-        }, track)
-        corner(fill, 5)
-        addGradient(fill, Theme.Accent, Theme.AccentAlt, 0)
-
-        local knob = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new(fraction, 0, 0.5, 0),
-            Size = UDim2.fromOffset(13, 13),
-            BackgroundColor3 = Theme.Text,
-            BorderSizePixel = 0,
-        }, track)
-        corner(knob, 8)
-        stroke(knob, Theme.Accent, 0.1)
-
-        local draggingSlider = false
-        local function setFromX(x: number)
-            local width = track.AbsoluteSize.X
-            if width <= 0 then return end
-            local fractionNow = math.clamp((x - track.AbsolutePosition.X) / width, 0, 1)
-            local raw = minValue + (maxValue - minValue) * fractionNow
-            value = math.clamp(math.floor(raw / increment + 0.5) * increment, minValue, maxValue)
-            local rounded = math.floor(value * 100 + 0.5) / 100
-            fractionNow = (value - minValue) / math.max(maxValue - minValue, 0.0001)
-            valueText.Text = tostring(rounded)
-            tween(fill, {Size = UDim2.new(fractionNow, 0, 1, 0)}, 0.07)
-            tween(knob, {Position = UDim2.new(fractionNow, 0, 0.5, 0)}, 0.07)
-            local ok, err = pcall(callback, rounded)
-            if not ok then warn("[Aether] Slider callback error:", err) end
-        end
-
-        local hitArea = create("TextButton", {
-            Position = UDim2.new(0, -4, 0, 31),
-            Size = UDim2.new(1, 8, 0, 27),
-            BackgroundTransparency = 1,
-            Text = "",
-            AutoButtonColor = false,
-        }, card)
-
-        hitArea.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                draggingSlider = true
-                setFromX(input.Position.X)
-            end
-        end)
-
-        UserInputService.InputChanged:Connect(function(input)
-            if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch) then
-                setFromX(input.Position.X)
-            end
-        end)
-
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                draggingSlider = false
-            end
-        end)
-
-        local api = {}
-        function api:Set(newValue: number)
-            value = math.clamp(newValue, minValue, maxValue)
-            local fractionNow = (value - minValue) / math.max(maxValue - minValue, 0.0001)
-            valueText.Text = tostring(value)
-            fill.Size = UDim2.new(fractionNow, 0, 1, 0)
-            knob.Position = UDim2.new(fractionNow, 0, 0.5, 0)
-            callback(value)
-        end
-        function api:Get() return value end
-        return api
-    end
-
-    function pageApi:Dropdown(options)
-        options = options or {}
-        local dropdownName = options.Name or "Dropdown"
-        local choices = options.Options or {"Option 1", "Option 2"}
-        local selected = options.Default or choices[1] or "None"
-        local callback = options.Callback or function() end
-        local expanded = false
-
-        local wrap = create("Frame", {
-            Name = "DropdownWrap",
-            Size = UDim2.new(1, 0, 0, 50),
-            BackgroundTransparency = 1,
-            ClipsDescendants = false,
-            LayoutOrder = nextOrder(),
-        }, page)
-
-        local card = create("TextButton", {
-            Name = "Dropdown",
-            Size = UDim2.new(1, 0, 0, 50),
-            BackgroundColor3 = Theme.Surface,
-            Text = "",
-            AutoButtonColor = false,
-            BorderSizePixel = 0,
-        }, wrap) :: TextButton
-        corner(card, 11)
-        stroke(card, Theme.Stroke, 0.7)
-
-        local titleText = textLabel(card, dropdownName, 11, Theme.Text, true) :: TextLabel
-        titleText.Position = UDim2.new(0, 14, 0, 5)
-        titleText.Size = UDim2.new(0.52, 0, 0, 18)
-
-        local selectedText = textLabel(card, tostring(selected), 9, Theme.Accent, true) :: TextLabel
-        selectedText.AnchorPoint = Vector2.new(1, 0)
-        selectedText.Position = UDim2.new(1, -38, 0, 5)
-        selectedText.Size = UDim2.new(0.4, 0, 0, 18)
-        selectedText.TextXAlignment = Enum.TextXAlignment.Right
-        selectedText.TextTruncate = Enum.TextTruncate.AtEnd
-
-        local arrow = textLabel(card, "⌄", 16, Theme.Muted, true) :: TextLabel
-        arrow.AnchorPoint = Vector2.new(1, 0)
-        arrow.Position = UDim2.new(1, -12, 0, 3)
-        arrow.Size = UDim2.fromOffset(18, 20)
-        arrow.TextXAlignment = Enum.TextXAlignment.Center
-
-        local optionList = create("Frame", {
-            Position = UDim2.new(0, 0, 0, 54),
-            Size = UDim2.new(1, 0, 0, 0),
-            BackgroundColor3 = Theme.SurfaceRaised,
-            BorderSizePixel = 0,
-            ClipsDescendants = true,
-            ZIndex = 20,
-            Visible = true,
-        }, wrap)
-        corner(optionList, 10)
-        stroke(optionList, Theme.Stroke, 0.25)
-
-        local optionLayout = create("UIListLayout", {
-            Padding = UDim.new(0, 3),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-        }, optionList)
-        padding(optionList, 5, 5, 5, 5)
-
-        local optionButtons = {}
-
-        local function collapse()
-            expanded = false
-            tween(optionList, {Size = UDim2.new(1, 0, 0, 0)}, 0.16)
-            tween(arrow, {Rotation = 0}, 0.16)
-            task.delay(0.17, function()
-                if not expanded and wrap.Parent then
-                    wrap.Size = UDim2.new(1, 0, 0, 50)
-                    optionList.Visible = true
+    -- 主窗口拖拽
+    local dragStart, startPos
+    local dragConn = self.titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            self.isDragging = true
+            dragStart = input.Position
+            startPos = self.mainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    self.isDragging = false
                 end
             end)
         end
+    end)
+    table.insert(self.connections, dragConn)
 
-        local function expand()
-            expanded = true
-            wrap.Size = UDim2.new(1, 0, 0, 54 + math.min(#choices, 5) * 29)
-            optionList.Visible = true
-            tween(optionList, {Size = UDim2.new(1, 0, 0, math.min(#choices, 5) * 29 + 10)}, 0.18)
-            tween(arrow, {Rotation = 180}, 0.16)
+    local moveConn = UserInputService.InputChanged:Connect(function(input)
+        if self.isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            self.mainFrame.Position = newPos
+
+            local islandPos = UDim2.new(newPos.X.Scale, newPos.X.Offset + self.windowWidth / 2 - UIConfig.IslandWidth / 2, 0, UIConfig.IslandTopOffset)
+            self.islandFrame.Position = islandPos
+            self.shadow.Position = UDim2.new(newPos.X.Scale, newPos.X.Offset + 10, newPos.Y.Scale, newPos.Y.Offset + self.windowHeight - 4)
         end
+    end)
+    table.insert(self.connections, moveConn)
 
-        local function choose(option)
-            selected = option
-            selectedText.Text = tostring(option)
-            collapse()
-            local ok, err = pcall(callback, option)
-            if not ok then warn("[Aether] Dropdown callback error:", err) end
+    -- 最小化按钮
+    local minimizeConn = self.minimizeBtn.MouseButton1Click:Connect(function()
+        self:_collapse()
+    end)
+    table.insert(self.connections, minimizeConn)
+
+    -- 关闭按钮
+    local closeConn = self.closeBtn.MouseButton1Click:Connect(function()
+        self:destroy()
+    end)
+    table.insert(self.connections, closeConn)
+end
+
+--------------------------------------------------
+-- 添加开关按钮
+--------------------------------------------------
+function Window3D:addToggle(name, defaultState, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = defaultState and UIConfig.AccentColor or Color3.fromRGB(45, 45, 60)
+    btn.BackgroundTransparency = defaultState and 0.3 or 0.5
+    btn.Text = name .. ": " .. (defaultState and "开" or "关")
+    btn.TextColor3 = UIConfig.TextColor
+    btn.TextSize = 12
+    btn.Font = Enum.Font.Gotham
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 7
+    btn.Parent = self.contentFrame
+    addCorner(btn, 8)
+
+    local state = defaultState or false
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = name .. ": " .. (state and "开" or "关")
+        TweenService:Create(btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = state and UIConfig.AccentColor or Color3.fromRGB(45, 45, 60),
+            BackgroundTransparency = state and 0.3 or 0.5,
+        }):Play()
+        if callback then callback(state) end
+    end)
+    return btn
+end
+
+--------------------------------------------------
+-- 添加滑块
+--------------------------------------------------
+function Window3D:addSlider(name, min, max, default, callback)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 52)
+    container.BackgroundTransparency = 1
+    container.ZIndex = 7
+    container.Parent = self.contentFrame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 18)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ": " .. default
+    label.TextColor3 = UIConfig.SubTextColor
+    label.TextSize = 12
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 8
+    label.Parent = container
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, 0, 0, 6)
+    track.Position = UDim2.new(0, 0, 0, 30)
+    track.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    track.BorderSizePixel = 0
+    track.ZIndex = 8
+    track.Parent = container
+    addCorner(track, 3)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = UIConfig.AccentColor
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 9
+    fill.Parent = track
+    addCorner(fill, 3)
+
+    -- 滑块拖动
+    local dragging = false
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
         end
+    end)
 
-        for index, option in ipairs(choices) do
-            local optionButton = create("TextButton", {
-                Size = UDim2.new(1, 0, 0, 26),
-                BackgroundColor3 = Theme.SurfaceRaised,
-                BackgroundTransparency = 1,
-                Text = tostring(option),
-                TextColor3 = Theme.Muted,
-                TextSize = 10,
-                Font = Enum.Font.Gotham,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                AutoButtonColor = false,
-                BorderSizePixel = 0,
-                LayoutOrder = index,
-                ZIndex = 21,
-            }, optionList) :: TextButton
-            corner(optionButton, 7)
-            padding(optionButton, 9, 8, 0, 0)
-
-            optionButton.MouseEnter:Connect(function()
-                tween(optionButton, {BackgroundTransparency = 0, TextColor3 = Theme.Text}, 0.1)
-            end)
-            optionButton.MouseLeave:Connect(function()
-                tween(optionButton, {BackgroundTransparency = 1, TextColor3 = Theme.Muted}, 0.1)
-            end)
-            optionButton.MouseButton1Click:Connect(function()
-                choose(option)
-            end)
-            table.insert(optionButtons, optionButton)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local mouseX = input.Position.X
+            local trackAbsX = track.AbsolutePosition.X
+            local trackWidth = track.AbsoluteSize.X
+            local ratio = math.clamp((mouseX - trackAbsX) / trackWidth, 0, 1)
+            local value = math.floor(min + (max - min) * ratio)
+            fill.Size = UDim2.new(ratio, 0, 1, 0)
+            label.Text = name .. ": " .. value
+            if callback then callback(value) end
         end
+    end)
 
-        card.MouseButton1Click:Connect(function()
-            if expanded then collapse() else expand() end
-        end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
 
-        local api = {}
-        function api:Set(option)
-            if table.find(choices, option) then
-                selected = option
-                selectedText.Text = tostring(option)
-                callback(option)
-            end
-        end
-        function api:Get() return selected end
-        function api:Refresh(newChoices)
-            choices = newChoices
-            for _, button in ipairs(optionButtons) do
-                button:Destroy()
-            end
-            table.clear(optionButtons)
-            for index, option in ipairs(choices) do
-                local optionButton = create("TextButton", {
-                    Size = UDim2.new(1, 0, 0, 26),
-                    BackgroundColor3 = Theme.SurfaceRaised,
-                    BackgroundTransparency = 1,
-                    Text = tostring(option),
-                    TextColor3 = Theme.Muted,
-                    TextSize = 10,
-                    Font = Enum.Font.Gotham,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    AutoButtonColor = false,
-                    BorderSizePixel = 0,
-                    LayoutOrder = index,
-                    ZIndex = 21,
-                }, optionList) :: TextButton
-                corner(optionButton, 7)
-                padding(optionButton, 9, 8, 0, 0)
-                optionButton.MouseButton1Click:Connect(function() choose(option) end)
-                table.insert(optionButtons, optionButton)
-            end
-        end
-        return api
+--------------------------------------------------
+-- 添加文本标签
+--------------------------------------------------
+function Window3D:addLabel(text)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 24)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = UIConfig.SubTextColor
+    label.TextSize = 12
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 7
+    label.Parent = self.contentFrame
+    return label
+end
+
+--------------------------------------------------
+-- 销毁窗口
+--------------------------------------------------
+function Window3D:destroy()
+    for _, conn in ipairs(self.connections) do
+        conn:Disconnect()
     end
-
-    Aether.Pages[title] = pageApi
-    if not Aether.CurrentPage then
-        selectPage()
-    end
-
-    return pageApi
+    self.screenGui:Destroy()
 end
 
-function Aether:CreatePage(title: string, subtitle: string?, iconText: string?)
-    return createPage(title, subtitle or "Manage your preferences and controls.", iconText or "•")
-end
-
-function Aether:SetStatus(text: string, color: Color3?)
-    StatusText.Text = string.upper(text)
-    if color then StatusDot.BackgroundColor3 = color end
-end
-
-function Aether:Destroy()
-    if ScreenGui then ScreenGui:Destroy() end
-end
-
--- Example pages and controls. Replace callbacks with your own functionality.
-local Home = Aether:CreatePage("Overview", "Your workspace at a glance.", "⌂")
-Home:Section("WELCOME BACK", "A clean workspace designed around your controls.")
-Home:Label("Aether Control Center", "Original interface framework • no external UI library")
-Home:Button({
-    Name = "Test notification callback",
-    Description = "Example action you can replace with your own code.",
-    Callback = function()
-        Aether:SetStatus("ACTION FIRED", Theme.Good)
-        print("[Aether] Example button clicked")
-        task.delay(2, function()
-            if ScreenGui.Parent then Aether:SetStatus("READY", Theme.Good) end
-        end)
-    end,
-})
-Home:Toggle({
-    Name = "Example toggle",
-    Description = "A working switch with a callback.",
-    Default = true,
-    Callback = function(enabled)
-        print("[Aether] Example toggle:", enabled)
-    end,
+--------------------------------------------------
+-- 示例：创建窗口并使用
+--------------------------------------------------
+local window = Window3D.new("莉艾尔控制台", {
+    width = 320,
+    height = 420,
 })
 
-local Controls = Aether:CreatePage("Controls", "Reusable components and live callbacks.", "◈")
-Controls:Section("INTERACTION", "Change these controls to test the interface.")
-Controls:Toggle({
-    Name = "Enable sample option",
-    Description = "The callback receives true or false.",
-    Default = false,
-    Callback = function(enabled)
-        print("[Aether] Sample option:", enabled)
-    end,
-})
-Controls:Slider({
-    Name = "Intensity",
-    Min = 0,
-    Max = 100,
-    Increment = 5,
-    Default = 40,
-    Callback = function(value)
-        print("[Aether] Intensity:", value)
-    end,
-})
-Controls:Dropdown({
-    Name = "Display preset",
-    Options = {"Balanced", "Performance", "Quality", "Custom"},
-    Default = "Balanced",
-    Callback = function(value)
-        print("[Aether] Display preset:", value)
-    end,
-})
-Controls:Button({
-    Name = "Run custom action",
-    Description = "Put your own function inside Callback.",
-    Callback = function()
-        print("[Aether] Custom action ran")
-    end,
-})
+-- 添加组件
+window:addLabel("功能开关")
+window:addToggle("加速", false, function(state)
+    print("加速:", state)
+end)
 
-local Settings = Aether:CreatePage("Settings", "Adjust the interface and workspace.", "⚙")
-Settings:Section("INTERFACE", "Window and appearance options.")
-Settings:Label("Responsive layout", "The window scales down to fit smaller screens.")
-Settings:Toggle({
-    Name = "Show ready indicator",
-    Description = "Example setting; connect it to your own feature.",
-    Default = true,
-    Callback = function(enabled)
-        StatusPill.Visible = enabled
-    end,
-})
-Settings:Button({
-    Name = "Reset window position",
-    Description = "Return the window to the center of the screen.",
-    Callback = function()
-        Root.Position = UDim2.fromScale(0.5, 0.5)
-        RootScale.Scale = 1
-        updateScale()
-    end,
-})
+window:addToggle("飞行", false, function(state)
+    print("飞行:", state)
+end)
 
--- Initial entrance animation
-Root.BackgroundTransparency = 1
-Root.Position = UDim2.fromScale(0.5, 0.53)
-tween(Root, {
-    BackgroundTransparency = 0,
-    Position = UDim2.fromScale(0.5, 0.5),
-}, 0.35)
+window:addToggle("透视", false, function(state)
+    print("透视:", state)
+end)
 
-print("[Aether] Custom UI loaded. Extend Aether:CreatePage() to add more pages.")
+window:addLabel("参数调节")
+window:addSlider("加速速度", 20, 500, 60, function(val)
+    print("加速速度:", val)
+end)
+
+window:addSlider("飞行速度", 20, 500, 80, function(val)
+    print("飞行速度:", val)
+end)
+
+print("莉艾尔3D悬浮窗已加载！点击顶部灵动岛展开菜单。")
