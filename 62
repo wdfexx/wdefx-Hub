@@ -1,54 +1,65 @@
 --=====================================================
--- LierUI 增强版 · 背景/图片/最小化/拖拽缩放/特效
--- 替换你原来的 LierUI 库，功能代码不用改
+-- LierUI v3 · Liquid Glass 液态玻璃风格
+-- 顶部标签栏 / 大圆角 / 无边框 / 弹性动画 / 完整组件
+-- 放到 LocalScript 里，位置：StarterPlayer > StarterPlayerScripts
 --=====================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+--=====================================================
+-- 主题
+--=====================================================
 local Theme = {
-    Accent = Color3.fromRGB(120, 140, 255),
-    Accent2 = Color3.fromRGB(180, 120, 255),
-    Bg = Color3.fromRGB(14, 15, 20),
-    BgLight = Color3.fromRGB(22, 24, 32),
-    Glass = Color3.fromRGB(28, 30, 42),
-    Border = Color3.fromRGB(60, 65, 90),
-    Text = Color3.fromRGB(240, 242, 250),
-    TextDim = Color3.fromRGB(150, 155, 175),
-    Success = Color3.fromRGB(90, 220, 150),
-    Danger = Color3.fromRGB(240, 90, 110),
-    Width = 480,
-    Height = 360,
-    SidebarWidth = 130,
-    TitleHeight = 44,
-    Radius = 12,
-    ItemHeight = 38,
-    AnimFast = 0.15,
-    AnimNormal = 0.25,
-    AnimSlow = 0.4,
-    MinWidth = 320,
-    MinHeight = 240,
-    MaxWidth = 900,
-    MaxHeight = 700,
+    -- 液态玻璃配色
+    Bg1 = Color3.fromRGB(18, 20, 30),
+    Bg2 = Color3.fromRGB(10, 12, 20),
+    Glass = Color3.fromRGB(32, 36, 52),
+    GlassLight = Color3.fromRGB(45, 50, 70),
+    Accent = Color3.fromRGB(140, 130, 255),
+    Accent2 = Color3.fromRGB(80, 200, 255),
+    Accent3 = Color3.fromRGB(255, 130, 200),
+    Text = Color3.fromRGB(245, 247, 255),
+    TextDim = Color3.fromRGB(140, 148, 175),
+    TextMuted = Color3.fromRGB(90, 96, 120),
+    Success = Color3.fromRGB(120, 230, 160),
+    Danger = Color3.fromRGB(255, 100, 120),
+    Warning = Color3.fromRGB(255, 200, 100),
+
+    -- 尺寸
+    Width = 520,
+    Height = 400,
+    TitleH = 46,
+    TabH = 44,
+    Radius = 18,
+    ItemH = 42,
+    Padding = 14,
+
+    -- 动画
+    Fast = 0.12,
+    Normal = 0.22,
+    Slow = 0.38,
 }
 
 local Util = {}
 
-function Util.corner(parent, radius)
+function Util.corner(parent, r)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius or Theme.Radius)
+    c.CornerRadius = UDim.new(0, r or Theme.Radius)
     c.Parent = parent
     return c
 end
 
 function Util.stroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color or Theme.Border
+    s.Color = color or Theme.Text
     s.Thickness = thickness or 1
-    s.Transparency = transparency or 0.5
+    s.Transparency = transparency or 0.8
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = parent
     return s
@@ -65,10 +76,39 @@ function Util.gradient(parent, c1, c2, rotation)
     return g
 end
 
+function Util.padding(parent, t, r, b, l)
+    local p = Instance.new("UIPadding")
+    p.PaddingTop = UDim.new(0, t or 0)
+    p.PaddingRight = UDim.new(0, r or 0)
+    p.PaddingBottom = UDim.new(0, b or 0)
+    p.PaddingLeft = UDim.new(0, l or 0)
+    p.Parent = parent
+    return p
+end
+
 function Util.tween(obj, time, props, style, dir)
-    local t = TweenService:Create(obj, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+    local t = TweenService:Create(
+        obj,
+        TweenInfo.new(time, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out),
+        props
+    )
     t:Play()
     return t
+end
+
+-- 柔和阴影（多层半透明Frame模拟）
+function Util.softShadow(parent, size, radius)
+    for i = 4, 1, -1 do
+        local sh = Instance.new("Frame")
+        sh.Size = UDim2.new(1, i * 4, 1, i * 4)
+        sh.Position = UDim2.new(0, -i * 2, 0, -i * 2 + 4)
+        sh.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        sh.BackgroundTransparency = 0.85 + i * 0.02
+        sh.BorderSizePixel = 0
+        sh.ZIndex = parent.ZIndex - 5 + i
+        sh.Parent = parent.Parent
+        Util.corner(sh, radius + i)
+    end
 end
 
 --=====================================================
@@ -82,16 +122,15 @@ function Window.new(config)
     local self = setmetatable({}, Window)
 
     self.title = config.Title or "LierUI"
-    self.subtitle = config.Subtitle or "v2.0"
+    self.subtitle = config.Subtitle or ""
     self.width = config.Width or Theme.Width
     self.height = config.Height or Theme.Height
     self.tabs = {}
     self.currentTab = nil
     self.minimized = false
     self.connections = {}
-    self.customBgImage = config.BackgroundImage or nil
-    self.bgImageTransparency = config.BackgroundImageTransparency or 0.3
 
+    -- ScreenGui
     self.gui = Instance.new("ScreenGui")
     self.gui.Name = "LierUI_" .. tostring(math.random(1000, 9999))
     self.gui.ResetOnSpawn = false
@@ -99,163 +138,194 @@ function Window.new(config)
     self.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     self.gui.Parent = PlayerGui
 
-    -- 主容器
+    -- 主窗口
     self.root = Instance.new("Frame")
+    self.root.Name = "Root"
     self.root.Size = UDim2.new(0, self.width, 0, self.height)
     self.root.Position = UDim2.new(0.5, -self.width / 2, 0.5, -self.height / 2)
-    self.root.BackgroundColor3 = Theme.Bg
-    self.root.BackgroundTransparency = 0.05
+    self.root.BackgroundColor3 = Theme.Bg1
+    self.root.BackgroundTransparency = 0.08
     self.root.BorderSizePixel = 0
     self.root.Active = true
     self.root.ClipsDescendants = true
+    self.root.ZIndex = 10
     self.root.Parent = self.gui
     Util.corner(self.root, Theme.Radius)
-    Util.stroke(self.root, Theme.Border, 1, 0.4)
 
-    --=====================================================
-    -- 【新增】自定义背景图片层
-    --=====================================================
-    self.bgImage = Instance.new("ImageLabel")
-    self.bgImage.Name = "CustomBackground"
-    self.bgImage.Size = UDim2.new(1, 0, 1, 0)
-    self.bgImage.Position = UDim2.new(0, 0, 0, 0)
-    self.bgImage.BackgroundTransparency = 1
-    self.bgImage.Image = self.customBgImage or ""
-    self.bgImage.ImageTransparency = self.customBgImage and self.bgImageTransparency or 1
-    self.bgImage.ScaleType = Enum.ScaleType.Crop
-    self.bgImage.ZIndex = 0
-    self.bgImage.Parent = self.root
-    Util.corner(self.bgImage, Theme.Radius)
+    -- 液体渐变背景
+    local bgGrad = Instance.new("Frame")
+    bgGrad.Size = UDim2.new(1, 0, 1, 0)
+    bgGrad.BackgroundColor3 = Theme.Bg2
+    bgGrad.BackgroundTransparency = 0.3
+    bgGrad.BorderSizePixel = 0
+    bgGrad.ZIndex = 11
+    bgGrad.Parent = self.root
+    Util.corner(bgGrad, Theme.Radius)
+    Util.gradient(bgGrad, Color3.fromRGB(24, 28, 44), Color3.fromRGB(12, 14, 24), 135)
 
-    -- 背景暗化层（确保图片上文字可读）
-    self.bgOverlay = Instance.new("Frame")
-    self.bgOverlay.Size = UDim2.new(1, 0, 1, 0)
-    self.bgOverlay.BackgroundColor3 = Theme.Bg
-    self.bgOverlay.BackgroundTransparency = 0.55
-    self.bgOverlay.BorderSizePixel = 0
-    self.bgOverlay.ZIndex = 1
-    self.bgOverlay.Parent = self.root
-    Util.corner(self.bgOverlay, Theme.Radius)
+    -- 顶部彩色光晕
+    local glow1 = Instance.new("Frame")
+    glow1.Size = UDim2.new(0, 240, 0, 240)
+    glow1.Position = UDim2.new(0, -60, 0, -120)
+    glow1.BackgroundColor3 = Theme.Accent
+    glow1.BackgroundTransparency = 0.92
+    glow1.BorderSizePixel = 0
+    glow1.ZIndex = 11
+    glow1.Parent = self.root
+    Util.corner(glow1, 120)
 
-    -- 顶部光晕
-    local topGlow = Instance.new("Frame")
-    topGlow.Size = UDim2.new(1, 0, 0, 80)
-    topGlow.BackgroundColor3 = Theme.Accent
-    topGlow.BackgroundTransparency = 0.94
-    topGlow.BorderSizePixel = 0
-    topGlow.ZIndex = 2
-    topGlow.Parent = self.root
-    Util.corner(topGlow, Theme.Radius)
-    Util.gradient(topGlow, Theme.Accent, Theme.Accent2, 0)
+    local glow2 = Instance.new("Frame")
+    glow2.Size = UDim2.new(0, 200, 0, 200)
+    glow2.Position = UDim2.new(1, -100, 1, -80)
+    glow2.BackgroundColor3 = Theme.Accent3
+    glow2.BackgroundTransparency = 0.94
+    glow2.BorderSizePixel = 0
+    glow2.ZIndex = 11
+    glow2.Parent = self.root
+    Util.corner(glow2, 100)
+
+    -- 玻璃边框
+    Util.stroke(self.root, Color3.fromRGB(255, 255, 255), 1, 0.85)
+
+    -- 顶部高光条
+    local topLine = Instance.new("Frame")
+    topLine.Size = UDim2.new(1, -40, 0, 1)
+    topLine.Position = UDim2.new(0, 20, 0, 0)
+    topLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    topLine.BackgroundTransparency = 0.75
+    topLine.BorderSizePixel = 0
+    topLine.ZIndex = 12
+    topLine.Parent = self.root
 
     --=====================================================
     -- 标题栏
     --=====================================================
     self.titleBar = Instance.new("Frame")
-    self.titleBar.Size = UDim2.new(1, 0, 0, Theme.TitleHeight)
+    self.titleBar.Size = UDim2.new(1, 0, 0, Theme.TitleH)
     self.titleBar.BackgroundTransparency = 1
-    self.titleBar.ZIndex = 10
+    self.titleBar.ZIndex = 20
     self.titleBar.Parent = self.root
 
+    -- 应用图标（渐变圆）
+    local icon = Instance.new("Frame")
+    icon.Size = UDim2.new(0, 26, 0, 26)
+    icon.Position = UDim2.new(0, 16, 0.5, -13)
+    icon.BackgroundColor3 = Theme.Accent
+    icon.BorderSizePixel = 0
+    icon.ZIndex = 21
+    icon.Parent = self.titleBar
+    Util.corner(icon, 9)
+    Util.gradient(icon, Theme.Accent, Theme.Accent2, 45)
+
+    local iconDot = Instance.new("Frame")
+    iconDot.Size = UDim2.new(0, 10, 0, 10)
+    iconDot.Position = UDim2.new(0.5, -5, 0.5, -5)
+    iconDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    iconDot.BackgroundTransparency = 0.2
+    iconDot.BorderSizePixel = 0
+    iconDot.ZIndex = 22
+    iconDot.Parent = icon
+    Util.corner(iconDot, 5)
+
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -120, 1, 0)
-    titleLabel.Position = UDim2.new(0, 20, 0, 0)
+    titleLabel.Size = UDim2.new(1, -160, 1, 0)
+    titleLabel.Position = UDim2.new(0, 52, 0, 0)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = self.title
     titleLabel.TextColor3 = Theme.Text
     titleLabel.TextSize = 15
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.ZIndex = 11
+    titleLabel.ZIndex = 21
     titleLabel.Parent = self.titleBar
 
-    local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(0, 60, 1, 0)
-    subtitle.Position = UDim2.new(0, 20 + titleLabel.TextBounds.X + 10, 0, 0)
-    subtitle.BackgroundTransparency = 1
-    subtitle.Text = self.subtitle
-    subtitle.TextColor3 = Theme.TextDim
-    subtitle.TextSize = 11
-    subtitle.Font = Enum.Font.Gotham
-    subtitle.TextXAlignment = Enum.TextXAlignment.Left
-    subtitle.ZIndex = 11
-    subtitle.Parent = self.titleBar
-
-    --=====================================================
-    -- 【升级】最小化按钮 — 模仿 WindUI 但不同
-    -- WindUI：点击后窗口收缩为极小点并隐藏
-    -- 本版：窗口收缩为标题栏高度并保留标题文字，图标旋转 90°
-    --=====================================================
+    -- 最小化按钮（圆形）
     self.minBtn = Instance.new("TextButton")
-    self.minBtn.Size = UDim2.new(0, 30, 0, 30)
-    self.minBtn.Position = UDim2.new(1, -76, 0, 7)
-    self.minBtn.BackgroundColor3 = Color3.fromRGB(50, 52, 65)
-    self.minBtn.BackgroundTransparency = 0.4
-    self.minBtn.Text = "—"
+    self.minBtn.Size = UDim2.new(0, 26, 0, 26)
+    self.minBtn.Position = UDim2.new(1, -70, 0.5, -13)
+    self.minBtn.BackgroundColor3 = Theme.Glass
+    self.minBtn.BackgroundTransparency = 0.5
+    self.minBtn.Text = "−"
     self.minBtn.TextColor3 = Theme.Text
-    self.minBtn.TextSize = 16
+    self.minBtn.TextSize = 15
     self.minBtn.Font = Enum.Font.GothamBold
     self.minBtn.BorderSizePixel = 0
-    self.minBtn.ZIndex = 11
+    self.minBtn.ZIndex = 21
     self.minBtn.Parent = self.titleBar
-    Util.corner(self.minBtn, 8)
+    Util.corner(self.minBtn, 13)
 
     -- 关闭按钮
     self.closeBtn = Instance.new("TextButton")
-    self.closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    self.closeBtn.Position = UDim2.new(1, -40, 0, 7)
-    self.closeBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 50)
-    self.closeBtn.BackgroundTransparency = 0.4
+    self.closeBtn.Size = UDim2.new(0, 26, 0, 26)
+    self.closeBtn.Position = UDim2.new(1, -38, 0.5, -13)
+    self.closeBtn.BackgroundColor3 = Theme.Glass
+    self.closeBtn.BackgroundTransparency = 0.5
     self.closeBtn.Text = "×"
     self.closeBtn.TextColor3 = Theme.Danger
     self.closeBtn.TextSize = 16
     self.closeBtn.Font = Enum.Font.GothamBold
     self.closeBtn.BorderSizePixel = 0
-    self.closeBtn.ZIndex = 11
+    self.closeBtn.ZIndex = 21
     self.closeBtn.Parent = self.titleBar
-    Util.corner(self.closeBtn, 8)
+    Util.corner(self.closeBtn, 13)
+
+    -- 悬停效果
+    self.minBtn.MouseEnter:Connect(function()
+        Util.tween(self.minBtn, Theme.Fast, { BackgroundTransparency = 0.2, BackgroundColor3 = Theme.Accent })
+    end)
+    self.minBtn.MouseLeave:Connect(function()
+        Util.tween(self.minBtn, Theme.Fast, { BackgroundTransparency = 0.5, BackgroundColor3 = Theme.Glass })
+    end)
+    self.closeBtn.MouseEnter:Connect(function()
+        Util.tween(self.closeBtn, Theme.Fast, { BackgroundTransparency = 0.2, BackgroundColor3 = Theme.Danger })
+        Util.tween(self.closeBtn, Theme.Fast, { TextColor3 = Color3.fromRGB(255, 255, 255) })
+    end)
+    self.closeBtn.MouseLeave:Connect(function()
+        Util.tween(self.closeBtn, Theme.Fast, { BackgroundTransparency = 0.5, BackgroundColor3 = Theme.Glass })
+        Util.tween(self.closeBtn, Theme.Fast, { TextColor3 = Theme.Danger })
+    end)
 
     --=====================================================
-    -- 主体
+    -- 顶部标签栏
     --=====================================================
-    self.body = Instance.new("Frame")
-    self.body.Size = UDim2.new(1, -20, 1, -Theme.TitleHeight - 14)
-    self.body.Position = UDim2.new(0, 10, 0, Theme.TitleHeight + 4)
-    self.body.BackgroundTransparency = 1
-    self.body.ZIndex = 5
-    self.body.Parent = self.root
+    self.tabBar = Instance.new("Frame")
+    self.tabBar.Size = UDim2.new(1, -32, 0, Theme.TabH)
+    self.tabBar.Position = UDim2.new(0, 16, 0, Theme.TitleH)
+    self.tabBar.BackgroundTransparency = 1
+    self.tabBar.ZIndex = 20
+    self.tabBar.Parent = self.root
 
-    -- 侧边栏
-    self.sidebar = Instance.new("Frame")
-    self.sidebar.Size = UDim2.new(0, Theme.SidebarWidth, 1, 0)
-    self.sidebar.BackgroundColor3 = Theme.BgLight
-    self.sidebar.BackgroundTransparency = 0.3
-    self.sidebar.BorderSizePixel = 0
-    self.sidebar.ZIndex = 6
-    self.sidebar.Parent = self.body
-    Util.corner(self.sidebar, 10)
+    -- 标签指示条容器
+    self.tabIndicator = Instance.new("Frame")
+    self.tabIndicator.Size = UDim2.new(0, 60, 0, 3)
+    self.tabIndicator.Position = UDim2.new(0, 0, 1, -3)
+    self.tabIndicator.BackgroundColor3 = Theme.Accent
+    self.tabIndicator.BorderSizePixel = 0
+    self.tabIndicator.ZIndex = 22
+    self.tabIndicator.Parent = self.tabBar
+    Util.corner(self.tabIndicator, 2)
+    Util.gradient(self.tabIndicator, Theme.Accent, Theme.Accent2, 0)
 
-    local sidebarLayout = Instance.new("UIListLayout")
-    sidebarLayout.Padding = UDim.new(0, 4)
-    sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    sidebarLayout.Parent = self.sidebar
+    self.tabLayout = Instance.new("UIListLayout")
+    self.tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    self.tabLayout.Padding = UDim.new(0, 6)
+    self.tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    self.tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    self.tabLayout.Parent = self.tabBar
 
+    --=====================================================
     -- 内容区
+    --=====================================================
     self.content = Instance.new("Frame")
-    self.content.Size = UDim2.new(1, -Theme.SidebarWidth - 10, 1, 0)
-    self.content.Position = UDim2.new(0, Theme.SidebarWidth + 10, 0, 0)
+    self.content.Size = UDim2.new(1, -24, 1, -Theme.TitleH - Theme.TabH - 20)
+    self.content.Position = UDim2.new(0, 12, 0, Theme.TitleH + Theme.TabH + 8)
     self.content.BackgroundTransparency = 1
-    self.content.ZIndex = 6
+    self.content.ZIndex = 15
     self.content.ClipsDescendants = true
-    self.content.Parent = self.body
+    self.content.Parent = self.root
 
     --=====================================================
-    -- 【新增】拖拽缩放：四角手柄
-    --=====================================================
-    self:_setupResizeHandles()
-
-    --=====================================================
-    -- 交互：拖动
+    -- 拖动
     --=====================================================
     local dragging, dragStart, startPos
     table.insert(self.connections, self.titleBar.InputBegan:Connect(function(input)
@@ -279,7 +349,9 @@ function Window.new(config)
         end
     end))
 
+    --=====================================================
     -- 最小化
+    --=====================================================
     table.insert(self.connections, self.minBtn.MouseButton1Click:Connect(function()
         self:ToggleMinimize()
     end))
@@ -299,220 +371,39 @@ function Window.new(config)
 
     -- 入场动画
     self.root.Size = UDim2.new(0, 0, 0, 0)
-    Util.tween(self.root, Theme.AnimSlow, {
+    self.root.BackgroundTransparency = 1
+    Util.tween(self.root, Theme.Slow, {
         Size = UDim2.new(0, self.width, 0, self.height),
+        BackgroundTransparency = 0.08,
     }, Enum.EasingStyle.Back)
 
     return self
 end
 
 --=====================================================
--- 【新增】设置背景图片
---=====================================================
-function Window:SetBackgroundImage(imageId, transparency)
-    self.customBgImage = imageId
-    self.bgImageTransparency = transparency or self.bgImageTransparency
-    self.bgImage.Image = imageId or ""
-    self.bgImage.ImageTransparency = imageId and self.bgImageTransparency or 1
-end
-
---=====================================================
--- 【新增】设置背景图片透明度
---=====================================================
-function Window:SetBackgroundTransparency(t)
-    self.bgImageTransparency = t
-    if self.customBgImage then
-        self.bgImage.ImageTransparency = t
-    end
-end
-
---=====================================================
--- 【新增】拖拽缩放逻辑
---=====================================================
-function Window:_setupResizeHandles()
-    local handleSize = 14
-    local handles = {}
-
-    local function makeHandle(pos, cursor, isCorner)
-        local h = Instance.new("TextButton")
-        h.Size = UDim2.new(0, handleSize, 0, handleSize)
-        h.Position = pos
-        h.BackgroundColor3 = Theme.Accent
-        h.BackgroundTransparency = 0.85
-        h.Text = ""
-        h.BorderSizePixel = 0
-        h.ZIndex = 20
-        h.Parent = self.root
-        Util.corner(h, isCorner and 4 or 2)
-
-        -- 悬停高亮
-        h.MouseEnter:Connect(function()
-            Util.tween(h, Theme.AnimFast, { BackgroundTransparency = 0.3 })
-        end)
-        h.MouseLeave:Connect(function()
-            Util.tween(h, Theme.AnimFast, { BackgroundTransparency = 0.85 })
-        end)
-
-        table.insert(handles, {btn = h, pos = pos, corner = isCorner})
-        return h
-    end
-
-    -- 四角手柄
-    local brHandle = makeHandle(UDim2.new(1, -handleSize, 1, -handleSize), nil, true)
-    local blHandle = makeHandle(UDim2.new(0, 0, 1, -handleSize), nil, true)
-    local trHandle = makeHandle(UDim2.new(1, -handleSize, 0, 0), nil, true)
-
-    -- 右边缘
-    local rightHandle = Instance.new("TextButton")
-    rightHandle.Size = UDim2.new(0, 6, 1, -handleSize * 2)
-    rightHandle.Position = UDim2.new(1, -3, 0, handleSize)
-    rightHandle.BackgroundColor3 = Theme.Accent
-    rightHandle.BackgroundTransparency = 0.9
-    rightHandle.Text = ""
-    rightHandle.BorderSizePixel = 0
-    rightHandle.ZIndex = 20
-    rightHandle.Parent = self.root
-    Util.corner(rightHandle, 3)
-
-    -- 底边缘
-    local bottomHandle = Instance.new("TextButton")
-    bottomHandle.Size = UDim2.new(1, -handleSize * 2, 0, 6)
-    bottomHandle.Position = UDim2.new(0, handleSize, 1, -3)
-    bottomHandle.BackgroundColor3 = Theme.Accent
-    bottomHandle.BackgroundTransparency = 0.9
-    bottomHandle.Text = ""
-    bottomHandle.BorderSizePixel = 0
-    bottomHandle.ZIndex = 20
-    bottomHandle.Parent = self.root
-    Util.corner(bottomHandle, 3)
-
-    -- 缩放状态
-    local resizing = false
-    local resizeStart = nil
-    local startSize = nil
-    local startPos = nil
-    local resizeMode = "br"
-
-    local function startResize(mode, input)
-        resizing = true
-        resizeMode = mode
-        resizeStart = input.Position
-        startSize = Vector2.new(self.root.AbsoluteSize.X, self.root.AbsoluteSize.Y)
-        startPos = Vector2.new(self.root.AbsolutePosition.X, self.root.AbsolutePosition.Y)
-    end
-
-    -- 绑定各个手柄
-    brHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            startResize("br", input)
-        end
-    end)
-    blHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            startResize("bl", input)
-        end
-    end)
-    trHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            startResize("tr", input)
-        end
-    end)
-    rightHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            startResize("r", input)
-        end
-    end)
-    bottomHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            startResize("b", input)
-        end
-    end)
-
-    -- 统一处理缩放
-    table.insert(self.connections, UserInputService.InputChanged:Connect(function(input)
-        if not resizing then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-
-        local delta = input.Position - resizeStart
-        local newW, newH = startSize.X, startSize.Y
-
-        if resizeMode == "br" or resizeMode == "r" then
-            newW = math.clamp(startSize.X + delta.X, Theme.MinWidth, Theme.MaxWidth)
-        end
-        if resizeMode == "br" or resizeMode == "b" then
-            newH = math.clamp(startSize.Y + delta.Y, Theme.MinHeight, Theme.MaxHeight)
-        end
-        if resizeMode == "bl" then
-            newW = math.clamp(startSize.X - delta.X, Theme.MinWidth, Theme.MaxWidth)
-            newH = math.clamp(startSize.Y + delta.Y, Theme.MinHeight, Theme.MaxHeight)
-            self.root.Position = UDim2.new(
-                self.root.Position.X.Scale,
-                self.root.Position.X.Offset + (startSize.X - newW),
-                self.root.Position.Y.Scale,
-                self.root.Position.Y.Offset
-            )
-        end
-        if resizeMode == "tr" then
-            newW = math.clamp(startSize.X + delta.X, Theme.MinWidth, Theme.MaxWidth)
-            newH = math.clamp(startSize.Y - delta.Y, Theme.MinHeight, Theme.MaxHeight)
-            self.root.Position = UDim2.new(
-                self.root.Position.X.Scale,
-                self.root.Position.X.Offset,
-                self.root.Position.Y.Scale,
-                self.root.Position.Y.Offset + (startSize.Y - newH)
-            )
-        end
-
-        self.root.Size = UDim2.new(0, newW, 0, newH)
-    end))
-
-    table.insert(self.connections, UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            resizing = false
-        end
-    end))
-
-    self.resizeHandles = handles
-end
-
---=====================================================
--- 【升级】最小化动画 — 模仿 WindUI 但有差异
--- WindUI: 窗口收缩为点后隐藏
--- 本版: 窗口收缩为标题栏高度，内容淡出，按钮图标变化
+-- 最小化
 --=====================================================
 function Window:ToggleMinimize()
     self.minimized = not self.minimized
-
     if self.minimized then
-        -- 收缩到标题栏高度
-        Util.tween(self.root, Theme.AnimNormal, {
-            Size = UDim2.new(0, self.width, 0, Theme.TitleHeight),
+        Util.tween(self.root, Theme.Normal, {
+            Size = UDim2.new(0, self.width, 0, Theme.TitleH),
         }, Enum.EasingStyle.Quart)
-
-        -- 内容淡出并隐藏
-        self.body.Visible = false
-
-        -- 最小化按钮图标变化
-        Util.tween(self.minBtn, Theme.AnimFast, {
+        self.content.Visible = false
+        self.tabBar.Visible = false
+        Util.tween(self.minBtn, Theme.Fast, {
             BackgroundColor3 = Theme.Accent,
             BackgroundTransparency = 0.2,
         })
-
-        -- 标题栏居中
-        Util.tween(self.titleBar, Theme.AnimNormal, {
-            Position = UDim2.new(0, 0, 0, 0),
-        })
     else
-        -- 恢复
-        self.body.Visible = true
-
-        Util.tween(self.root, Theme.AnimNormal, {
+        self.content.Visible = true
+        self.tabBar.Visible = true
+        Util.tween(self.root, Theme.Normal, {
             Size = UDim2.new(0, self.width, 0, self.height),
         }, Enum.EasingStyle.Back)
-
-        Util.tween(self.minBtn, Theme.AnimFast, {
-            BackgroundColor3 = Color3.fromRGB(50, 52, 65),
-            BackgroundTransparency = 0.4,
+        Util.tween(self.minBtn, Theme.Fast, {
+            BackgroundColor3 = Theme.Glass,
+            BackgroundTransparency = 0.5,
         })
     end
 end
@@ -522,49 +413,50 @@ end
 --=====================================================
 function Window:CreateTab(name)
     local tab = {}
+    tab.name = name
+    tab.items = {}
+    tab.window = self
 
+    -- 标签按钮
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 34)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 32, 42)
+    btn.Size = UDim2.new(0, 0, 0, 30)
+    btn.AutomaticSize = Enum.AutomaticSize.X
+    btn.BackgroundColor3 = Theme.Glass
     btn.BackgroundTransparency = 1
     btn.Text = ""
     btn.BorderSizePixel = 0
-    btn.ZIndex = 7
-    btn.Parent = self.sidebar
-    Util.corner(btn, 8)
-
-    local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 3, 0.6, 0)
-    indicator.Position = UDim2.new(0, 0, 0.5, -indicator.Size.Y.Scale / 2)
-    indicator.BackgroundColor3 = Theme.Accent
-    indicator.BackgroundTransparency = 1
-    indicator.BorderSizePixel = 0
-    indicator.ZIndex = 8
-    indicator.Parent = btn
-    Util.corner(indicator, 2)
+    btn.ZIndex = 21
+    btn.Parent = self.tabBar
+    Util.corner(btn, 10)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 1, 0)
-    label.Position = UDim2.new(0, 14, 0, 0)
+    label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Theme.TextDim
     label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 8
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.ZIndex = 22
     label.Parent = btn
 
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 14)
+    pad.PaddingRight = UDim.new(0, 14)
+    pad.Parent = btn
+
+    -- 内容容器
     local container = Instance.new("ScrollingFrame")
     container.Size = UDim2.new(1, 0, 1, 0)
     container.BackgroundTransparency = 1
     container.BorderSizePixel = 0
     container.ScrollBarThickness = 3
     container.ScrollBarImageColor3 = Theme.Accent
+    container.ScrollBarImageTransparency = 0.5
     container.CanvasSize = UDim2.new(0, 0, 0, 0)
     container.AutomaticCanvasSize = Enum.AutomaticSize.Y
     container.Visible = false
-    container.ZIndex = 7
+    container.ZIndex = 16
     container.Parent = self.content
 
     local layout = Instance.new("UIListLayout")
@@ -573,18 +465,32 @@ function Window:CreateTab(name)
     layout.Parent = container
 
     tab.button = btn
-    tab.indicator = indicator
     tab.label = label
     tab.container = container
-    tab.window = self
-    tab.items = {}
 
+    -- 点击切换
     btn.MouseButton1Click:Connect(function()
         self:SelectTab(tab)
     end)
 
+    -- 悬停
+    btn.MouseEnter:Connect(function()
+        if self.currentTab ~= tab then
+            Util.tween(btn, Theme.Fast, { BackgroundTransparency = 0.7 })
+            Util.tween(label, Theme.Fast, { TextColor3 = Theme.Text })
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if self.currentTab ~= tab then
+            Util.tween(btn, Theme.Fast, { BackgroundTransparency = 1 })
+            Util.tween(label, Theme.Fast, { TextColor3 = Theme.TextDim })
+        end
+    end)
+
     table.insert(self.tabs, tab)
-    if #self.tabs == 1 then self:SelectTab(tab) end
+    if #self.tabs == 1 then
+        self:SelectTab(tab)
+    end
 
     return tab
 end
@@ -592,118 +498,128 @@ end
 function Window:SelectTab(tab)
     for _, t in ipairs(self.tabs) do
         t.container.Visible = false
-        Util.tween(t.button, Theme.AnimFast, { BackgroundTransparency = 1 })
-        Util.tween(t.indicator, Theme.AnimFast, { BackgroundTransparency = 1 })
-        Util.tween(t.label, Theme.AnimFast, { TextColor3 = Theme.TextDim })
+        Util.tween(t.button, Theme.Fast, { BackgroundTransparency = 1 })
+        Util.tween(t.label, Theme.Fast, { TextColor3 = Theme.TextDim })
     end
 
     tab.container.Visible = true
-    Util.tween(tab.button, Theme.AnimFast, { BackgroundTransparency = 0.6 })
-    Util.tween(tab.indicator, Theme.AnimFast, { BackgroundTransparency = 0 })
-    Util.tween(tab.label, Theme.AnimFast, { TextColor3 = Theme.Text })
+    Util.tween(tab.button, Theme.Fast, { BackgroundTransparency = 0.6 })
+    Util.tween(tab.label, Theme.Fast, { TextColor3 = Theme.Text })
 
-    tab.container.Position = UDim2.new(0, 10, 0, 0)
-    Util.tween(tab.container, Theme.AnimNormal, { Position = UDim2.new(0, 0, 0, 0) })
+    -- 指示条滑动
+    local btn = tab.button
+    local targetX = btn.AbsolutePosition.X - self.tabBar.AbsolutePosition.X
+    local targetW = btn.AbsoluteSize.X
+    Util.tween(self.tabIndicator, Theme.Normal, {
+        Position = UDim2.new(0, targetX, 1, -3),
+        Size = UDim2.new(0, targetW, 0, 3),
+    }, Enum.EasingStyle.Quint)
+
+    -- 内容切换淡入
+    tab.container.Position = UDim2.new(0, 12, 0, 0)
+    Util.tween(tab.container, Theme.Normal, { Position = UDim2.new(0, 0, 0, 0) })
 
     self.currentTab = tab
 end
 
 --=====================================================
--- 开关（带放大特效）
+-- 开关
 --=====================================================
 function Window:AddToggle(tab, config)
     local name = config.Name or "Toggle"
     local default = config.Default or false
     local callback = config.Callback
 
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, Theme.ItemHeight)
-    container.BackgroundColor3 = Theme.Glass
-    container.BackgroundTransparency = 0.5
-    container.BorderSizePixel = 0
-    container.ZIndex = 8
-    container.Parent = tab.container
-    Util.corner(container, 10)
-    Util.stroke(container, Theme.Border, 1, 0.7)
+    local item = Instance.new("Frame")
+    item.Size = UDim2.new(1, 0, 0, Theme.ItemH)
+    item.BackgroundColor3 = Theme.Glass
+    item.BackgroundTransparency = 0.6
+    item.BorderSizePixel = 0
+    item.ZIndex = 17
+    item.Parent = tab.container
+    Util.corner(item, 12)
+    Util.stroke(item, Color3.fromRGB(255, 255, 255), 1, 0.88)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -70, 1, 0)
-    label.Position = UDim2.new(0, 14, 0, 0)
+    label.Size = UDim2.new(1, -80, 1, 0)
+    label.Position = UDim2.new(0, 16, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Theme.Text
     label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 9
-    label.Parent = container
+    label.ZIndex = 18
+    label.Parent = item
 
     local track = Instance.new("Frame")
-    track.Size = UDim2.new(0, 38, 0, 20)
-    track.Position = UDim2.new(1, -52, 0.5, -10)
-    track.BackgroundColor3 = default and Theme.Accent or Color3.fromRGB(50, 54, 70)
+    track.Size = UDim2.new(0, 40, 0, 22)
+    track.Position = UDim2.new(1, -56, 0.5, -11)
+    track.BackgroundColor3 = default and Theme.Accent or Color3.fromRGB(50, 55, 72)
     track.BorderSizePixel = 0
-    track.ZIndex = 9
-    track.Parent = container
-    Util.corner(track, 10)
+    track.ZIndex = 18
+    track.Parent = item
+    Util.corner(track, 11)
+
+    if default then
+        Util.gradient(track, Theme.Accent, Theme.Accent2, 0)
+    end
 
     local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 16, 0, 16)
-    knob.Position = default and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.Position = default and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.BorderSizePixel = 0
-    knob.ZIndex = 10
+    knob.ZIndex = 19
     knob.Parent = track
-    Util.corner(knob, 8)
+    Util.corner(knob, 9)
 
     local clickBtn = Instance.new("TextButton")
     clickBtn.Size = UDim2.new(1, 0, 1, 0)
     clickBtn.BackgroundTransparency = 1
     clickBtn.Text = ""
-    clickBtn.ZIndex = 11
-    clickBtn.Parent = container
+    clickBtn.ZIndex = 20
+    clickBtn.Parent = item
 
     local state = default
+    local trackGrad = nil
+
+    local function refresh()
+        Util.tween(track, Theme.Normal, {
+            BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(50, 55, 72),
+        }, Enum.EasingStyle.Quint)
+        Util.tween(knob, Theme.Normal, {
+            Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 2, 0.5, -9),
+        }, Enum.EasingStyle.Back)
+    end
+
     clickBtn.MouseButton1Click:Connect(function()
         state = not state
 
-        -- 【放大特效】点击时瞬间放大再回弹
-        local origSize = container.Size
-        container.Size = UDim2.new(1, 6, 0, Theme.ItemHeight + 4)
-        Util.tween(container, 0.12, { Size = origSize }, Enum.EasingStyle.Back)
+        -- 放大弹动
+        local origSize = item.Size
+        item.Size = UDim2.new(1, 6, 0, Theme.ItemH + 3)
+        Util.tween(item, 0.14, { Size = origSize }, Enum.EasingStyle.Back)
 
-        Util.tween(track, Theme.AnimFast, {
-            BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(50, 54, 70),
-        })
-        Util.tween(knob, Theme.AnimNormal, {
-            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
-        }, Enum.EasingStyle.Back)
-
+        refresh()
         if callback then callback(state) end
     end)
 
-    container.MouseEnter:Connect(function()
-        Util.tween(container, Theme.AnimFast, { BackgroundTransparency = 0.3 })
+    item.MouseEnter:Connect(function()
+        Util.tween(item, Theme.Fast, { BackgroundTransparency = 0.4 })
     end)
-    container.MouseLeave:Connect(function()
-        Util.tween(container, Theme.AnimFast, { BackgroundTransparency = 0.5 })
+    item.MouseLeave:Connect(function()
+        Util.tween(item, Theme.Fast, { BackgroundTransparency = 0.6 })
     end)
 
     return {
-        Set = function(v)
-            state = v
-            Util.tween(track, Theme.AnimFast, {
-                BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(50, 54, 70),
-            })
-            Util.tween(knob, Theme.AnimNormal, {
-                Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
-            })
-        end,
+        Set = function(v) state = v; refresh() end,
+        Get = function() return state end,
     }
 end
 
 --=====================================================
--- 滑块（带放大特效）
+-- 滑块
 --=====================================================
 function Window:AddSlider(tab, config)
     local name = config.Name or "Slider"
@@ -713,57 +629,57 @@ function Window:AddSlider(tab, config)
     local suffix = config.Suffix or ""
     local callback = config.Callback
 
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 54)
-    container.BackgroundColor3 = Theme.Glass
-    container.BackgroundTransparency = 0.5
-    container.BorderSizePixel = 0
-    container.ZIndex = 8
-    container.Parent = tab.container
-    Util.corner(container, 10)
-    Util.stroke(container, Theme.Border, 1, 0.7)
+    local item = Instance.new("Frame")
+    item.Size = UDim2.new(1, 0, 0, 58)
+    item.BackgroundColor3 = Theme.Glass
+    item.BackgroundTransparency = 0.6
+    item.BorderSizePixel = 0
+    item.ZIndex = 17
+    item.Parent = tab.container
+    Util.corner(item, 12)
+    Util.stroke(item, Color3.fromRGB(255, 255, 255), 1, 0.88)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -80, 0, 20)
-    label.Position = UDim2.new(0, 14, 0, 6)
+    label.Size = UDim2.new(1, -90, 0, 20)
+    label.Position = UDim2.new(0, 16, 0, 8)
     label.BackgroundTransparency = 1
     label.Text = name
     label.TextColor3 = Theme.Text
     label.TextSize = 12
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 9
-    label.Parent = container
+    label.ZIndex = 18
+    label.Parent = item
 
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.Size = UDim2.new(0, 70, 0, 20)
-    valueLabel.Position = UDim2.new(1, -80, 0, 6)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Text = tostring(default) .. suffix
-    valueLabel.TextColor3 = Theme.Accent
-    valueLabel.TextSize = 12
-    valueLabel.Font = Enum.Font.GothamBold
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.ZIndex = 9
-    valueLabel.Parent = container
+    local valueLbl = Instance.new("TextLabel")
+    valueLbl.Size = UDim2.new(0, 70, 0, 20)
+    valueLbl.Position = UDim2.new(1, -86, 0, 8)
+    valueLbl.BackgroundTransparency = 1
+    valueLbl.Text = tostring(default) .. suffix
+    valueLbl.TextColor3 = Theme.Accent
+    valueLbl.TextSize = 12
+    valueLbl.Font = Enum.Font.GothamBold
+    valueLbl.TextXAlignment = Enum.TextXAlignment.Right
+    valueLbl.ZIndex = 18
+    valueLbl.Parent = item
 
     local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, -28, 0, 4)
-    track.Position = UDim2.new(0, 14, 0, 36)
-    track.BackgroundColor3 = Color3.fromRGB(40, 44, 58)
+    track.Size = UDim2.new(1, -32, 0, 5)
+    track.Position = UDim2.new(0, 16, 0, 38)
+    track.BackgroundColor3 = Color3.fromRGB(40, 44, 60)
     track.BorderSizePixel = 0
-    track.ZIndex = 9
-    track.Parent = container
-    Util.corner(track, 2)
+    track.ZIndex = 18
+    track.Parent = item
+    Util.corner(track, 3)
 
     local fill = Instance.new("Frame")
     local ratio = (default - min) / (max - min)
     fill.Size = UDim2.new(ratio, 0, 1, 0)
     fill.BackgroundColor3 = Theme.Accent
     fill.BorderSizePixel = 0
-    fill.ZIndex = 10
+    fill.ZIndex = 19
     fill.Parent = track
-    Util.corner(fill, 2)
+    Util.corner(fill, 3)
     Util.gradient(fill, Theme.Accent, Theme.Accent2, 0)
 
     local knob = Instance.new("Frame")
@@ -771,41 +687,40 @@ function Window:AddSlider(tab, config)
     knob.Position = UDim2.new(ratio, -7, 0.5, -7)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.BorderSizePixel = 0
-    knob.ZIndex = 11
+    knob.ZIndex = 20
     knob.Parent = track
     Util.corner(knob, 7)
     Util.stroke(knob, Theme.Accent, 2, 0)
 
-    local currentValue = default
+    local current = default
     local dragging = false
 
-    local function updateFromInput(input)
-        local mouseX = input.Position.X
-        local trackAbsX = track.AbsolutePosition.X
-        local trackAbsW = track.AbsoluteSize.X
-        local newRatio = math.clamp((mouseX - trackAbsX) / trackAbsW, 0, 1)
-        local newValue = math.floor(min + (max - min) * newRatio)
-        currentValue = newValue
-        fill.Size = UDim2.new(newRatio, 0, 1, 0)
-        knob.Position = UDim2.new(newRatio, -7, 0.5, -7)
-        valueLabel.Text = tostring(newValue) .. suffix
-        if callback then callback(newValue) end
+    local function update(input)
+        local x = input.Position.X
+        local tx = track.AbsolutePosition.X
+        local tw = track.AbsoluteSize.X
+        local r = math.clamp((x - tx) / tw, 0, 1)
+        local v = math.floor(min + (max - min) * r)
+        current = v
+        fill.Size = UDim2.new(r, 0, 1, 0)
+        knob.Position = UDim2.new(r, -7, 0.5, -7)
+        valueLbl.Text = tostring(v) .. suffix
+        if callback then callback(v) end
     end
 
     track.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            -- 【放大特效】
-            local origSize = container.Size
-            container.Size = UDim2.new(1, 6, 0, 58)
-            Util.tween(container, 0.12, { Size = origSize }, Enum.EasingStyle.Back)
-            updateFromInput(input)
+            local orig = item.Size
+            item.Size = UDim2.new(1, 4, 0, 62)
+            Util.tween(item, 0.12, { Size = orig }, Enum.EasingStyle.Back)
+            update(input)
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            updateFromInput(input)
+            update(input)
         end
     end)
 
@@ -818,13 +733,13 @@ function Window:AddSlider(tab, config)
     return {
         Set = function(v)
             v = math.clamp(v, min, max)
-            currentValue = v
+            current = v
             local r = (v - min) / (max - min)
             fill.Size = UDim2.new(r, 0, 1, 0)
             knob.Position = UDim2.new(r, -7, 0.5, -7)
-            valueLabel.Text = tostring(v) .. suffix
+            valueLbl.Text = tostring(v) .. suffix
         end,
-        Get = function() return currentValue end,
+        Get = function() return current end,
     }
 end
 
@@ -837,30 +752,29 @@ function Window:AddButton(tab, config)
     local color = config.Color or Theme.Accent
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, Theme.ItemHeight)
+    btn.Size = UDim2.new(1, 0, 0, Theme.ItemH)
     btn.BackgroundColor3 = color
-    btn.BackgroundTransparency = 0.7
+    btn.BackgroundTransparency = 0.75
     btn.Text = name
     btn.TextColor3 = Theme.Text
     btn.TextSize = 12
     btn.Font = Enum.Font.GothamMedium
     btn.BorderSizePixel = 0
-    btn.ZIndex = 8
+    btn.ZIndex = 17
     btn.Parent = tab.container
-    Util.corner(btn, 10)
+    Util.corner(btn, 12)
     Util.stroke(btn, color, 1, 0.5)
 
     btn.MouseEnter:Connect(function()
-        Util.tween(btn, Theme.AnimFast, { BackgroundTransparency = 0.4 })
+        Util.tween(btn, Theme.Fast, { BackgroundTransparency = 0.5 })
     end)
     btn.MouseLeave:Connect(function()
-        Util.tween(btn, Theme.AnimFast, { BackgroundTransparency = 0.7 })
+        Util.tween(btn, Theme.Fast, { BackgroundTransparency = 0.75 })
     end)
     btn.MouseButton1Click:Connect(function()
-        -- 【放大特效】
-        local origSize = btn.Size
-        btn.Size = UDim2.new(1, 4, 0, Theme.ItemHeight + 2)
-        Util.tween(btn, 0.1, { Size = origSize }, Enum.EasingStyle.Back)
+        local orig = btn.Size
+        btn.Size = UDim2.new(1, 4, 0, Theme.ItemH + 2)
+        Util.tween(btn, 0.1, { Size = orig }, Enum.EasingStyle.Back)
         if callback then callback() end
     end)
 
@@ -868,94 +782,280 @@ function Window:AddButton(tab, config)
 end
 
 --=====================================================
+-- 下拉菜单
+--=====================================================
+function Window:AddDropdown(tab, config)
+    local name = config.Name or "Dropdown"
+    local options = config.Options or {}
+    local default = config.Default or options[1]
+    local callback = config.Callback
+
+    local item = Instance.new("Frame")
+    item.Size = UDim2.new(1, 0, 0, Theme.ItemH)
+    item.BackgroundColor3 = Theme.Glass
+    item.BackgroundTransparency = 0.6
+    item.BorderSizePixel = 0
+    item.ZIndex = 17
+    item.ClipsDescendants = true
+    item.Parent = tab.container
+    Util.corner(item, 12)
+    Util.stroke(item, Color3.fromRGB(255, 255, 255), 1, 0.88)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -110, 1, 0)
+    label.Position = UDim2.new(0, 16, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.TextSize = 12
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 18
+    label.Parent = item
+
+    local currentLbl = Instance.new("TextLabel")
+    currentLbl.Size = UDim2.new(0, 80, 1, 0)
+    currentLbl.Position = UDim2.new(1, -96, 0, 0)
+    currentLbl.BackgroundTransparency = 1
+    currentLbl.Text = tostring(default) .. "  ▾"
+    currentLbl.TextColor3 = Theme.Accent
+    currentLbl.TextSize = 11
+    currentLbl.Font = Enum.Font.GothamBold
+    currentLbl.TextXAlignment = Enum.TextXAlignment.Right
+    currentLbl.ZIndex = 18
+    currentLbl.Parent = item
+
+    -- 选项容器
+    local optionsContainer = Instance.new("Frame")
+    optionsContainer.Size = UDim2.new(1, 0, 0, 0)
+    optionsContainer.Position = UDim2.new(0, 0, 1, 0)
+    optionsContainer.BackgroundTransparency = 1
+    optionsContainer.ZIndex = 18
+    optionsContainer.Parent = item
+
+    local optLayout = Instance.new("UIListLayout")
+    optLayout.Padding = UDim.new(0, 2)
+    optLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    optLayout.Parent = optionsContainer
+
+    local expanded = false
+    local current = default
+
+    local function buildOptions()
+        for _, child in ipairs(optionsContainer:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        for i, opt in ipairs(options) do
+            local ob = Instance.new("TextButton")
+            ob.Size = UDim2.new(1, 0, 0, 28)
+            ob.BackgroundColor3 = Theme.GlassLight
+            ob.BackgroundTransparency = 0.5
+            ob.Text = "    " .. tostring(opt)
+            ob.TextColor3 = Theme.Text
+            ob.TextSize = 11
+            ob.Font = Enum.Font.Gotham
+            ob.TextXAlignment = Enum.TextXAlignment.Left
+            ob.BorderSizePixel = 0
+            ob.ZIndex = 19
+            ob.Parent = optionsContainer
+            Util.corner(ob, 6)
+            ob.MouseButton1Click:Connect(function()
+                current = opt
+                currentLbl.Text = tostring(opt) .. "  ▾"
+                if callback then callback(opt) end
+                -- 收起
+                expanded = false
+                Util.tween(item, Theme.Normal, { Size = UDim2.new(1, 0, 0, Theme.ItemH) })
+            end)
+        end
+    end
+
+    buildOptions()
+
+    local clickBtn = Instance.new("TextButton")
+    clickBtn.Size = UDim2.new(1, 0, 0, Theme.ItemH)
+    clickBtn.BackgroundTransparency = 1
+    clickBtn.Text = ""
+    clickBtn.ZIndex = 20
+    clickBtn.Parent = item
+
+    clickBtn.MouseButton1Click:Connect(function()
+        expanded = not expanded
+        if expanded then
+            local h = Theme.ItemH + #options * 30 + 6
+            Util.tween(item, Theme.Normal, { Size = UDim2.new(1, 0, 0, h) }, Enum.EasingStyle.Quart)
+            optionsContainer.Position = UDim2.new(0, 8, 0, Theme.ItemH)
+            optionsContainer.Size = UDim2.new(1, -16, 0, #options * 30)
+        else
+            Util.tween(item, Theme.Normal, { Size = UDim2.new(1, 0, 0, Theme.ItemH) }, Enum.EasingStyle.Quart)
+        end
+    end)
+
+    return {
+        Get = function() return current end,
+        Set = function(v)
+            current = v
+            currentLbl.Text = tostring(v) .. "  ▾"
+        end,
+    }
+end
+
+--=====================================================
+-- 按键绑定
+--=====================================================
+function Window:AddKeybind(tab, config)
+    local name = config.Name or "Keybind"
+    local default = config.Default or Enum.KeyCode.F
+    local callback = config.Callback
+
+    local item = Instance.new("Frame")
+    item.Size = UDim2.new(1, 0, 0, Theme.ItemH)
+    item.BackgroundColor3 = Theme.Glass
+    item.BackgroundTransparency = 0.6
+    item.BorderSizePixel = 0
+    item.ZIndex = 17
+    item.Parent = tab.container
+    Util.corner(item, 12)
+    Util.stroke(item, Color3.fromRGB(255, 255, 255), 1, 0.88)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -110, 1, 0)
+    label.Position = UDim2.new(0, 16, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.Text
+    label.TextSize = 12
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 18
+    label.Parent = item
+
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.new(0, 80, 0, 26)
+    keyBtn.Position = UDim2.new(1, -96, 0.5, -13)
+    keyBtn.BackgroundColor3 = Theme.GlassLight
+    keyBtn.BackgroundTransparency = 0.3
+    keyBtn.Text = default.Name
+    keyBtn.TextColor3 = Theme.Accent
+    keyBtn.TextSize = 11
+    keyBtn.Font = Enum.Font.GothamBold
+    keyBtn.BorderSizePixel = 0
+    keyBtn.ZIndex = 18
+    keyBtn.Parent = item
+    Util.corner(keyBtn, 8)
+
+    local currentKey = default
+    local listening = false
+
+    keyBtn.MouseButton1Click:Connect(function()
+        listening = true
+        keyBtn.Text = "..."
+    end)
+
+    local conn = UserInputService.InputBegan:Connect(function(input, gp)
+        if not listening then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            currentKey = input.KeyCode
+            keyBtn.Text = input.KeyCode.Name
+            listening = false
+            if callback then callback(input.KeyCode) end
+        end
+    end)
+    table.insert(self.connections, conn)
+
+    return {
+        Get = function() return currentKey end,
+        Set = function(k)
+            currentKey = k
+            keyBtn.Text = k.Name
+        end,
+    }
+end
+
+--=====================================================
 -- 说明文字
 --=====================================================
 function Window:AddLabel(tab, text)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 22)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Theme.TextDim
-    label.TextSize = 11
-    label.Font = Enum.Font.Gotham
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 8
-    label.Parent = tab.container
-    return label
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 22)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Theme.TextDim
+    lbl.TextSize = 11
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 17
+    lbl.Parent = tab.container
+    Util.padding(lbl, 0, 0, 0, 4)
+    return lbl
 end
 
 function Window:AddDivider(tab)
     local line = Instance.new("Frame")
     line.Size = UDim2.new(1, 0, 0, 1)
-    line.BackgroundColor3 = Theme.Border
-    line.BackgroundTransparency = 0.5
+    line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    line.BackgroundTransparency = 0.85
     line.BorderSizePixel = 0
-    line.ZIndex = 8
+    line.ZIndex = 17
     line.Parent = tab.container
     return line
 end
 
 --=====================================================
--- 文本框
+-- 通知系统
 --=====================================================
-function Window:AddTextBox(tab, config)
-    local name = config.Name or "Input"
-    local placeholder = config.Placeholder or "输入..."
-    local callback = config.Callback
+function Window:Notify(text, duration)
+    duration = duration or 3
+    local n = Instance.new("Frame")
+    n.Size = UDim2.new(0, 260, 0, 50)
+    n.Position = UDim2.new(1, 20, 0, 20)
+    n.BackgroundColor3 = Theme.Glass
+    n.BackgroundTransparency = 0.1
+    n.BorderSizePixel = 0
+    n.ZIndex = 100
+    n.Parent = self.gui
+    Util.corner(n, 12)
+    Util.stroke(n, Color3.fromRGB(255, 255, 255), 1, 0.8)
 
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 54)
-    container.BackgroundColor3 = Theme.Glass
-    container.BackgroundTransparency = 0.5
-    container.BorderSizePixel = 0
-    container.ZIndex = 8
-    container.Parent = tab.container
-    Util.corner(container, 10)
-    Util.stroke(container, Theme.Border, 1, 0.7)
+    local accentBar = Instance.new("Frame")
+    accentBar.Size = UDim2.new(0, 3, 0.6, 0)
+    accentBar.Position = UDim2.new(0, 0, 0.5, -accentBar.Size.Y.Scale / 2)
+    accentBar.BackgroundColor3 = Theme.Accent
+    accentBar.BorderSizePixel = 0
+    accentBar.ZIndex = 101
+    accentBar.Parent = n
+    Util.corner(accentBar, 2)
+    Util.gradient(accentBar, Theme.Accent, Theme.Accent2, 90)
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -28, 0, 18)
-    label.Position = UDim2.new(0, 14, 0, 6)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Theme.Text
-    label.TextSize = 11
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 9
-    label.Parent = container
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -24, 1, 0)
+    lbl.Position = UDim2.new(0, 16, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Theme.Text
+    lbl.TextSize = 12
+    lbl.Font = Enum.Font.GothamMedium
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextWrapped = true
+    lbl.ZIndex = 101
+    lbl.Parent = n
 
-    local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -28, 0, 24)
-    box.Position = UDim2.new(0, 14, 0, 26)
-    box.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
-    box.BackgroundTransparency = 0.3
-    box.Text = ""
-    box.PlaceholderText = placeholder
-    box.PlaceholderColor3 = Theme.TextDim
-    box.TextColor3 = Theme.Text
-    box.TextSize = 12
-    box.Font = Enum.Font.Gotham
-    box.TextXAlignment = Enum.TextXAlignment.Left
-    box.ClearTextOnFocus = false
-    box.BorderSizePixel = 0
-    box.ZIndex = 9
-    box.Parent = container
-    Util.corner(box, 6)
-
-    box.FocusLost:Connect(function()
-        if callback then callback(box.Text) end
+    -- 滑入
+    Util.tween(n, Theme.Normal, { Position = UDim2.new(1, -280, 0, 20) }, Enum.EasingStyle.Back)
+    -- 滑出
+    task.delay(duration, function()
+        Util.tween(n, Theme.Normal, { Position = UDim2.new(1, 20, 0, 20) }, Enum.EasingStyle.Quart)
+        task.wait(Theme.Normal + 0.05)
+        n:Destroy()
     end)
-
-    return box
 end
 
 --=====================================================
--- 销毁
+-- 关闭
 --=====================================================
 function Window:Destroy()
-    for _, conn in ipairs(self.connections) do
-        pcall(function() conn:Disconnect() end)
+    for _, c in ipairs(self.connections) do
+        pcall(function() c:Disconnect() end)
     end
     if self.gui then self.gui:Destroy() end
 end
