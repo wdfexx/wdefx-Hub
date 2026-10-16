@@ -1,5 +1,4 @@
--- 3D立体灵动岛悬浮窗 UI 库
--- 功能：3D透视立体窗口、灵动岛折叠/展开、基础组件、可调尺寸
+-- 莉艾尔 3D 全息悬浮窗 UI 库
 -- 放到 LocalScript 里，位置：StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
@@ -11,396 +10,674 @@ local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 --------------------------------------------------
--- UI 配置
+-- 主题配置
 --------------------------------------------------
-local UIConfig = {
-    AccentColor = Color3.fromRGB(80, 140, 255),
-    BgColor = Color3.fromRGB(20, 20, 28),
-    BgTransparency = 0.15,
-    TextColor = Color3.fromRGB(255, 255, 255),
-    SubTextColor = Color3.fromRGB(160, 160, 180),
-    BorderColor = Color3.fromRGB(60, 60, 80),
-    WindowWidth = 320,
-    WindowHeight = 420,
-    IslandWidth = 200,
-    IslandHeight = 36,
-    IslandTopOffset = 8,
-    AnimationSpeed = 0.35,
+local Theme = {
+    -- 全息配色
+    Holo1 = Color3.fromRGB(0, 220, 255),      -- 青色
+    Holo2 = Color3.fromRGB(140, 80, 255),     -- 紫色
+    Holo3 = Color3.fromRGB(255, 100, 200),    -- 粉紫
+    BgDark = Color3.fromRGB(8, 10, 20),       -- 深空底色
+    PanelBg = Color3.fromRGB(16, 22, 40),
+    TextColor = Color3.fromRGB(220, 240, 255),
+    SubText = Color3.fromRGB(130, 160, 200),
+    BorderGlow = Color3.fromRGB(0, 220, 255),
+
+    -- 尺寸
+    PanelWidth = 340,
+    PanelHeight = 460,
+    IslandWidth = 220,
+    IslandHeight = 34,
+    DepthOffset = 5,      -- 厚度错位像素
+    TiltAngle = -6,       -- 面板倾斜角度（3D 侧视角感）
 }
 
 --------------------------------------------------
--- 工具函数：创建圆角
+-- 工具函数
 --------------------------------------------------
-local function addCorner(parent, radius)
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, radius or 8)
-    corner.Parent = parent
-    return corner
+local function corner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 10)
+    c.Parent = parent
+    return c
 end
 
-local function addStroke(parent, color, thickness, transparency)
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = color or UIConfig.BorderColor
-    stroke.Thickness = thickness or 1
-    stroke.Transparency = transparency or 0.5
-    stroke.Parent = parent
-    return stroke
+local function stroke(parent, color, thickness, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color or Theme.BorderGlow
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0.3
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = parent
+    return s
 end
 
-local function addGradient(parent, color1, color2, rotation)
-    local gradient = Instance.new("UIGradient")
-    gradient.Color = ColorSequence.new{
+local function gradient(parent, color1, color2, rotation)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, color1),
         ColorSequenceKeypoint.new(1, color2),
     }
-    gradient.Rotation = rotation or 90
-    gradient.Parent = parent
-    return gradient
+    g.Rotation = rotation or 90
+    g.Parent = parent
+    return g
 end
 
 --------------------------------------------------
--- 3D 立体窗口核心类
+-- 3D 立体容器构建（核心：多层错位叠加做厚度）
 --------------------------------------------------
-local Window3D = {}
-Window3D.__index = Window3D
+local function build3DPanel(parent, width, height, radius)
+    -- 底层阴影（最外圈）
+    local shadow = Instance.new("Frame")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(0, width + 10, 0, height + 10)
+    shadow.Position = UDim2.new(0, -5 + 4, 0, -5 + 6)
+    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.BackgroundTransparency = 0.5
+    shadow.BorderSizePixel = 0
+    shadow.ZIndex = 0
+    shadow.Parent = parent
+    corner(shadow, radius + 2)
 
-function Window3D.new(title, options)
-    local self = setmetatable({}, Window3D)
-    options = options or {}
+    -- 厚度层（错位多层，模拟面板侧面）
+    for i = Theme.DepthOffset, 1, -1 do
+        local layer = Instance.new("Frame")
+        layer.Name = "Depth_" .. i
+        layer.Size = UDim2.new(0, width, 0, height)
+        layer.Position = UDim2.new(0, i, 0, i)
+        layer.BackgroundColor3 = Color3.fromRGB(20, 30, 55)
+        layer.BackgroundTransparency = 0.3 + i * 0.06
+        layer.BorderSizePixel = 0
+        layer.ZIndex = i
+        layer.Parent = parent
+        corner(layer, radius)
+        stroke(layer, Theme.Holo2, 1, 0.7)
+    end
 
-    self.title = title or "3D悬浮窗"
-    self.isExpanded = false
-    self.isDragging = false
-    self.dragOffset = Vector2.new(0, 0)
+    -- 面板主体
+    local panel = Instance.new("Frame")
+    panel.Name = "PanelBody"
+    panel.Size = UDim2.new(0, width, 0, height)
+    panel.Position = UDim2.new(0, 0, 0, 0)
+    panel.BackgroundColor3 = Theme.PanelBg
+    panel.BackgroundTransparency = 0.15
+    panel.BorderSizePixel = 0
+    panel.ClipsDescendants = true
+    panel.ZIndex = 10
+    panel.Parent = parent
+    corner(panel, radius)
+
+    -- 全息渐变（青紫对角）
+    local bgGrad = gradient(panel, Color3.fromRGB(18, 26, 50), Color3.fromRGB(35, 20, 60), 135)
+    bgGrad.Transparency = NumberSequence.new{
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(0.5, 0.05),
+        NumberSequenceKeypoint.new(1, 0.25),
+    }
+
+    -- 内层柔光
+    local innerGlow = Instance.new("Frame")
+    innerGlow.Size = UDim2.new(1, -8, 1, -8)
+    innerGlow.Position = UDim2.new(0, 4, 0, 4)
+    innerGlow.BackgroundTransparency = 1
+    innerGlow.BorderSizePixel = 0
+    innerGlow.ZIndex = 11
+    innerGlow.Parent = panel
+    corner(innerGlow, radius - 2)
+    stroke(innerGlow, Theme.Holo1, 1, 0.85)
+
+    -- 边缘发光
+    stroke(panel, Theme.BorderGlow, 1.5, 0.2)
+
+    -- 顶部高光条
+    local topLight = Instance.new("Frame")
+    topLight.Size = UDim2.new(1, -30, 0, 2)
+    topLight.Position = UDim2.new(0, 15, 0, 3)
+    topLight.BackgroundColor3 = Theme.Holo1
+    topLight.BackgroundTransparency = 0.2
+    topLight.BorderSizePixel = 0
+    topLight.ZIndex = 12
+    topLight.Parent = panel
+    corner(topLight, 1)
+    gradient(topLight, Theme.Holo1, Theme.Holo3, 0)
+
+    -- 扫描线（装饰科技感）
+    local scanLines = Instance.new("Frame")
+    scanLines.Size = UDim2.new(1, 0, 1, 0)
+    scanLines.BackgroundTransparency = 1
+    scanLines.ZIndex = 11
+    scanLines.Parent = panel
+    for i = 0, 18 do
+        local line = Instance.new("Frame")
+        line.Size = UDim2.new(1, 0, 0, 1)
+        line.Position = UDim2.new(0, 0, i / 18, 0)
+        line.BackgroundColor3 = Theme.Holo1
+        line.BackgroundTransparency = 0.94
+        line.BorderSizePixel = 0
+        line.ZIndex = 11
+        line.Parent = scanLines
+    end
+
+    return panel, shadow
+end
+
+--------------------------------------------------
+-- 3D 悬浮窗主类
+--------------------------------------------------
+local HoloWindow = {}
+HoloWindow.__index = HoloWindow
+
+function HoloWindow.new(title)
+    local self = setmetatable({}, HoloWindow)
+    self.title = title or "莉艾尔控制台"
+    self.expanded = false
+    self.dragging = false
     self.connections = {}
 
-    self.windowWidth = options.width or UIConfig.WindowWidth
-    self.windowHeight = options.height or UIConfig.WindowHeight
+    -- ScreenGui
+    self.gui = Instance.new("ScreenGui")
+    self.gui.Name = "LierHoloUI"
+    self.gui.ResetOnSpawn = false
+    self.gui.IgnoreGuiInset = true
+    self.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.gui.Parent = playerGui
 
-    -- 创建 ScreenGui
-    self.screenGui = Instance.new("ScreenGui")
-    self.screenGui.Name = "Lier3DWindow"
-    self.screenGui.ResetOnSpawn = false
-    self.screenGui.IgnoreGuiInset = true
-    self.screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    self.screenGui.Parent = playerGui
+    --------------------------------------------------
+    -- 顶部椭圆条（形状像灵动岛，只是一个展开按钮）
+    --------------------------------------------------
+    self.island = Instance.new("Frame")
+    self.island.Name = "TopBar"
+    self.island.Size = UDim2.new(0, Theme.IslandWidth, 0, Theme.IslandHeight)
+    self.island.Position = UDim2.new(0.5, -Theme.IslandWidth / 2, 0, 12)
+    self.island.BackgroundColor3 = Color3.fromRGB(12, 16, 28)
+    self.island.BackgroundTransparency = 0.1
+    self.island.BorderSizePixel = 0
+    self.island.ZIndex = 20
+    self.island.Parent = self.gui
+    corner(self.island, Theme.IslandHeight / 2)  -- 100% 圆角 = 椭圆条
 
-    -- 灵动岛（折叠态）
-    self.islandFrame = Instance.new("Frame")
-    self.islandFrame.Name = "Island"
-    self.islandFrame.Size = UDim2.new(0, UIConfig.IslandWidth, 0, UIConfig.IslandHeight)
-    self.islandFrame.Position = UDim2.new(0.5, -UIConfig.IslandWidth / 2, 0, UIConfig.IslandTopOffset)
-    self.islandFrame.BackgroundColor3 = UIConfig.BgColor
-    self.islandFrame.BackgroundTransparency = 0.1
-    self.islandFrame.BorderSizePixel = 0
-    self.islandFrame.Active = true
-    self.islandFrame.ZIndex = 10
-    self.islandFrame.Parent = self.screenGui
+    -- 椭圆条的厚度层
+    for i = 3, 1, -1 do
+        local layer = Instance.new("Frame")
+        layer.Size = UDim2.new(1, 0, 1, 0)
+        layer.Position = UDim2.new(0, i, 0, i)
+        layer.BackgroundColor3 = Theme.Holo2
+        layer.BackgroundTransparency = 0.7
+        layer.BorderSizePixel = 0
+        layer.ZIndex = 20 - i
+        layer.Parent = self.island
+        corner(layer, Theme.IslandHeight / 2)
+    end
 
-    addCorner(self.islandFrame, UIConfig.IslandHeight / 2)
-    local islandStroke = addStroke(self.islandFrame, UIConfig.AccentColor, 1.5, 0.3)
-    addGradient(self.islandFrame, Color3.fromRGB(30, 35, 50), Color3.fromRGB(15, 15, 25), 135)
+    -- 椭圆条渐变
+    gradient(self.island, Color3.fromRGB(20, 30, 60), Color3.fromRGB(40, 20, 70), 0)
+    stroke(self.island, Theme.Holo1, 1.5, 0.25)
 
-    self.islandLabel = Instance.new("TextLabel")
-    self.islandLabel.Size = UDim2.new(1, -40, 1, 0)
-    self.islandLabel.Position = UDim2.new(0, 20, 0, 0)
-    self.islandLabel.BackgroundTransparency = 1
-    self.islandLabel.Text = self.title
-    self.islandLabel.TextColor3 = UIConfig.TextColor
-    self.islandLabel.TextSize = 13
-    self.islandLabel.Font = Enum.Font.GothamBold
-    self.islandLabel.TextXAlignment = Enum.TextXAlignment.Left
-    self.islandLabel.ZIndex = 11
-    self.islandLabel.Parent = self.islandFrame
+    -- 椭圆条文字
+    local islandText = Instance.new("TextLabel")
+    islandText.Size = UDim2.new(1, -30, 1, 0)
+    islandText.Position = UDim2.new(0, 15, 0, 0)
+    islandText.BackgroundTransparency = 1
+    islandText.Text = self.title
+    islandText.TextColor3 = Theme.TextColor
+    islandText.TextSize = 13
+    islandText.Font = Enum.Font.GothamBold
+    islandText.TextXAlignment = Enum.TextXAlignment.Center
+    islandText.ZIndex = 22
+    islandText.Parent = self.island
+    self.islandText = islandText
 
-    -- 灵动岛状态指示点
-    self.islandDot = Instance.new("Frame")
-    self.islandDot.Size = UDim2.new(0, 8, 0, 8)
-    self.islandDot.Position = UDim2.new(1, -20, 0.5, -4)
-    self.islandDot.BackgroundColor3 = UIConfig.AccentColor
-    self.islandDot.BorderSizePixel = 0
-    self.islandDot.ZIndex = 11
-    self.islandDot.Parent = self.islandFrame
-    addCorner(self.islandDot, 4)
+    -- 椭圆条状态点
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 7, 0, 7)
+    dot.Position = UDim2.new(0, 16, 0.5, -3.5)
+    dot.BackgroundColor3 = Theme.Holo1
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 22
+    dot.Parent = self.island
+    corner(dot, 4)
+    -- 状态点呼吸
+    TweenService:Create(dot, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        BackgroundTransparency = 0.6,
+    }):Play()
 
-    -- 主窗口（展开态）
-    self.mainFrame = Instance.new("Frame")
-    self.mainFrame.Name = "MainWindow"
-    self.mainFrame.Size = UDim2.new(0, self.windowWidth, 0, 10)
-    self.mainFrame.Position = UDim2.new(0.5, -self.windowWidth / 2, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6)
-    self.mainFrame.BackgroundColor3 = UIConfig.BgColor
-    self.mainFrame.BackgroundTransparency = UIConfig.BgTransparency
-    self.mainFrame.BorderSizePixel = 0
-    self.mainFrame.ClipsDescendants = true
-    self.mainFrame.Visible = false
-    self.mainFrame.ZIndex = 5
-    self.mainFrame.Parent = self.screenGui
+    --------------------------------------------------
+    -- 主面板容器（带倾斜，做 3D 侧视角）
+    --------------------------------------------------
+    self.panelContainer = Instance.new("Frame")
+    self.panelContainer.Name = "PanelContainer"
+    self.panelContainer.Size = UDim2.new(0, Theme.PanelWidth + 20, 0, Theme.PanelHeight + 20)
+    self.panelContainer.Position = UDim2.new(0.5, -(Theme.PanelWidth + 20) / 2, 0, 60)
+    self.panelContainer.BackgroundTransparency = 1
+    self.panelContainer.Rotation = 0  -- 倾斜放在内层做，避免拖动错位
+    self.panelContainer.Visible = false
+    self.panelContainer.ZIndex = 5
+    self.panelContainer.Parent = self.gui
 
-    addCorner(self.mainFrame, 12)
-    addStroke(self.mainFrame, UIConfig.BorderColor, 1, 0.5)
-    addGradient(self.mainFrame, Color3.fromRGB(28, 32, 45), Color3.fromRGB(14, 14, 22), 135)
+    -- 构建 3D 面板
+    self.panel, self.shadow = build3DPanel(self.panelContainer, Theme.PanelWidth, Theme.PanelHeight, 12)
 
-    -- 3D 立体效果：左侧高光
-    self.highlightBar = Instance.new("Frame")
-    self.highlightBar.Size = UDim2.new(0, 3, 1, -24)
-    self.highlightBar.Position = UDim2.new(0, 0, 0, 12)
-    self.highlightBar.BackgroundColor3 = UIConfig.AccentColor
-    self.highlightBar.BackgroundTransparency = 0.2
-    self.highlightBar.BorderSizePixel = 0
-    self.highlightBar.ZIndex = 6
-    self.highlightBar.Parent = self.mainFrame
-    addCorner(self.highlightBar, 2)
+    -- 面板整体倾斜（3D 侧视角）
+    self.panel.Rotation = Theme.TiltAngle
+    self.shadow.Rotation = Theme.TiltAngle
 
-    -- 底部阴影（3D 悬浮感）
-    self.shadow = Instance.new("Frame")
-    self.shadow.Name = "Shadow"
-    self.shadow.Size = UDim2.new(0, self.windowWidth - 20, 0, 8)
-    self.shadow.Position = UDim2.new(0, 10, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6 + 4)
-    self.shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    self.shadow.BackgroundTransparency = 0.75
-    self.shadow.BorderSizePixel = 0
-    self.shadow.ZIndex = 4
-    self.shadow.Parent = self.screenGui
-    addCorner(self.shadow, 4)
-
+    --------------------------------------------------
     -- 标题栏
+    --------------------------------------------------
     self.titleBar = Instance.new("Frame")
-    self.titleBar.Name = "TitleBar"
-    self.titleBar.Size = UDim2.new(1, 0, 0, 38)
+    self.titleBar.Size = UDim2.new(1, 0, 0, 42)
     self.titleBar.BackgroundTransparency = 1
-    self.titleBar.ZIndex = 7
-    self.titleBar.Parent = self.mainFrame
+    self.titleBar.ZIndex = 15
+    self.titleBar.Parent = self.panel
 
-    self.titleLabel = Instance.new("TextLabel")
-    self.titleLabel.Size = UDim2.new(1, -80, 1, 0)
-    self.titleLabel.Position = UDim2.new(0, 16, 0, 0)
-    self.titleLabel.BackgroundTransparency = 1
-    self.titleLabel.Text = self.title
-    self.titleLabel.TextColor3 = UIConfig.TextColor
-    self.titleLabel.TextSize = 14
-    self.titleLabel.Font = Enum.Font.GothamBold
-    self.titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    self.titleLabel.ZIndex = 8
-    self.titleLabel.Parent = self.titleBar
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -80, 1, 0)
+    titleLabel.Position = UDim2.new(0, 18, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = self.title
+    titleLabel.TextColor3 = Theme.TextColor
+    titleLabel.TextSize = 15
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.ZIndex = 16
+    titleLabel.Parent = self.titleBar
 
-    -- 最小化按钮（折叠回灵动岛）
-    self.minimizeBtn = Instance.new("TextButton")
-    self.minimizeBtn.Size = UDim2.new(0, 24, 0, 24)
-    self.minimizeBtn.Position = UDim2.new(1, -58, 0, 7)
-    self.minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-    self.minimizeBtn.BackgroundTransparency = 0.5
-    self.minimizeBtn.Text = "—"
-    self.minimizeBtn.TextColor3 = UIConfig.TextColor
-    self.minimizeBtn.TextSize = 14
-    self.minimizeBtn.Font = Enum.Font.GothamBold
-    self.minimizeBtn.BorderSizePixel = 0
-    self.minimizeBtn.ZIndex = 8
-    self.minimizeBtn.Parent = self.titleBar
-    addCorner(self.minimizeBtn, 6)
+    -- 最小化按钮
+    local minBtn = Instance.new("TextButton")
+    minBtn.Size = UDim2.new(0, 26, 0, 26)
+    minBtn.Position = UDim2.new(1, -62, 0, 8)
+    minBtn.BackgroundColor3 = Color3.fromRGB(40, 50, 80)
+    minBtn.BackgroundTransparency = 0.3
+    minBtn.Text = "—"
+    minBtn.TextColor3 = Theme.TextColor
+    minBtn.TextSize = 14
+    minBtn.Font = Enum.Font.GothamBold
+    minBtn.BorderSizePixel = 0
+    minBtn.ZIndex = 16
+    minBtn.Parent = self.titleBar
+    corner(minBtn, 7)
+    stroke(minBtn, Theme.Holo1, 1, 0.6)
+    self.minBtn = minBtn
 
     -- 关闭按钮
-    self.closeBtn = Instance.new("TextButton")
-    self.closeBtn.Size = UDim2.new(0, 24, 0, 24)
-    self.closeBtn.Position = UDim2.new(1, -30, 0, 7)
-    self.closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-    self.closeBtn.BackgroundTransparency = 0.4
-    self.closeBtn.Text = "×"
-    self.closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    self.closeBtn.TextSize = 16
-    self.closeBtn.Font = Enum.Font.GothamBold
-    self.closeBtn.BorderSizePixel = 0
-    self.closeBtn.ZIndex = 8
-    self.closeBtn.Parent = self.titleBar
-    addCorner(self.closeBtn, 6)
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 26, 0, 26)
+    closeBtn.Position = UDim2.new(1, -30, 0, 8)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 50)
+    closeBtn.BackgroundTransparency = 0.3
+    closeBtn.Text = "×"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.BorderSizePixel = 0
+    closeBtn.ZIndex = 16
+    closeBtn.Parent = self.titleBar
+    corner(closeBtn, 7)
+    stroke(closeBtn, Theme.Holo3, 1, 0.5)
+    self.closeBtn = closeBtn
 
-    -- 内容容器
-    self.contentFrame = Instance.new("Frame")
-    self.contentFrame.Name = "Content"
-    self.contentFrame.Size = UDim2.new(1, -20, 1, -50)
-    self.contentFrame.Position = UDim2.new(0, 10, 0, 44)
-    self.contentFrame.BackgroundTransparency = 1
-    self.contentFrame.ZIndex = 6
-    self.contentFrame.Parent = self.mainFrame
+    --------------------------------------------------
+    -- 分类标签栏
+    --------------------------------------------------
+    self.tabBar = Instance.new("Frame")
+    self.tabBar.Size = UDim2.new(1, -20, 0, 32)
+    self.tabBar.Position = UDim2.new(0, 10, 0, 48)
+    self.tabBar.BackgroundColor3 = Color3.fromRGB(10, 14, 26)
+    self.tabBar.BackgroundTransparency = 0.35
+    self.tabBar.BorderSizePixel = 0
+    self.tabBar.ZIndex = 15
+    self.tabBar.Parent = self.panel
+    corner(self.tabBar, 8)
+    stroke(self.tabBar, Theme.Holo2, 1, 0.6)
 
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 6)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = self.contentFrame
+    local tabLayout = Instance.new("UIListLayout")
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.Padding = UDim.new(0, 4)
+    tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    tabLayout.Parent = self.tabBar
+
+    -- 内容区
+    self.content = Instance.new("Frame")
+    self.content.Size = UDim2.new(1, -20, 1, -140)
+    self.content.Position = UDim2.new(0, 10, 0, 86)
+    self.content.BackgroundTransparency = 1
+    self.content.ZIndex = 15
+    self.content.Parent = self.panel
+
+    self.contentLayout = Instance.new("UIListLayout")
+    self.contentLayout.Padding = UDim.new(0, 8)
+    self.contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    self.contentLayout.Parent = self.content
+
+    -- 底部状态栏
+    local statusBar = Instance.new("Frame")
+    statusBar.Size = UDim2.new(1, -20, 0, 22)
+    statusBar.Position = UDim2.new(0, 10, 1, -28)
+    statusBar.BackgroundColor3 = Color3.fromRGB(10, 14, 26)
+    statusBar.BackgroundTransparency = 0.5
+    statusBar.BorderSizePixel = 0
+    statusBar.ZIndex = 15
+    statusBar.Parent = self.panel
+    corner(statusBar, 6)
+
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, -10, 1, 0)
+    statusText.Position = UDim2.new(0, 5, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.Text = "莉艾尔 · 全息模式已就绪"
+    statusText.TextColor3 = Theme.SubText
+    statusText.TextSize = 10
+    statusText.Font = Enum.Font.Gotham
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.ZIndex = 16
+    statusText.Parent = statusBar
+
+    -- 分类存储
+    self.tabs = {}
+    self.currentTab = nil
 
     -- 绑定交互
-    self:_bindInteractions()
+    self:_bind()
+    self:_startFloatingAnimation()
 
     return self
 end
 
 --------------------------------------------------
--- 展开/折叠动画
+-- 悬浮动画（持续缓慢上下浮动，加强 3D 空间感）
 --------------------------------------------------
-function Window3D:_expand()
-    if self.isExpanded then return end
-    self.isExpanded = true
+function HoloWindow:_startFloatingAnimation()
+    local baseY = self.panelContainer.Position.Y.Offset
+    local tween = TweenService:Create(
+        self.panelContainer,
+        TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        { Position = UDim2.new(0.5, -(Theme.PanelWidth + 20) / 2, 0, baseY + 6) }
+    )
+    tween:Play()
+    table.insert(self.connections, tween)
+end
 
-    self.islandFrame.Visible = false
-    self.mainFrame.Visible = true
-    self.shadow.Visible = true
+--------------------------------------------------
+-- 展开 / 收起
+--------------------------------------------------
+function HoloWindow:_expand()
+    if self.expanded then return end
+    self.expanded = true
+    self.panelContainer.Visible = true
+    self.panelContainer.Size = UDim2.new(0, Theme.PanelWidth + 20, 0, 10)
 
-    local tweenInfo = TweenInfo.new(UIConfig.AnimationSpeed, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-
-    -- 主窗口展开
-    TweenService:Create(self.mainFrame, tweenInfo, {
-        Size = UDim2.new(0, self.windowWidth, 0, self.windowHeight),
+    -- 椭圆条淡出
+    TweenService:Create(self.island, TweenInfo.new(0.2), {
+        BackgroundTransparency = 1,
+    }):Play()
+    TweenService:Create(self.islandText, TweenInfo.new(0.2), {
+        TextTransparency = 1,
     }):Play()
 
-    -- 阴影同步
-    TweenService:Create(self.shadow, tweenInfo, {
-        Size = UDim2.new(0, self.windowWidth - 20, 0, 12),
-        Position = UDim2.new(0, 10, 0, UIConfig.IslandTopOffset + UIConfig.IslandHeight + 6 + self.windowHeight - 4),
+    -- 面板弹出（弹性）
+    TweenService:Create(self.panelContainer, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, Theme.PanelWidth + 20, 0, Theme.PanelHeight + 20),
     }):Play()
 end
 
-function Window3D:_collapse()
-    if not self.isExpanded then return end
-    self.isExpanded = false
+function HoloWindow:_collapse()
+    if not self.expanded then return end
+    self.expanded = false
 
-    self.islandFrame.Visible = true
-    self.shadow.Visible = false
-
-    local tweenInfo = TweenInfo.new(UIConfig.AnimationSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-
-    TweenService:Create(self.mainFrame, tweenInfo, {
-        Size = UDim2.new(0, self.windowWidth, 0, 10),
+    TweenService:Create(self.panelContainer, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, Theme.PanelWidth + 20, 0, 10),
     }):Play()
 
-    task.delay(UIConfig.AnimationSpeed, function()
-        if not self.isExpanded then
-            self.mainFrame.Visible = false
+    task.delay(0.25, function()
+        if not self.expanded then
+            self.panelContainer.Visible = false
         end
     end)
+
+    TweenService:Create(self.island, TweenInfo.new(0.3), {
+        BackgroundTransparency = 0.1,
+    }):Play()
+    TweenService:Create(self.islandText, TweenInfo.new(0.3), {
+        TextTransparency = 0,
+    }):Play()
 end
 
 --------------------------------------------------
--- 拖拽与点击交互
+-- 交互绑定
 --------------------------------------------------
-function Window3D:_bindInteractions()
-    -- 灵动岛点击展开
-    local islandClickConn = self.islandFrame.InputBegan:Connect(function(input)
+function HoloWindow:_bind()
+    -- 点击椭圆条展开
+    table.insert(self.connections, self.island.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             self:_expand()
         end
-    end)
-    table.insert(self.connections, islandClickConn)
+    end))
 
-    -- 主窗口拖拽
+    -- 拖拽
     local dragStart, startPos
-    local dragConn = self.titleBar.InputBegan:Connect(function(input)
+    table.insert(self.connections, self.titleBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            self.isDragging = true
+            self.dragging = true
             dragStart = input.Position
-            startPos = self.mainFrame.Position
+            startPos = self.panelContainer.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    self.isDragging = false
+                    self.dragging = false
                 end
             end)
         end
-    end)
-    table.insert(self.connections, dragConn)
+    end))
 
-    local moveConn = UserInputService.InputChanged:Connect(function(input)
-        if self.isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+    table.insert(self.connections, UserInputService.InputChanged:Connect(function(input)
+        if self.dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-            self.mainFrame.Position = newPos
-
-            local islandPos = UDim2.new(newPos.X.Scale, newPos.X.Offset + self.windowWidth / 2 - UIConfig.IslandWidth / 2, 0, UIConfig.IslandTopOffset)
-            self.islandFrame.Position = islandPos
-            self.shadow.Position = UDim2.new(newPos.X.Scale, newPos.X.Offset + 10, newPos.Y.Scale, newPos.Y.Offset + self.windowHeight - 4)
+            self.panelContainer.Position = newPos
+            self.island.Position = UDim2.new(newPos.X.Scale, newPos.X.Offset + (Theme.PanelWidth + 20) / 2 - Theme.IslandWidth / 2, 0, 12)
         end
-    end)
-    table.insert(self.connections, moveConn)
+    end))
 
     -- 最小化按钮
-    local minimizeConn = self.minimizeBtn.MouseButton1Click:Connect(function()
+    table.insert(self.connections, self.minBtn.MouseButton1Click:Connect(function()
         self:_collapse()
-    end)
-    table.insert(self.connections, minimizeConn)
+    end))
 
     -- 关闭按钮
-    local closeConn = self.closeBtn.MouseButton1Click:Connect(function()
-        self:destroy()
-    end)
-    table.insert(self.connections, closeConn)
+    table.insert(self.connections, self.closeBtn.MouseButton1Click:Connect(function()
+        self.gui.Enabled = false
+    end))
 end
 
 --------------------------------------------------
--- 添加开关按钮
+-- 创建分类（Tab）
 --------------------------------------------------
-function Window3D:addToggle(name, defaultState, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.BackgroundColor3 = defaultState and UIConfig.AccentColor or Color3.fromRGB(45, 45, 60)
-    btn.BackgroundTransparency = defaultState and 0.3 or 0.5
-    btn.Text = name .. ": " .. (defaultState and "开" or "关")
-    btn.TextColor3 = UIConfig.TextColor
-    btn.TextSize = 12
-    btn.Font = Enum.Font.Gotham
-    btn.BorderSizePixel = 0
-    btn.ZIndex = 7
-    btn.Parent = self.contentFrame
-    addCorner(btn, 8)
+function HoloWindow:CreateTab(name)
+    local tab = {}
+    tab.name = name
+    tab.items = {}
 
-    local state = defaultState or false
+    -- 分类按钮
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 0, 1, -8)
+    btn.AutomaticSize = Enum.AutomaticSize.X
+    btn.BackgroundColor3 = Color3.fromRGB(40, 50, 80)
+    btn.BackgroundTransparency = 0.4
+    btn.Text = name
+    btn.TextColor3 = Theme.SubText
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 16
+    btn.Parent = self.tabBar
+    corner(btn, 6)
+    -- 内边距
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 10)
+    pad.PaddingRight = UDim.new(0, 10)
+    pad.Parent = btn
+
+    -- 分类内容容器
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 0)
+    container.AutomaticSize = Enum.AutomaticSize.Y
+    container.BackgroundTransparency = 1
+    container.Visible = false
+    container.ZIndex = 15
+    container.Parent = self.content
+
+    local cLayout = Instance.new("UIListLayout")
+    cLayout.Padding = UDim.new(0, 8)
+    cLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    cLayout.Parent = container
+
+    tab.button = btn
+    tab.container = container
+
+    -- 切换逻辑
+    btn.MouseButton1Click:Connect(function()
+        for _, t in pairs(self.tabs) do
+            t.container.Visible = false
+            t.button.BackgroundTransparency = 0.4
+            t.button.TextColor3 = Theme.SubText
+        end
+        container.Visible = true
+        btn.BackgroundTransparency = 0.2
+        btn.TextColor3 = Theme.Holo1
+        self.currentTab = tab
+    end)
+
+    table.insert(self.tabs, tab)
+
+    -- 第一个分类默认选中
+    if #self.tabs == 1 then
+        container.Visible = true
+        btn.BackgroundTransparency = 0.2
+        btn.TextColor3 = Theme.Holo1
+        self.currentTab = tab
+    end
+
+    -- 返回挂载方法
+    tab.window = self
+    return tab
+end
+
+--------------------------------------------------
+-- 分类内添加开关
+--------------------------------------------------
+function HoloWindow:addToggle(tab, name, default, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 38)
+    btn.BackgroundColor3 = Color3.fromRGB(20, 28, 50)
+    btn.BackgroundTransparency = 0.4
+    btn.Text = ""
+    btn.BorderSizePixel = 0
+    btn.ZIndex = 15
+    btn.Parent = tab.container
+    corner(btn, 8)
+    stroke(btn, Theme.Holo2, 1, 0.7)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Position = UDim2.new(0, 14, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Theme.TextColor
+    label.TextSize = 12
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 16
+    label.Parent = btn
+
+    -- 开关滑块
+    local switchBg = Instance.new("Frame")
+    switchBg.Size = UDim2.new(0, 36, 0, 18)
+    switchBg.Position = UDim2.new(1, -50, 0.5, -9)
+    switchBg.BackgroundColor3 = default and Theme.Holo1 or Color3.fromRGB(50, 55, 70)
+    switchBg.BackgroundTransparency = 0.3
+    switchBg.BorderSizePixel = 0
+    switchBg.ZIndex = 16
+    switchBg.Parent = btn
+    corner(switchBg, 9)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 17
+    knob.Parent = switchBg
+    corner(knob, 7)
+
+    local state = default or false
     btn.MouseButton1Click:Connect(function()
         state = not state
-        btn.Text = name .. ": " .. (state and "开" or "关")
-        TweenService:Create(btn, TweenInfo.new(0.15), {
-            BackgroundColor3 = state and UIConfig.AccentColor or Color3.fromRGB(45, 45, 60),
-            BackgroundTransparency = state and 0.3 or 0.5,
+        TweenService:Create(switchBg, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Theme.Holo1 or Color3.fromRGB(50, 55, 70),
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            Position = state and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
         }):Play()
         if callback then callback(state) end
     end)
+
     return btn
 end
 
 --------------------------------------------------
--- 添加滑块
+-- 分类内添加滑块
 --------------------------------------------------
-function Window3D:addSlider(name, min, max, default, callback)
+function HoloWindow:addSlider(tab, name, min, max, default, callback)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, 0, 0, 52)
-    container.BackgroundTransparency = 1
-    container.ZIndex = 7
-    container.Parent = self.contentFrame
+    container.BackgroundColor3 = Color3.fromRGB(20, 28, 50)
+    container.BackgroundTransparency = 0.4
+    container.BorderSizePixel = 0
+    container.ZIndex = 15
+    container.Parent = tab.container
+    corner(container, 8)
+    stroke(container, Theme.Holo2, 1, 0.7)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 18)
+    label.Size = UDim2.new(1, -20, 0, 18)
+    label.Position = UDim2.new(0, 12, 0, 6)
     label.BackgroundTransparency = 1
     label.Text = name .. ": " .. default
-    label.TextColor3 = UIConfig.SubTextColor
-    label.TextSize = 12
+    label.TextColor3 = Theme.TextColor
+    label.TextSize = 11
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 8
+    label.ZIndex = 16
     label.Parent = container
 
     local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, 0, 0, 6)
-    track.Position = UDim2.new(0, 0, 0, 30)
-    track.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    track.Size = UDim2.new(1, -24, 0, 6)
+    track.Position = UDim2.new(0, 12, 0, 30)
+    track.BackgroundColor3 = Color3.fromRGB(35, 40, 55)
     track.BorderSizePixel = 0
-    track.ZIndex = 8
+    track.ZIndex = 16
     track.Parent = container
-    addCorner(track, 3)
+    corner(track, 3)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = UIConfig.AccentColor
+    fill.BackgroundColor3 = Theme.Holo1
     fill.BorderSizePixel = 0
-    fill.ZIndex = 9
+    fill.ZIndex = 17
     fill.Parent = track
-    addCorner(fill, 3)
+    corner(fill, 3)
+    gradient(fill, Theme.Holo1, Theme.Holo3, 0)
 
-    -- 滑块拖动
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 18
+    knob.Parent = track
+    corner(knob, 7)
+    stroke(knob, Theme.Holo1, 1, 0.2)
+
     local dragging = false
     track.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -416,6 +693,7 @@ function Window3D:addSlider(name, min, max, default, callback)
             local ratio = math.clamp((mouseX - trackAbsX) / trackWidth, 0, 1)
             local value = math.floor(min + (max - min) * ratio)
             fill.Size = UDim2.new(ratio, 0, 1, 0)
+            knob.Position = UDim2.new(ratio, -7, 0.5, -7)
             label.Text = name .. ": " .. value
             if callback then callback(value) end
         end
@@ -429,61 +707,20 @@ function Window3D:addSlider(name, min, max, default, callback)
 end
 
 --------------------------------------------------
--- 添加文本标签
+-- 分类内添加说明文字
 --------------------------------------------------
-function Window3D:addLabel(text)
+function HoloWindow:addLabel(tab, text)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 24)
+    label.Size = UDim2.new(1, 0, 0, 20)
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = UIConfig.SubTextColor
-    label.TextSize = 12
+    label.TextColor3 = Theme.SubText
+    label.TextSize = 10
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.ZIndex = 7
-    label.Parent = self.contentFrame
+    label.ZIndex = 15
+    label.Parent = tab.container
     return label
 end
 
---------------------------------------------------
--- 销毁窗口
---------------------------------------------------
-function Window3D:destroy()
-    for _, conn in ipairs(self.connections) do
-        conn:Disconnect()
-    end
-    self.screenGui:Destroy()
-end
-
---------------------------------------------------
--- 示例：创建窗口并使用
---------------------------------------------------
-local window = Window3D.new("莉艾尔控制台", {
-    width = 320,
-    height = 420,
-})
-
--- 添加组件
-window:addLabel("功能开关")
-window:addToggle("加速", false, function(state)
-    print("加速:", state)
-end)
-
-window:addToggle("飞行", false, function(state)
-    print("飞行:", state)
-end)
-
-window:addToggle("透视", false, function(state)
-    print("透视:", state)
-end)
-
-window:addLabel("参数调节")
-window:addSlider("加速速度", 20, 500, 60, function(val)
-    print("加速速度:", val)
-end)
-
-window:addSlider("飞行速度", 20, 500, 80, function(val)
-    print("飞行速度:", val)
-end)
-
-print("莉艾尔3D悬浮窗已加载！点击顶部灵动岛展开菜单。")
+return HoloWindow
