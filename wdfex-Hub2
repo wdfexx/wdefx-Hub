@@ -26,6 +26,7 @@ WindUI:Popup({
         { Title = "执行", Icon = "arrow-right", Callback = function() Confirmed = true; createUI() end, Variant = "Primary" }
     }
 })
+
 function createUI()
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -239,7 +240,7 @@ function createUI()
         ScrollBarEnabled = true,
         Resizable = true,
         Background = "rbxassetid://120259800200854",
-        BackgroundImageTransparency = 0.07,
+        BackgroundImageTransparency = 0.1,
         User = { Enabled = true, Callback = function() end, Anonymous = false },
         SideBarWidth = 250,
         Search = { Enabled = true, Placeholder = "搜索...", Callback = function(searchText) end },
@@ -247,6 +248,25 @@ function createUI()
     })
     Window:Tag({ Title = "wdfex-HubNB", Color = Color3.fromHex("#00ffff") })
     Window:EditOpenButton({ Title = 'wdfex-<font color="rgb(255, 255, 0)">Hub</font>', RichText = true, Icon = "crown", IconThemed = true, CornerRadius = UDim.new(0,16), StrokeThickness = 4, Color = ColorSequence.new(Color3.fromHex("FF6B6B")), Draggable = true })
+
+    -- ================= 【新增快捷键控制】 =================
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.Zero then
+            -- 0键：打开
+            pcall(function()
+                if Window.Open then Window:Open() else Window:Toggle() end
+            end)
+            local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
+            if mainGui then mainGui.Enabled = true end
+        elseif input.KeyCode == Enum.KeyCode.Minus then
+            -- 减号键：关闭
+            pcall(function()
+                if Window.Close then Window:Close() else Window:Toggle() end
+            end)
+        end
+    end)
+    -- ======================================================
 
     task.spawn(function()
         task.wait(1)
@@ -328,122 +348,26 @@ function createUI()
         end)
     end)
 
-    _G.CatAntiFling_Enabled = false
-    _G.CatAntiFling_Running = false
-    local function AntiFlingLoop()
-        if _G.CatAntiFling_Running then return end
-        _G.CatAntiFling_Running = true
-        task.spawn(function()
-            while not isDestroyed do
-                if _G.CatAntiFling_Enabled then
-                    pcall(function()
-                        local char = player.Character
-                        if not char then return end
-                        local root = char:FindFirstChild("HumanoidRootPart")
-                        if not root then return end
-                        local vel = root.Velocity
-                        if vel.Magnitude > 500 or math.abs(vel.Y) > 300 then
-                            root.Velocity = Vector3.new(0, 0, 0)
-                            root.RotVelocity = Vector3.new(0, 0, 0)
-                        end
-                        for _, obj in ipairs(root:GetChildren()) do
-                            if (obj:IsA("BodyVelocity") or obj:IsA("BodyAngularVelocity")) and obj.Name ~= "CatAntiFling" and obj.Name ~= "CatAntiFlingAngular" then obj:Destroy() end
-                        end
-                    end)
-                end
-                task.wait(0.1)
-            end
-            _G.CatAntiFling_Running = false
-        end)
-    end
-    AntiFlingLoop()
-
-    local AuthorTab = Window:Tab({ Title = "作者信息", Icon = "user" })
-    local AuthorSection = AuthorTab:Section({ Title = "", Opened = true })
-    AuthorSection:Paragraph({ Title = "", Desc = "", Thumbnail = "rbxassetid://74369447499630", ThumbnailSize = 150, ThumbnailShape = "Square" })
-    AuthorSection:Paragraph({ Title = "作者：wdfex", Desc = "" })
-    AuthorSection:Paragraph({ Title = "作者QQ：1687426335", Desc = "" })
-    AuthorSection:Paragraph({ Title = "此脚本仅wdfex一人开发", Desc = "" })
-
-    local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
-    local windowDragging, windowDragStart, windowStartPos = false, nil, nil
-    local lockWindowBtn = false
-    local function DestroyWindowQuickToggle()
-        if windowQuickScreenGui then windowQuickScreenGui:Destroy(); windowQuickScreenGui = nil; windowQuickButton = nil end
-    end
-    local function CreateWindowQuickToggle()
-        if windowQuickButton then return end
-        windowQuickScreenGui = Instance.new("ScreenGui")
-        windowQuickScreenGui.Name = "WindowQuickToggle"
-        windowQuickScreenGui.ResetOnSpawn = false
-        windowQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        windowQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(0, 115, 0, 46)
-        button.Position = UDim2.new(0.5, -58, 0.3, 0)
-        button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
-        button.BackgroundTransparency = 0.15
-        button.BorderSizePixel = 0
-        button.Text = "调出主悬浮窗"
-        button.TextColor3 = Color3.fromHSV(0.5, 1, 1)
-        button.TextSize = 14
-        button.Font = Enum.Font.GothamBold
-        button.Parent = windowQuickScreenGui
-        windowQuickButton = button
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = button
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 2
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Color = Color3.fromHSV(0.5, 1, 1)
-        stroke.Parent = button
-        task.spawn(function()
-            while windowQuickButton and windowQuickButton.Parent do
-                local hue = (tick() * 0.15) % 1
-                stroke.Color = Color3.fromHSV(hue, 1, 1)
-                button.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
-                task.wait(0.03)
-            end
-        end)
-        button.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if not lockWindowBtn then
-                    windowDragging = true
-                    windowDragStart = input.Position
-                    windowStartPos = button.Position
-                end
-            end
-        end)
-        button.InputChanged:Connect(function(input)
-            if windowDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                local delta = input.Position - windowDragStart
-                button.Position = UDim2.new(windowStartPos.X.Scale, windowStartPos.X.Offset + delta.X, windowStartPos.Y.Scale, windowStartPos.Y.Offset + delta.Y)
-            end
-        end)
-        button.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then windowDragging = false end
-        end)
-        button.MouseButton1Click:Connect(function()
-            pcall(function()
-                if Window.Open then Window:Open() elseif Window.Toggle then Window:Toggle() end
-            end)
-            local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
-            if mainGui then mainGui.Enabled = true end
-        end)
-    end
-    AuthorSection:Toggle({
-        Title = "悬浮窗快捷开关（如果你使用的是电脑请打开它否则最小化之后无法继续打开主悬浮窗）",
-        Value = false,
-        Callback = function(value) windowQuickToggle = value; if value then CreateWindowQuickToggle() else DestroyWindowQuickToggle() end end
+    -- ================= 【更新公告】 =================
+    local UpdateTab = Window:Tab({ Title = "更新公告", Icon = "bell" })
+    local UpdateSection = UpdateTab:Section({ Title = "5.5更新公告", Opened = true })
+    
+    UpdateSection:Paragraph({
+        Title = "5.5更新公告",
+        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加飞车",
+        ThumbnailSize = 150,
     })
-    AuthorSection:Toggle({
-        Title = "锁定悬浮窗快捷开关",
-        Value = false,
-        Callback = function(value) lockWindowBtn = value end
+    
+    local FixedSection = UpdateTab:Section({ Title = "已修复的问题", Opened = true })
+    FixedSection:Paragraph({
+        Title = "已修复的问题",
+        Desc = "修复电脑最小化之后无法继续打开主悬浮窗的问题打开主悬浮窗点一下键盘上面的0最小化悬浮窗点一下-就行了或者是点悬浮窗里面自带的\n优化卡顿",
+        ThumbnailSize = 150,
     })
+    
+    UpdateTab:Select()
+    -- ======================================================
 
-    AuthorTab:Select()
     local MainSection = Window:Section({ Title = "主功能", Opened = true })
     local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
     local A = AddTab(MainSection, "玩家修改", "user")
@@ -518,8 +442,7 @@ function createUI()
         MovementSettings.noclip = noclip
         if noclip then startNoclip() else stopNoclip() end
     end })
-    A:Divider({ Text = "防甩飞" })
-    A:Toggle({ Title = "防甩飞", Value = false, Callback = function(value) _G.CatAntiFling_Enabled = value end })
+
     A:Divider({ Text = "防摔" })
     antiFallToggle = A:Toggle({ Title = "防摔", Value = false, Callback = function(value) antiFallEnabled = value end })
     task.spawn(function()
