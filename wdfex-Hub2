@@ -354,7 +354,7 @@ function createUI()
     
     UpdateSection:Paragraph({
         Title = "5.5更新公告",
-        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加飞车\n增加AI使用的AI模型是DeepSeek\n可能会增加用户聊天使用wdfex-Hub的用户可以在里面和其他的wdefx-Hub用户进行聊天",
+        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型是DeepSeek\n可能会增加用户聊天使用wdfex-Hub的用户可以在里面和其他的wdefx-Hub用户进行聊天",
         ThumbnailSize = 150,
     })
     
@@ -764,25 +764,73 @@ function createUI()
             local spawnPoint = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Interactive") and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn") and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns") and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
             if not carModel or not spawnPoint then return end
             local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
+            -- 记录旧车辆集合，用来识别新生成的车
+            local oldSet = {}
+            if vehiclesFolder then
+                for _, v in ipairs(vehiclesFolder:GetChildren()) do oldSet[v] = true end
+            end
+            -- 发起生成
             local success = pcall(function()
                 local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
                 ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
             end)
-            if success then
-                task.spawn(function()
-                    task.wait(0.8)
-                    local myCar = nil
+            if not success then return end
+            -- 秒级轮询，一旦发现新车辆就立即定位到自己脚下地面
+            task.spawn(function()
+                local deadline = tick() + 3
+                local newCar = nil
+                while tick() < deadline do
+                    if not vehiclesFolder or not vehiclesFolder.Parent then
+                        vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
+                    end
                     if vehiclesFolder then
                         for _, v in ipairs(vehiclesFolder:GetChildren()) do
-                            if v.Name == "Lincoln LS 2002" then myCar = v end
+                            if v:IsA("Model") and v.Name == "Lincoln LS 2002" and not oldSet[v] then
+                                newCar = v
+                                break
+                            end
                         end
                     end
-                    if myCar then
-                        local targetPos = root.CFrame * CFrame.new(0, 3, 0)
-                        if myCar:IsA("Model") then myCar:PivotTo(targetPos) elseif myCar:IsA("BasePart") then myCar.CFrame = targetPos end
+                    if newCar then break end
+                    task.wait(0.03)
+                end
+                if not newCar then return end
+                -- 找玩家脚下的地面高度
+                local charNow = player.Character
+                local rootNow = charNow and charNow:FindFirstChild("HumanoidRootPart")
+                if not rootNow then return end
+                local rayParams = RaycastParams.new()
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                local filterList = {}
+                if charNow then table.insert(filterList, charNow) end
+                if newCar then table.insert(filterList, newCar) end
+                rayParams.FilterDescendantsInstances = filterList
+                local rayOrigin = rootNow.Position + Vector3.new(0, 5, 0)
+                local groundResult = workspace:Raycast(rayOrigin, Vector3.new(0, -500, 0), rayParams)
+                local groundY = groundResult and groundResult.Position.Y or (rootNow.Position.Y - 3)
+                -- 目标：玩家水平位置，地面高度 + 小偏移（让车贴地不砸头）
+                local targetPos = Vector3.new(rootNow.Position.X, groundY + 2.5, rootNow.Position.Z)
+                -- 朝向：相机水平方向
+                local cam = workspace.CurrentCamera
+                local lookDir = cam and Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z) or Vector3.new(0, 0, -1)
+                if lookDir.Magnitude < 0.001 then lookDir = Vector3.new(0, 0, -1) end
+                lookDir = lookDir.Unit
+                local targetCFrame = CFrame.lookAt(targetPos, targetPos + lookDir)
+                pcall(function()
+                    if newCar:IsA("Model") then
+                        newCar:PivotTo(targetCFrame)
+                    elseif newCar:IsA("BasePart") then
+                        newCar.CFrame = targetCFrame
+                    end
+                    -- 清零速度防止甩飞
+                    for _, part in ipairs(newCar:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.AssemblyLinearVelocity = Vector3.zero
+                            part.AssemblyAngularVelocity = Vector3.zero
+                        end
                     end
                 end)
-            end
+            end)
         end
     })
 
@@ -1531,6 +1579,431 @@ function createUI()
                     local env = getgenv()
                     if env and env.__CAR_SPEED_GUI_CLEANUP then env.__CAR_SPEED_GUI_CLEANUP() end
                 end)
+            end
+        end
+    })
+
+    -- =================== 飞车（完全套用飞天逻辑 + 严格上下车联动） ===================
+    local CarFly = {
+        Enabled = false,
+        Speed = 139,
+        DriveDir = 0,
+        StrafeDir = 0,
+        UpDown = 0,
+        Gui = nil,
+        hrp = nil,
+        hum = nil,
+        microThread = nil,
+        healthThread = nil,
+        diedConn = nil,
+        targetPos = nil,
+        lastTime = 0,
+        anchorActive = false,
+        anchoredPart = nil,
+        lastScan = -math.huge,
+        cachedRoot = nil,
+        cachedRef = nil,
+    }
+
+    local CF_SCAN_INTERVAL = 0.05
+
+    local function CF_getHumanoid()
+        local c = player.Character
+        if not c then return nil end
+        return c:FindFirstChildOfClass("Humanoid")
+    end
+
+    local function CF_getCharacterRoot(h)
+        if not h or not h.Parent then return nil end
+        return h.RootPart or h.Parent:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function CF_getCurrentSeatPart(h)
+        if not h then return nil end
+        local s = h.SeatPart
+        if s and s:IsA("BasePart") and (s:IsA("Seat") or s:IsA("VehicleSeat")) then return s end
+        return nil
+    end
+
+    local function CF_getVehicleReferenceScore(part, characterRoot)
+        if not part or not part:IsA("BasePart") then return -math.huge end
+        local score = 0
+        local lowerName = string.lower(part.Name)
+        if part:IsA("VehicleSeat") then score += 10000 elseif part:IsA("Seat") then score += 9000 end
+        if string.find(lowerName, "driver", 1, true) or string.find(lowerName, "drive", 1, true) or string.find(part.Name, "驾驶", 1, true) then score += 5000 end
+        if string.find(lowerName, "seat", 1, true) or string.find(part.Name, "座", 1, true) then score += 4000 end
+        if string.find(lowerName, "chassis", 1, true) or string.find(lowerName, "body", 1, true) or string.find(lowerName, "frame", 1, true) or string.find(lowerName, "main", 1, true) or string.find(lowerName, "root", 1, true) or string.find(lowerName, "base", 1, true) or string.find(part.Name, "底盘", 1, true) or string.find(part.Name, "车身", 1, true) then score += 2500 end
+        if string.find(lowerName, "wheel", 1, true) or string.find(lowerName, "tire", 1, true) or string.find(lowerName, "tyre", 1, true) or string.find(part.Name, "车轮", 1, true) or string.find(part.Name, "轮胎", 1, true) then score -= 10000 end
+        local volume = part.Size.X * part.Size.Y * part.Size.Z
+        score += math.min(volume, 1500)
+        if characterRoot then score -= math.min((part.Position - characterRoot.Position).Magnitude * 4, 400) end
+        return score
+    end
+
+    local function CF_addExternalCandidate(candidates, part, character)
+        if not part or not part:IsA("BasePart") or not part.Parent or part:IsDescendantOf(character) or not part:IsDescendantOf(workspace) then return end
+        local assemblyRoot = part.AssemblyRootPart or part
+        if not assemblyRoot or not assemblyRoot:IsA("BasePart") or not assemblyRoot.Parent then return end
+        candidates[part] = true
+    end
+
+    local function CF_addJointExternalPart(candidates, character, part0, part1)
+        if part0 and part0:IsA("BasePart") and part0:IsDescendantOf(character) then
+            CF_addExternalCandidate(candidates, part1, character)
+        elseif part1 and part1:IsA("BasePart") and part1:IsDescendantOf(character) then
+            CF_addExternalCandidate(candidates, part0, character)
+        end
+    end
+
+    local function CF_scanExternalVehicle(h)
+        local character = h and h.Parent
+        local characterRoot = CF_getCharacterRoot(h)
+        if not character or not characterRoot then return nil, nil end
+        local candidates = {}
+        local directAssemblyRoot = characterRoot.AssemblyRootPart
+        if directAssemblyRoot and not directAssemblyRoot:IsDescendantOf(character) then
+            CF_addExternalCandidate(candidates, directAssemblyRoot, character)
+        end
+        local ok, connectedParts = pcall(function() return characterRoot:GetConnectedParts(true) end)
+        if ok and connectedParts then
+            for _, part in ipairs(connectedParts) do CF_addExternalCandidate(candidates, part, character) end
+        end
+        for _, d in ipairs(character:GetDescendants()) do
+            if d:IsA("WeldConstraint") or d:IsA("Weld") or d:IsA("Motor6D") then
+                CF_addJointExternalPart(candidates, character, d.Part0, d.Part1)
+            elseif d:IsA("RigidConstraint") then
+                local a0 = d.Attachment0
+                local a1 = d.Attachment1
+                CF_addJointExternalPart(candidates, character, a0 and a0.Parent, a1 and a1.Parent)
+            end
+        end
+        local bestPart, bestScore = nil, -math.huge
+        for part in pairs(candidates) do
+            local s = CF_getVehicleReferenceScore(part, characterRoot)
+            if s > bestScore then bestScore = s; bestPart = part end
+        end
+        if not bestPart then return nil, nil end
+        local vehicleRoot = bestPart.AssemblyRootPart or bestPart
+        if not vehicleRoot or not vehicleRoot:IsA("BasePart") then return nil, nil end
+        return vehicleRoot, bestPart
+    end
+
+    -- 严格上车检测
+    local function CF_flyRefreshParts()
+        local char = player.Character
+        if not char then CarFly.hrp = nil; CarFly.hum = nil; return end
+        CarFly.hum = char:FindFirstChildOfClass("Humanoid")
+        if not CarFly.hum then CarFly.hrp = nil; return end
+        local seatPart = CF_getCurrentSeatPart(CarFly.hum)
+        if seatPart then
+            local vehicleRoot = seatPart.AssemblyRootPart or seatPart
+            if vehicleRoot and vehicleRoot:IsA("BasePart") then
+                CarFly.hrp = vehicleRoot
+                return
+            end
+        end
+        local now = time()
+        if now - CarFly.lastScan >= CF_SCAN_INTERVAL then
+            CarFly.lastScan = now
+            local root, ref = CF_scanExternalVehicle(CarFly.hum)
+            CarFly.cachedRoot = root
+            CarFly.cachedRef = ref
+        end
+        if CarFly.cachedRoot and CarFly.cachedRoot.Parent and CarFly.cachedRef and CarFly.cachedRef.Parent then
+            CarFly.hrp = CarFly.cachedRoot
+        else
+            CarFly.hrp = nil
+        end
+    end
+
+    local function CF_flyDetectWall()
+        local hrp = CarFly.hrp
+        if not hrp then return false end
+        local pos = hrp.Position
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Blacklist
+        local filterList = { player.Character }
+        if hrp.Parent then table.insert(filterList, hrp.Parent) end
+        params.FilterDescendantsInstances = filterList
+        local rayLength = 3.5
+        local rayCount = 4
+        local verticalLayers = 2
+        for i = 1, rayCount do
+            local angle = (i / rayCount) * 2 * math.pi
+            local dx, dz = math.cos(angle), math.sin(angle)
+            for j = -(verticalLayers - 1) // 2, (verticalLayers - 1) // 2 do
+                local dir = Vector3.new(dx, j * 0.5, dz).Unit
+                local result = workspace:Raycast(pos, dir * rayLength, params)
+                if result and result.Instance and result.Instance.CanCollide and result.Instance.Transparency < 0.9 then return true end
+            end
+        end
+        return false
+    end
+
+    local function CF_flyEnterAnchor()
+        if CarFly.anchorActive then return end
+        if not CarFly.hrp then return end
+        CarFly.anchoredPart = CarFly.hrp
+        pcall(function() CarFly.hrp.Anchored = true end)
+        CarFly.anchorActive = true
+    end
+
+    local function CF_flyExitAnchor()
+        if not CarFly.anchorActive then return end
+        local part = CarFly.anchoredPart or CarFly.hrp
+        if part and part.Parent then
+            pcall(function() part.Anchored = false end)
+        end
+        CarFly.anchorActive = false
+        CarFly.anchoredPart = nil
+    end
+
+    local function CarFly_StopMove()
+        CarFly.DriveDir = 0
+        CarFly.StrafeDir = 0
+        CarFly.UpDown = 0
+    end
+
+    local function CarFly_DestroyGui()
+        if CarFly.Gui then
+            CarFly.Gui:Destroy()
+            CarFly.Gui = nil
+        end
+    end
+
+    local function CarFly_MakeButton(parent, text, borderColor, pos, size)
+        local b = Instance.new("TextButton")
+        b.Size = size or UDim2.new(0, 90, 0, 90)
+        b.Position = pos
+        b.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+        b.BackgroundTransparency = 0.45
+        b.AutoButtonColor = false
+        b.Text = text
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.TextSize = 22
+        b.Font = Enum.Font.GothamBold
+        b.Parent = parent
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = b
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 3
+        stroke.Color = borderColor
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = b
+        return b
+    end
+
+    local function CarFly_CreateGui()
+        CarFly_DestroyGui()
+        local sg = Instance.new("ScreenGui")
+        sg.Name = "wdfex飞车控制"
+        sg.ResetOnSpawn = false
+        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        local parentGui = nil
+        pcall(function() if gethui then parentGui = gethui() end end)
+        if not parentGui then pcall(function() parentGui = game:GetService("CoreGui") end) end
+        if not parentGui then parentGui = player:WaitForChild("PlayerGui") end
+        sg.Parent = parentGui
+        CarFly.Gui = sg
+
+        local btnSize = UDim2.new(0, 90, 0, 90)
+        local gap = 8
+
+        local left = Instance.new("Frame")
+        left.AnchorPoint = Vector2.new(0, 1)
+        left.Position = UDim2.new(0, 20, 1, -20)
+        left.Size = UDim2.new(0, 90, 0, 90 * 2 + gap)
+        left.BackgroundTransparency = 1
+        left.Parent = sg
+
+        local fwdBtn = CarFly_MakeButton(left, "前", Color3.fromRGB(0, 245, 212), UDim2.new(0, 0, 0, 0), btnSize)
+        local backBtn = CarFly_MakeButton(left, "后", Color3.fromRGB(255, 105, 180), UDim2.new(0, 0, 0, 90 + gap), btnSize)
+
+        local right = Instance.new("Frame")
+        right.AnchorPoint = Vector2.new(1, 1)
+        right.Position = UDim2.new(1, -20, 1, -20)
+        right.Size = UDim2.new(0, 90 * 2 + gap, 0, 90 * 2 + gap)
+        right.BackgroundTransparency = 1
+        right.Parent = sg
+
+        local upBtn = CarFly_MakeButton(right, "升", Color3.fromRGB(46, 213, 115), UDim2.new(0, 0, 0, 0), btnSize)
+        local downBtn = CarFly_MakeButton(right, "降", Color3.fromRGB(255, 71, 87), UDim2.new(0, 90 + gap, 0, 0), btnSize)
+        local leftBtn = CarFly_MakeButton(right, "左", Color3.fromRGB(255, 165, 2), UDim2.new(0, 0, 0, 90 + gap), btnSize)
+        local rightBtn = CarFly_MakeButton(right, "右", Color3.fromRGB(255, 165, 2), UDim2.new(0, 90 + gap, 0, 90 + gap), btnSize)
+
+        local function hold(btn, onDown, onUp)
+            btn.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    btn.BackgroundTransparency = 0.15
+                    onDown()
+                end
+            end)
+            btn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    btn.BackgroundTransparency = 0.45
+                    onUp()
+                end
+            end)
+            btn.MouseLeave:Connect(function()
+                btn.BackgroundTransparency = 0.45
+                onUp()
+            end)
+        end
+
+        hold(fwdBtn, function() CarFly.DriveDir = 1 end, function() if CarFly.DriveDir == 1 then CarFly.DriveDir = 0 end end)
+        hold(backBtn, function() CarFly.DriveDir = -1 end, function() if CarFly.DriveDir == -1 then CarFly.DriveDir = 0 end end)
+        hold(leftBtn, function() CarFly.StrafeDir = -1 end, function() if CarFly.StrafeDir == -1 then CarFly.StrafeDir = 0 end end)
+        hold(rightBtn, function() CarFly.StrafeDir = 1 end, function() if CarFly.StrafeDir == 1 then CarFly.StrafeDir = 0 end end)
+        hold(upBtn, function() CarFly.UpDown = 1 end, function() if CarFly.UpDown == 1 then CarFly.UpDown = 0 end end)
+        hold(downBtn, function() CarFly.UpDown = -1 end, function() if CarFly.UpDown == -1 then CarFly.UpDown = 0 end end)
+    end
+
+    local function CF_flyMicroStepLoop()
+        CarFly.lastTime = tick()
+        local hadTarget = false
+        while CarFly.Enabled do
+            local now = tick()
+            local dt = now - CarFly.lastTime
+            CarFly.lastTime = now
+            CF_flyRefreshParts()
+            if CarFly.hrp and CarFly.hrp.Parent then
+                if not hadTarget then
+                    hadTarget = true
+                    CarFly.targetPos = CarFly.hrp.Position
+                    CarFly.lastTime = tick()
+                    if not CarFly.Gui then CarFly_CreateGui() end
+                end
+                if not CarFly.targetPos then CarFly.targetPos = CarFly.hrp.Position end
+                local inWall = CF_flyDetectWall()
+                if inWall and not CarFly.anchorActive then CF_flyEnterAnchor()
+                elseif not inWall and CarFly.anchorActive then CF_flyExitAnchor() end
+                local cam = workspace.CurrentCamera
+                if cam then
+                    local cf = cam.CFrame
+                    local moveDir = (cf.LookVector * CarFly.DriveDir) + (cf.RightVector * CarFly.StrafeDir) + Vector3.new(0, CarFly.UpDown, 0)
+                    CarFly.targetPos = CarFly.targetPos + moveDir * CarFly.Speed * dt
+                    local currentPos = CarFly.hrp.Position
+                    local remaining = CarFly.targetPos - currentPos
+                    local distance = remaining.Magnitude
+                    local lookFlat = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+                    if lookFlat.Magnitude > 0.001 then lookFlat = lookFlat.Unit else lookFlat = Vector3.new(0, 0, -1) end
+                    local newRot = CFrame.lookAt(Vector3.zero, lookFlat).Rotation
+                    if distance > 0 then
+                        local steps = math.ceil(distance / 10)
+                        local stepVec = remaining / steps
+                        for i = 1, steps do
+                            if not CarFly.Enabled then break end
+                            currentPos = currentPos + stepVec
+                            CarFly.hrp.CFrame = CFrame.new(currentPos) * newRot
+                            CarFly.hrp.AssemblyLinearVelocity = Vector3.zero
+                            CarFly.hrp.AssemblyAngularVelocity = Vector3.zero
+                        end
+                    else
+                        CarFly.hrp.CFrame = CFrame.new(CarFly.targetPos) * newRot
+                        CarFly.hrp.AssemblyLinearVelocity = Vector3.zero
+                        CarFly.hrp.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
+            else
+                if hadTarget then
+                    hadTarget = false
+                    CarFly.targetPos = nil
+                    CF_flyExitAnchor()
+                    CarFly_StopMove()
+                    if CarFly.Gui then CarFly.Gui:Destroy(); CarFly.Gui = nil end
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+        if CarFly.anchorActive then CF_flyExitAnchor() end
+        CarFly_StopMove()
+        CarFly.hrp = nil
+        CarFly.cachedRoot = nil
+        CarFly.cachedRef = nil
+        CarFly.microThread = nil
+        if CarFly.Gui then CarFly.Gui:Destroy(); CarFly.Gui = nil end
+    end
+
+    local function CF_flyHealthLockLoop()
+        while CarFly.Enabled do
+            local hum = CF_getHumanoid()
+            CarFly.hum = hum
+            if hum and hum.Health <= 0 then hum.Health = hum.MaxHealth end
+            task.wait(0.1)
+        end
+    end
+
+    local function CarFly_Start()
+        if CarFly.Enabled then return true end
+        local hum = CF_getHumanoid()
+        if not hum then return false end
+        CarFly.Enabled = true
+        CarFly.hum = hum
+        CarFly.hrp = nil
+        CarFly.anchorActive = false
+        CarFly.anchoredPart = nil
+        CarFly.lastScan = -math.huge
+        CarFly.cachedRoot = nil
+        CarFly.cachedRef = nil
+        CarFly_StopMove()
+        CarFly.microThread = task.spawn(CF_flyMicroStepLoop)
+        CarFly.healthThread = task.spawn(CF_flyHealthLockLoop)
+        CarFly.diedConn = hum.Died:Connect(function()
+            if hum and CarFly.Enabled then
+                hum.Health = hum.MaxHealth
+            end
+        end)
+        return true
+    end
+
+    local function CarFly_Stop()
+        if not CarFly.Enabled then return end
+        CarFly.Enabled = false
+        CF_flyExitAnchor()
+        if CarFly.microThread then pcall(function() task.cancel(CarFly.microThread) end); CarFly.microThread = nil end
+        if CarFly.healthThread then pcall(function() task.cancel(CarFly.healthThread) end); CarFly.healthThread = nil end
+        if CarFly.diedConn then CarFly.diedConn:Disconnect(); CarFly.diedConn = nil end
+        CarFly_StopMove()
+        CarFly.hrp = nil
+        CarFly.cachedRoot = nil
+        CarFly.cachedRef = nil
+        CarFly_DestroyGui()
+    end
+
+    player.CharacterRemoving:Connect(function()
+        if CarFly.Enabled then CarFly_Stop() end
+    end)
+
+    VehicleTab:Divider({ Text = "飞车" })
+    do
+        local inputCreated = false
+        local ok = pcall(function()
+            VehicleTab:Input({
+                Title = "飞车速度",
+                Value = "139",
+                Placeholder = "139",
+                Callback = function(text)
+                    local n = tonumber(text)
+                    if n and n > 0 then CarFly.Speed = math.clamp(n, 1, 1000) end
+                end
+            })
+            inputCreated = true
+        end)
+        if not ok or not inputCreated then
+            VehicleTab:Slider({ Title = "飞车速度", Value = { Min = 1, Max = 600, Default = 139 }, Step = 1, Callback = function(v) CarFly.Speed = v end })
+        end
+    end
+    local carFlyToggle
+    carFlyToggle = VehicleTab:Toggle({
+        Title = "飞车",
+        Value = false,
+        Callback = function(value)
+            if value then
+                local okStart = CarFly_Start()
+                if not okStart and carFlyToggle then pcall(function() carFlyToggle:SetValue(false) end) end
+            else
+                CarFly_Stop()
             end
         end
     })
