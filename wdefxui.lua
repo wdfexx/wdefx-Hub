@@ -1,971 +1,1291 @@
-local WindUI = {}
-WindUI.__index = WindUI
-
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
-local LocalPlayer = Players.LocalPlayer
+local localPlayer = Players.LocalPlayer
 
-local function getParent()
-    local ok, hui = pcall(function() return gethui and gethui() or nil end)
-    if ok and hui then return hui end
-    local ok2, cg = pcall(function() return game:GetService("CoreGui") end)
-    if ok2 and cg then return cg end
-    return LocalPlayer:WaitForChild("PlayerGui")
-end
+local PRIMARY_DOMAIN = "www.keyt.cn"
+local BACKUP_DOMAIN = "keyt.srwz.net"
+local PING_PATH = "/kami/ping"
+local USER_ID = "wdfex12345"
+local APP_NAME = "a"
+local SIGN_KEY = "ec4ea19c08aaed1cb13ee0dfc6222ed4"
+local LOAD_SCRIPT_URL = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub2"
+local LOAD_SCRIPT_URL_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub2"
+local LOAD_FREE_SCRIPT_URL = "https://raw.githubusercontent.com/wdfexx/wdefx-Hub/refs/heads/main/wdfex-Hub%E5%85%8D%E8%B4%B9%E7%89%88"
+local LOAD_FREE_SCRIPT_URL_BACKUP = "https://cdn.jsdelivr.net/gh/wdfexx/wdefx-Hub@main/wdfex-Hub%E5%85%8D%E8%B4%B9%E7%89%88"
+local CARD_FILE = "wdfex_saved_card.txt"
 
-local Themes = {
-    Dark = {
-        Main=Color3.fromRGB(20,20,26), Sidebar=Color3.fromRGB(16,16,22),
-        Card=Color3.fromRGB(30,30,38), CardHover=Color3.fromRGB(38,38,48),
-        Accent=Color3.fromRGB(138,92,246), AccentDark=Color3.fromRGB(100,60,200),
-        Text=Color3.fromRGB(240,240,245), SubText=Color3.fromRGB(150,150,165),
-        Stroke=Color3.fromRGB(45,45,58), Outline=Color3.fromRGB(60,60,78),
-        Danger=Color3.fromRGB(230,70,70), Success=Color3.fromRGB(60,200,120),
-    },
-    Light = {
-        Main=Color3.fromRGB(245,245,250), Sidebar=Color3.fromRGB(235,235,242),
-        Card=Color3.fromRGB(255,255,255), CardHover=Color3.fromRGB(240,240,248),
-        Accent=Color3.fromRGB(120,80,230), AccentDark=Color3.fromRGB(90,60,180),
-        Text=Color3.fromRGB(25,25,35), SubText=Color3.fromRGB(110,110,125),
-        Stroke=Color3.fromRGB(215,215,225), Outline=Color3.fromRGB(190,190,205),
-        Danger=Color3.fromRGB(210,55,55), Success=Color3.fromRGB(40,180,100),
-    },
-    Indigo = {
-        Main=Color3.fromRGB(18,20,38), Sidebar=Color3.fromRGB(14,16,32),
-        Card=Color3.fromRGB(28,32,56), CardHover=Color3.fromRGB(36,40,70),
-        Accent=Color3.fromRGB(99,102,241), AccentDark=Color3.fromRGB(70,72,200),
-        Text=Color3.fromRGB(235,238,255), SubText=Color3.fromRGB(150,155,185),
-        Stroke=Color3.fromRGB(44,48,78), Outline=Color3.fromRGB(58,62,100),
-        Danger=Color3.fromRGB(230,70,70), Success=Color3.fromRGB(60,200,120),
-    },
-    Rose = {
-        Main=Color3.fromRGB(28,18,26), Sidebar=Color3.fromRGB(22,14,22),
-        Card=Color3.fromRGB(40,26,38), CardHover=Color3.fromRGB(52,34,50),
-        Accent=Color3.fromRGB(244,114,182), AccentDark=Color3.fromRGB(200,80,150),
-        Text=Color3.fromRGB(250,240,248), SubText=Color3.fromRGB(180,150,175),
-        Stroke=Color3.fromRGB(60,40,58), Outline=Color3.fromRGB(80,55,78),
-        Danger=Color3.fromRGB(230,70,70), Success=Color3.fromRGB(60,200,120),
-    },
-}
+local USING_BACKUP = false
+local attempts = 0
+local maxAttempts = 3
+local copyCooldown = false
+local unbindCooldown = false
+local isDragging = false
+local dragStart, frameStart
+local isMobile = UserInputService.TouchEnabled
+local isMouse = UserInputService.MouseEnabled
+local currentVersion = "paid"
 
-local Theme = Themes.Dark
-WindUI.Theme = Theme
-WindUI.Themes = Themes
-WindUI.DPIScale = 1
-
-local function corner(p, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = r or UDim.new(0, 8)
-    c.Parent = p
-    return c
-end
-
-local function stroke(p, color, thickness)
-    local s = Instance.new("UIStroke")
-    s.Color = color or Theme.Stroke
-    s.Thickness = thickness or 1
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Parent = p
-    return s
-end
-
-local function padding(p, t, r, b, l)
-    local pd = Instance.new("UIPadding")
-    pd.PaddingTop = UDim.new(0, t or 0)
-    pd.PaddingRight = UDim.new(0, r or t or 0)
-    pd.PaddingBottom = UDim.new(0, b or t or 0)
-    pd.PaddingLeft = UDim.new(0, l or r or t or 0)
-    pd.Parent = p
-    return pd
-end
-
-local function create(class, props, children)
-    local inst = Instance.new(class)
-    for k, v in pairs(props or {}) do inst[k] = v end
-    for _, c in ipairs(children or {}) do c.Parent = inst end
-    return inst
-end
-
-local function tween(obj, time, props)
-    local t = TweenService:Create(obj, TweenInfo.new(time or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
-    t:Play()
-    return t
-end
-
--- ========== 通知 ==========
-local NotifyHolder
-local function notifyHolder()
-    if NotifyHolder and NotifyHolder.Parent then return NotifyHolder end
-    NotifyHolder = create("ScreenGui", {
-        Name = "WindUI_Notify", ResetOnSpawn = false, IgnoreGuiInset = true,
-        DisplayOrder = 99999, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        Parent = getParent(),
-    })
-    return NotifyHolder
-end
-
-function WindUI:Notify(opts)
-    opts = opts or {}
-    local holder = notifyHolder()
-    local title = opts.Title or "通知"
-    local content = opts.Content or ""
-    local duration = opts.Duration or 4
-    local icon = opts.Icon
-
-    local card = create("Frame", {
-        Size = UDim2.fromOffset(300, 0), AutomaticSize = Enum.AutomaticSize.Y,
-        Position = UDim2.new(1, 340, 1, -20),
-        BackgroundColor3 = Theme.Main, BorderSizePixel = 0,
-        Parent = holder,
-    })
-    corner(card, UDim.new(0, 10))
-    stroke(card, Theme.Accent, 1.2)
-    padding(card, 12, 14, 12, 14)
-
-    local bar = create("Frame", {
-        Size = UDim2.new(1, -28, 0, 3), Position = UDim2.new(0, 14, 1, -4),
-        BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Parent = card,
-    })
-    corner(bar, UDim.new(1, 0))
-
-    create("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Accent,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = title, Parent = card,
-    })
-    if content ~= "" then
-        create("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-            Position = UDim2.new(0, 0, 0, 22), BackgroundTransparency = 1,
-            Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Theme.Text,
-            TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
-            TextYAlignment = Enum.TextYAlignment.Top, Text = content, Parent = card,
-        })
-    end
-
-    local idx = 0
-    for _, c in ipairs(holder:GetChildren()) do
-        if c:IsA("Frame") then idx = idx + 1 end
-    end
-    local yOffset = -20 - idx * 92
-    card.Position = UDim2.new(1, 340, 1, yOffset)
-    tween(card, 0.4, { Position = UDim2.new(1, -20, 1, yOffset) })
-    bar.Size = UDim2.new(1, -28, 0, 3)
-    tween(bar, duration, { Size = UDim2.new(0, 0, 0, 3) })
-
-    task.delay(duration, function()
-        tween(card, 0.3, { Position = UDim2.new(1, 340, 1, yOffset) })
-        task.wait(0.35)
-        card:Destroy()
-    end)
-end
-
--- ========== 控件 ==========
-local function makeToggle(parent, data)
-    local state = data.Value and true or false
-    local row = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, -60, 1, 0), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "开关",
-        Parent = row,
-    })
-    local btn = create("TextButton", {
-        Size = UDim2.fromOffset(42, 22), Position = UDim2.new(1, -42, 0.5, -11),
-        BackgroundColor3 = state and Theme.Accent or Theme.Card, Text = "",
-        AutoButtonColor = false, Parent = row,
-    })
-    corner(btn, UDim.new(1, 0))
-    stroke(btn, Theme.Outline, 1)
-    local dot = create("Frame", {
-        Size = UDim2.fromOffset(16, 16),
-        Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
-        BackgroundColor3 = Color3.new(1,1,1), Parent = btn,
-    })
-    corner(dot, UDim.new(1, 0))
-
-    local function render()
-        tween(btn, 0.15, { BackgroundColor3 = state and Theme.Accent or Theme.Card })
-        tween(dot, 0.15, {
-            Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
-        })
-    end
-    btn.MouseButton1Click:Connect(function()
-        state = not state
-        render()
-        if data.Callback then task.spawn(data.Callback, state) end
-    end)
-    render()
-    return { Set = function(_, v) state = v; render() end }
-end
-
-local function makeButton(parent, data)
-    local btn = create("TextButton", {
-        Size = UDim2.new(1, 0, 0, 32),
-        BackgroundColor3 = data.Danger and Theme.Danger or Theme.Card,
-        AutoButtonColor = false, Font = Enum.Font.GothamMedium,
-        TextSize = 13, TextColor3 = Theme.Text, Text = data.Title or "按钮",
-        Parent = parent,
-    })
-    corner(btn, UDim.new(0, 8))
-    stroke(btn, Theme.Outline, 1)
-    btn.MouseEnter:Connect(function()
-        tween(btn, 0.15, { BackgroundColor3 = data.Danger and Theme.Danger or Theme.CardHover })
-    end)
-    btn.MouseLeave:Connect(function()
-        tween(btn, 0.15, { BackgroundColor3 = data.Danger and Theme.Danger or Theme.Card })
-    end)
-    btn.MouseButton1Click:Connect(function()
-        if data.Callback then task.spawn(data.Callback) end
-    end)
-    return btn
-end
-
-local function makeSlider(parent, data)
-    local c = data.Value or {}
-    local minV, maxV = c.Min or 0, c.Max or 100
-    local cur = c.Default or minV
-    local step = data.Step or 1
-
-    local holder = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, -60, 0, 18), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "滑块",
-        Parent = holder,
-    })
-    local valText = create("TextLabel", {
-        Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -60, 0, 0),
-        BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12,
-        TextColor3 = Theme.Accent, TextXAlignment = Enum.TextXAlignment.Right,
-        Text = tostring(cur), Parent = holder,
-    })
-    local bar = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0, 28),
-        BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Parent = holder,
-    })
-    corner(bar, UDim.new(1, 0))
-    local fill = create("Frame", {
-        Size = UDim2.new((cur-minV)/(maxV-minV), 0, 1, 0),
-        BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Parent = bar,
-    })
-    corner(fill, UDim.new(1, 0))
-    local knob = create("Frame", {
-        Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new((cur-minV)/(maxV-minV), 0, 0.5, 0),
-        BackgroundColor3 = Color3.new(1,1,1), Parent = bar,
-    })
-    corner(knob, UDim.new(1, 0))
-    stroke(knob, Theme.Accent, 2)
-
-    local dragging = false
-    local function update(x)
-        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        local val = minV + (maxV - minV) * rel
-        val = math.floor(val / step + 0.5) * step
-        cur = val
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        knob.Position = UDim2.new(rel, 0, 0.5, 0)
-        valText.Text = tostring(val)
-        if data.Callback then task.spawn(data.Callback, val) end
-    end
-    bar.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            update(i.Position.X)
+local function saveCard(card)
+    pcall(function()
+        if type(writefile) == "function" then
+            writefile(CARD_FILE, card)
         end
     end)
-    UserInputService.InputChanged:Connect(function(i)
-        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-            update(i.Position.X)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-    return {
-        Set = function(_, v)
-            v = math.clamp(v, minV, maxV)
-            local rel = (v - minV) / (maxV - minV)
-            fill.Size = UDim2.new(rel, 0, 1, 0)
-            knob.Position = UDim2.new(rel, 0, 0.5, 0)
-            valText.Text = tostring(v)
-            cur = v
-        end
-    }
 end
 
-local function makeInput(parent, data)
-    local holder = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "输入",
-        Parent = holder,
-    })
-    local box = create("TextBox", {
-        Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 22),
-        BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Font = Enum.Font.Gotham,
-        TextSize = 12, TextColor3 = Theme.Text,
-        PlaceholderText = data.PlaceholderText or "输入...",
-        PlaceholderColor3 = Theme.SubText, Text = data.Value or "",
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ClearTextOnFocus = data.ClearTextOnFocus ~= false, Parent = holder,
-    })
-    corner(box, UDim.new(0, 6))
-    stroke(box, Theme.Outline, 1)
-    padding(box, 0, 8, 0, 8)
-    box.Focused:Connect(function()
-        tween(box, 0.15, { BackgroundColor3 = Theme.CardHover })
-    end)
-    box.FocusLost:Connect(function()
-        tween(box, 0.15, { BackgroundColor3 = Theme.Card })
-        if data.Callback then task.spawn(data.Callback, box.Text) end
-    end)
-    return box
-end
-
-local function makeDropdown(parent, data)
-    local values = data.Values or {}
-    local multi = data.Multi == true
-    local selected = data.Value
-    local open = false
-
-    local holder = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 46), BackgroundTransparency = 1,
-        ClipsDescendants = false, ZIndex = 5, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "选择",
-        Parent = holder,
-    })
-
-    local label = "选择..."
-    if type(selected) == "string" then label = selected
-    elseif type(selected) == "table" and #selected > 0 then label = table.concat(selected, ", ") end
-
-    local btn = create("TextButton", {
-        Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, 22),
-        BackgroundColor3 = Theme.Card, AutoButtonColor = false,
-        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = label,
-        ClipsDescendants = false, ZIndex = 6, Parent = holder,
-    })
-    corner(btn, UDim.new(0, 6))
-    stroke(btn, Theme.Outline, 1)
-    padding(btn, 0, 8, 0, 8)
-
-    local arrow = create("TextLabel", {
-        Size = UDim2.fromOffset(14, 14), Position = UDim2.new(1, -20, 0.5, -7),
-        BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 12,
-        TextColor3 = Theme.SubText, Text = "▼", Parent = btn,
-    })
-
-    local list = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 1, 4),
-        BackgroundColor3 = Theme.Sidebar, Visible = false,
-        ClipsDescendants = true, ZIndex = 20, Parent = btn,
-    })
-    corner(list, UDim.new(0, 6))
-    stroke(list, Theme.Outline, 1)
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 2)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = list
-    padding(list, 4)
-
-    local selSet = {}
-    if multi and type(selected) == "table" then
-        for _, v in ipairs(selected) do selSet[v] = true end
-    end
-
-    for _, v in ipairs(values) do
-        local item = create("TextButton", {
-            Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = Theme.Card,
-            AutoButtonColor = false, Font = Enum.Font.Gotham, TextSize = 12,
-            TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
-            Text = tostring(v), ZIndex = 21, Parent = list,
-        })
-        corner(item, UDim.new(0, 4))
-        padding(item, 0, 8, 0, 8)
-        if multi and selSet[v] then item.BackgroundColor3 = Theme.Accent end
-        if not multi and selected == v then item.BackgroundColor3 = Theme.Accent end
-        item.MouseButton1Click:Connect(function()
-            if multi then
-                selSet[v] = not selSet[v]
-                item.BackgroundColor3 = selSet[v] and Theme.Accent or Theme.Card
-                local out = {}
-                for k, on in pairs(selSet) do if on then table.insert(out, k) end end
-                btn.Text = #out > 0 and table.concat(out, ", ") or "选择..."
-                if data.Callback then task.spawn(data.Callback, out) end
-            else
-                btn.Text = tostring(v)
-                if data.Callback then task.spawn(data.Callback, v) end
-                open = false
-                list.Visible = false
-                list.Size = UDim2.new(1, 0, 0, 0)
-                arrow.Text = "▼"
+local function loadSavedCard()
+    local card = nil
+    pcall(function()
+        if type(readfile) == "function" and type(isfile) == "function" and isfile(CARD_FILE) then
+            card = readfile(CARD_FILE)
+            if card then
+                card = card:gsub("%s+", "")
             end
-        end)
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        open = not open
-        list.Visible = open
-        arrow.Text = open and "▲" or "▼"
-        tween(list, 0.2, {
-            Size = open and UDim2.new(1, 0, 0, math.min(#values * 26 + 8, 200)) or UDim2.new(1, 0, 0, 0),
-        })
+        end
     end)
-    return btn
+    return card
 end
 
-local function makeColorpicker(parent, data)
-    local color = data.Default or Color3.fromRGB(255,255,255)
-    local holder = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1,
-        ClipsDescendants = false, ZIndex = 5, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, -40, 1, 0), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "颜色",
-        Parent = holder,
-    })
-    local preview = create("TextButton", {
-        Size = UDim2.fromOffset(28, 22), Position = UDim2.new(1, -28, 0.5, -11),
-        BackgroundColor3 = color, Text = "", AutoButtonColor = false,
-        ZIndex = 6, Parent = holder,
-    })
-    corner(preview, UDim.new(0, 6))
-    stroke(preview, Theme.Outline, 1)
+local function deleteSavedCard()
+    pcall(function()
+        if type(delfile) == "function" and type(isfile) == "function" and isfile(CARD_FILE) then
+            delfile(CARD_FILE)
+        end
+    end)
+end
 
-    local palette = {
-        Color3.fromRGB(255,80,80), Color3.fromRGB(255,170,60),
-        Color3.fromRGB(255,240,80), Color3.fromRGB(120,230,120),
-        Color3.fromRGB(80,220,220), Color3.fromRGB(90,140,255),
-        Color3.fromRGB(160,110,255), Color3.fromRGB(255,110,200),
-        Color3.fromRGB(255,255,255), Color3.fromRGB(180,180,190),
-        Color3.fromRGB(120,120,130), Color3.fromRGB(40,40,50),
+local function getCurrentDomain()
+    if USING_BACKUP then return BACKUP_DOMAIN end
+    return PRIMARY_DOMAIN
+end
+
+local function getServerURL()
+    return "https://" .. getCurrentDomain() .. "/kami/" .. USER_ID .. "/check.php"
+end
+
+local function httpGet(url)
+    if type(syn) == "table" and type(syn.request) == "function" then
+        local ok, res = pcall(function()
+            return syn.request({ Url = url, Method = "GET" })
+        end)
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
+    end
+
+    if type(http_request) == "function" then
+        local ok, res = pcall(function()
+            return http_request({ Url = url, Method = "GET" })
+        end)
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
+    end
+
+    if type(request) == "function" then
+        local ok, res = pcall(function()
+            return request({ Url = url, Method = "GET" })
+        end)
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
+    end
+
+    if type(http) == "table" and type(http.request) == "function" then
+        local ok, res = pcall(function()
+            return http.request({ Url = url, Method = "GET" })
+        end)
+        if ok and res and (res.Body or res.body) then
+            return res.Body or res.body
+        end
+    end
+
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if ok and type(res) == "string" and #res > 0 then
+        return res
+    end
+
+    return nil
+end
+
+local function httpGetWithTimeout(url, timeout)
+    local result = nil
+    local done = false
+    task.spawn(function()
+        result = httpGet(url)
+        done = true
+    end)
+    local startTime = tick()
+    while not done and tick() - startTime < timeout do
+        task.wait(0.1)
+    end
+    if done then return result end
+    return nil
+end
+
+local function probeDomain()
+    local url = "https://" .. PRIMARY_DOMAIN .. PING_PATH
+    local raw = httpGetWithTimeout(url, 5)
+    if raw and string.find(raw, "ok") then
+        return true
+    end
+    USING_BACKUP = true
+    return false
+end
+
+local function extractBiz(raw)
+    if not raw then return "" end
+    local body = raw
+    local signPos = string.find(body, "|sign=")
+    if signPos then body = string.sub(body, 1, signPos - 1) end
+    local lastPipe = nil
+    for i = #body, 1, -1 do
+        if string.sub(body, i, i) == "|" then lastPipe = i; break end
+    end
+    if lastPipe then return string.sub(body, 1, lastPipe - 1) end
+    return body
+end
+
+local function transMsg(code)
+    local map = {
+        already_online = "该卡密已在线",
+        online_limit_reached = "在线设备数已满",
+        activate = "激活成功",
+        valid = "验证通过",
+        permanent = "终身有效",
+        heartbeat = "心跳正常",
+        bypass = "验证已关闭",
+        unbind_ok = "解绑成功",
+        invalid_card = "卡密无效",
+        expired = "卡密已过期",
+        banned = "卡密已被禁用",
+        device_mismatch = "设备不匹配",
+        missing_params = "参数不完整",
+        too_frequent = "请求太频繁，请稍后再试",
+        system_locked = "系统已被管理员锁死",
     }
-    local panel = create("Frame", {
-        Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(1, 0, 1, 4),
-        AnchorPoint = Vector2.new(1, 0),
-        BackgroundColor3 = Theme.Sidebar, Visible = false,
-        ClipsDescendants = true, ZIndex = 20, Parent = preview,
-    })
-    corner(panel, UDim.new(0, 6))
-    stroke(panel, Theme.Outline, 1)
-    local grid = Instance.new("UIGridLayout")
-    grid.CellSize = UDim2.fromOffset(22, 22)
-    grid.CellPadding = UDim2.fromOffset(4, 4)
-    grid.Parent = panel
-    padding(panel, 4)
+    return map[code] or code
+end
 
-    local open = false
-    for _, c in ipairs(palette) do
-        local sw = create("TextButton", {
-            BackgroundColor3 = c, Text = "", AutoButtonColor = false,
-            ZIndex = 21, Parent = panel,
-        })
-        corner(sw, UDim.new(0, 4))
-        stroke(sw, Theme.Outline, 1)
-        sw.MouseButton1Click:Connect(function()
-            color = c
-            preview.BackgroundColor3 = c
-            if data.Callback then task.spawn(data.Callback, c) end
-        end)
+local function formatExpireTime(biz)
+    local parts = {}
+    for p in string.gmatch(biz, "([^|]+)") do
+        table.insert(parts, p)
+    end
+    local days = parts[3] or "0"
+    local mins = parts[4] or "0"
+    local lowerDays = string.lower(tostring(days))
+    if lowerDays == "permanent" or lowerDays == "终身" or tostring(days) == "9999" then
+        return "永久有效"
+    end
+    local totalSeconds = (tonumber(days) or 0) * 86400 + (tonumber(mins) or 0) * 60
+    if totalSeconds <= 0 then return "永久有效" end
+    local expireTime = os.time() + totalSeconds
+    local year = tonumber(os.date("%Y", expireTime))
+    local month = tonumber(os.date("%m", expireTime))
+    local day = tonumber(os.date("%d", expireTime))
+    local hour = tonumber(os.date("%H", expireTime))
+    local minute = tonumber(os.date("%M", expireTime))
+    return year .. "年" .. month .. "月" .. day .. "日 " .. hour .. ":" .. minute
+end
+
+local function getFingerprint()
+    local fpFile = "wdfex_fp.txt"
+    local cached = nil
+    pcall(function()
+        if type(readfile) == "function" and type(isfile) == "function" and isfile(fpFile) then
+            cached = readfile(fpFile)
+        end
+    end)
+    if cached and #cached > 6 then return cached end
+    local rand = ""
+    for _ = 1, 8 do rand = rand .. string.char(math.random(48, 57)) end
+    local fp = localPlayer.Name .. "-" .. localPlayer.UserId .. "-" .. rand .. "MAC"
+    pcall(function()
+        if type(writefile) == "function" then writefile(fpFile, fp) end
+    end)
+    return fp
+end
+local FP = getFingerprint()
+
+local function checkCard(card)
+    local ts = os.time()
+    local url = string.format("%s?card=%s&mac=%s&app=%s&heart=1&t=%d",
+        getServerURL(), HttpService:UrlEncode(card), HttpService:UrlEncode(FP), APP_NAME, ts)
+    local raw = httpGetWithTimeout(url, 10)
+    if not raw then return false, "网络超时或连接失败", nil end
+    local biz = extractBiz(raw)
+    if string.sub(biz, 1, 3) == "ok|" then
+        return true, biz, formatExpireTime(biz)
+    elseif string.sub(biz, 1, 6) == "error|" then
+        local code = string.match(biz, "error|([^|]+)") or "unknown"
+        return false, transMsg(code), nil
+    end
+    return false, "未知响应: " .. biz, nil
+end
+
+local function unbindCard(card)
+    local ts = os.time()
+    local url = string.format("%s?act=unbind&card=%s&mac=%s&app=%s&t=%d",
+        getServerURL(), HttpService:UrlEncode(card), HttpService:UrlEncode(FP), APP_NAME, ts)
+    local raw = httpGetWithTimeout(url, 10)
+    if not raw then return false, "网络超时或连接失败" end
+    local biz = extractBiz(raw)
+    if string.find(biz, "unbind_ok") or string.sub(biz, 1, 3) == "ok|" then
+        return true, "解绑成功"
+    elseif string.sub(biz, 1, 6) == "error|" then
+        local code = string.match(biz, "error|([^|]+)") or "unknown"
+        return false, transMsg(code)
+    end
+    return false, "未知响应: " .. biz
+end
+
+local function getSwitch()
+    local url = string.format("%s?act=get_switch&app=%s&t=%d",
+        getServerURL(), APP_NAME, os.time())
+    local raw = httpGetWithTimeout(url, 5)
+    if not raw then return "CARD_ON" end
+    if string.find(raw, "system_locked") then return "CARD_LOCKED" end
+    if string.find(raw, "CARD_OFF") then return "CARD_OFF" end
+    return "CARD_ON"
+end
+
+local function runString(source)
+    if type(source) ~= "string" or #source < 10 then
+        return false, "源码无效"
     end
 
-    preview.MouseButton1Click:Connect(function()
-        open = not open
-        panel.Visible = open
-        tween(panel, 0.2, {
-            Size = open and UDim2.new(0, 172, 0, 110) or UDim2.new(0, 0, 0, 0),
-        })
-    end)
-    return preview
+    local func = nil
+
+    if type(loadstring) == "function" then
+        local ok, f = pcall(loadstring, source)
+        if ok and type(f) == "function" then func = f end
+    end
+
+    if not func and type(load) == "function" then
+        local ok, f = pcall(load, source)
+        if ok and type(f) == "function" then func = f end
+    end
+
+    if not func then
+        return false, "执行器不支持 loadstring 或 load"
+    end
+
+    local ok2, err2 = pcall(func)
+    if not ok2 then
+        return false, "执行脚本出错: " .. tostring(err2)
+    end
+
+    return true, "脚本已运行"
 end
 
-local function makeKeybind(parent, data)
-    local key = data.Value or "None"
-    local holder = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, Parent = parent,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, -80, 1, 0), BackgroundTransparency = 1,
-        Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = Theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Text = data.Title or "按键",
-        Parent = holder,
-    })
-    local btn = create("TextButton", {
-        Size = UDim2.fromOffset(72, 24), Position = UDim2.new(1, -72, 0.5, -12),
-        BackgroundColor3 = Theme.Card, AutoButtonColor = false,
-        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Theme.Text,
-        Text = key, Parent = holder,
-    })
-    corner(btn, UDim.new(0, 6))
-    stroke(btn, Theme.Outline, 1)
-
-    local waiting = false
-    btn.MouseButton1Click:Connect(function()
-        waiting = true
-        btn.Text = "..."
-        btn.BackgroundColor3 = Theme.Accent
-    end)
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if waiting and input.UserInputType == Enum.UserInputType.Keyboard then
-            waiting = false
-            key = input.KeyCode.Name
-            btn.Text = key
-            btn.BackgroundColor3 = Theme.Card
-            if data.Callback then task.spawn(data.Callback, key) end
-        end
-    end)
-    return btn
-end
-
--- ========== 主窗口 ==========
-function WindUI:CreateWindow(opts)
-    opts = opts or {}
-    Theme = Themes[opts.Theme or "Dark"] or Themes.Dark
-    self.Theme = Theme
-
-    local gui = create("ScreenGui", {
-        Name = "WindUI_" .. (opts.Title or "Window"),
-        ResetOnSpawn = false, IgnoreGuiInset = true,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 999,
-        Parent = getParent(),
-    })
-
-    local main = create("Frame", {
-        Size = opts.Size or UDim2.fromOffset(640, 480),
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = Theme.Main, BorderSizePixel = 0,
-        Parent = gui,
-    })
-    corner(main, UDim.new(0, 12))
-    stroke(main, Theme.Stroke, 1)
-
-    -- 标题栏
-    local titleBar = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 42),
-        BackgroundColor3 = Theme.Sidebar, BorderSizePixel = 0,
-        Parent = main,
-    })
-    corner(titleBar, UDim.new(0, 12))
-    create("Frame", {
-        Size = UDim2.new(1, 0, 0, 14), Position = UDim2.new(0, 0, 1, -14),
-        BackgroundColor3 = Theme.Sidebar, BorderSizePixel = 0,
-        Parent = titleBar,
-    })
-
-    local iconLabel = create("TextLabel", {
-        Size = UDim2.fromOffset(24, 24), Position = UDim2.new(0, 14, 0.5, -12),
-        BackgroundColor3 = Theme.Accent, Text = opts.Icon or "★",
-        Font = Enum.Font.GothamBold, TextSize = 12,
-        TextColor3 = Color3.new(1,1,1), Parent = titleBar,
-    })
-    corner(iconLabel, UDim.new(0, 6))
-
-    create("TextLabel", {
-        Size = UDim2.new(1, -160, 0, 18), Position = UDim2.new(0, 46, 0, 6),
-        BackgroundTransparency = 1, Font = Enum.Font.GothamBold, Text pairsSize = 14,
-        TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
-        Text = opts.Title or "WindUI", Parent = titleBar,
-    })
-    create("TextLabel", {
-        Size = UDim2.new(1, -160, 0, 14), Position = UDim2.new(0, 46, 0, 23),
-        BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 10,
-        TextColor3 = Theme.SubText, TextXAlignment = Enum.TextXAlignment.Left,
-        Text = opts.Author or "by WindUI", Parent = titleBar,
-    })
-
-    -- 最小化按钮
-    local minBtn = create("TextButton", {
-        Size = UDim2.fromOffset(28, 24), Position = UDim2.new(1, -70, 0.5, -12),
-        BackgroundColor3 = Theme.Card, AutoButtonColor = false,
-        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Text,
-        Text = "─", Parent = titleBar,
-    })
-    corner(minBtn, UDim.new(0, 6))
-
-    -- 关闭按钮
-    local closeBtn = create("TextButton", {
-        Size = UDim2.fromOffset(28, 24), Position = UDim2.new(1, -36, 0.5, -12),
-        BackgroundColor3 = Theme.Danger, AutoButtonColor = false,
-        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.new(1,1,1),
-        Text = "×", Parent = titleBar,
-    })
-    corner(closeBtn, UDim.new(0, 6))
-
-    -- 拖动
-    local dragging, dragStart, startPos
-    titleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = main.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.Mouse(tMovement or input.UserInputabType == Enum.UserInputType.Touch) then
-            local d = input.Position - dragStart
-            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    -- 侧边栏
-    local sidebar = create("Frame", {
-        Size = UDim2.new(0, opts.SideBarWidth or 160, 1, -58),
-        Position = UDim2.new(0, 10, 0, 50),
-        BackgroundColor3 = Theme.Sidebar, BorderSizePixel = 0,
-        Parent = main,
-    })
-    corner(sidebar, UDim.new(0, 10))
-    stroke(sidebar, Theme.Stroke, 1)
-    local sideLayout = Instance.new("UIListLayout")
-    sideLayout.Padding = UDim.new(0, 4)
-    sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    sideLayout.Parent = sidebar
-Buttons    padding(sidebar, 6)
-
-    -- 内容)区
-    local content = create("Frame", {
-        Size = UDim2.new(1, -(opts.SideBarWidth or 160) - 30, 1, -62),
-        Position = UDim2.new(0, (opts.SideBarWidth or 160) + 20, 0, 54),
-        BackgroundTransparency = 1, ClipsDescendants = true,
-        Parent = main,
-    })
-
-    -- 悬浮窗（最小化后）
-    local minimized = false
-    local miniHolder = create("ScreenGui", {
-        Name = "WindUI_Mini", ResetOnSpawn = false, IgnoreGuiInset = true,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 9998,
-        Parent = getParent(),
-    })
-    local miniBtn = create("TextButton", {
-        Size = UDim2.fromOffset(48, 48),
-        Position = UDim2.new(0, 20, 0.5, -24),
-        BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
-        Text = opts.Icon or "★", Font = Enum.Font.GothamBold,
-        TextSize = 18, TextColor3 = Color3.new(1,1,1),
-        AutoButtonColor = false,
-        Visible = false,
-        Parent = miniHolder,
-    })
-    corner(miniBtn, UDim.new(1, 0))
-    stroke(miniBtn, Theme.AccentDark, 2)
-
-    local miniDragging, miniStart, miniPos
-    miniBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            miniDragging = true
-            miniStart = input.Position
-            miniPos = miniBtn.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if miniDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local d = input.Position - miniStart
-            miniBtn.Position = UDim2.new(miniPos.X.Scale, miniPos.X.Offset + d.X, miniPos.Y.Scale, miniPos.Y.Offset + d.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            miniDragging = false
-        end
-    end)
-
-    local function setMinimize(state)
-        minimized = state
-        if state then
-            tween(main, 0.25, { Position = UDim2.new(0.5, 0, 1.5, 0) })
-            task.delay(0.25, function()
-                main.Visible = false
-            end)
-            task.delay(0.3, function()
-                miniBtn.Visible = true
-                miniBtn.Size = UDim2.fromOffset(0, 0)
-                tween(miniBtn, 0.25, { Size = UDim2.fromOffset(48, 48) })
-            end)
+local function loadScriptFromURLs(urls, label)
+    for _, url in ipairs(urls) do
+        local source = httpGetWithTimeout(url, 15)
+        if source and #source > 10 then
+            local ok, msg = runString(source)
+            if ok then
+                print("[wdfex-Hub] " .. label .. " 加载成功")
+                return true
+            else
+                warn("[wdfex-Hub] " .. label .. " 执行失败: " .. tostring(msg))
+            end
         else
-            miniBtn.Visible = false
-            main.Visible = true
-            main.Position = UDim2.new(0.5, 0, 0.5, 0)
-            main.Size = UDim2.fromOffset(0, 0)
-            tween(main, 0.25, { Size = opts.Size or UDim2.fromOffset(640, 480) })
+            warn("[wdfex-Hub] " .. label .. " 下载失败: " .. url)
         end
+        task.wait(0.5)
     end
-
-    minBtn.MouseButton1Click:Connect(function() setMinimize(true) end)
-    closeBtn.MouseButton1Click:Connect(function()
-        gui.Enabled = false
-        miniHolder.Enabled = false
-    end)
-    miniBtn.MouseButton1Click:Connect(function()
-        if miniDragging then return end
-        setMinimize(false)
-    end)
-
-    -- 状态
-    local tabs, tabButtons = {}, {}
-    local currentTab
-
-    local function selectTab(name)
-        for n, page in pairs(tabs) do page.Visible = (n == name) end
-        for n, btn in do
-            if n == name then
-                tween(btn, 0.15, { BackgroundColor3 = Theme.Accent })
-                tween(btn.IconLabel, 0.15, { TextColor3 = Color3.new(1,1,1) })
-                tween(btn.TitleLabel, 0.15, { TextColor3 = Color3.new(1,1,1) })
-            else
-                tween(btn, 0.15, { BackgroundColor3 = Theme.Card })
-                tween(btn.IconLabel, 0.15, { TextColor3 = Theme.Accent })
-                tween(btn.TitleLabel, 0.15, { TextColor3 = Theme.Text })
-            end
-        end
-        currentTab = name
-    end
-
-    local window = {
-        Gui = gui, Main = main, Content = content, Sidebar = sidebar,
-        MiniBtn = miniBtn, Theme = Theme, Tabs = tabs,
-        SelectTab = selectTab, SetMinimize = setMinimize,
-    }
-    setmetatable(window, WindUI)
-
-    function window:Tab(tabOpts)
-        tabOpts = tabOpts or {}
-        local name = tabOpts.Title or "标签"
-        local icon = tabOpts.Icon or "●"
-
-        local btn = create("TextButton", {
-            Size = UDim2.new(1, 0, 0, 34),
-            BackgroundColor3 = Theme.Card, AutoButtonColor = false,
-            Text = "", Parent = sidebar,
-        })
-        corner(btn, UDim.new(0, 8))
-        local iconLbl = create("TextLabel", {
-            Size = UDim2.fromOffset(20, 20), Position = UDim2.new(0, 8, 0.5, -10),
-            BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
-            TextSize = 13, TextColor3 = Theme.Accent,
-            Text = icon, Parent = btn,
-        })
-        iconLbl.Name = "IconLabel"
-        local titleLbl = create("TextLabel", {
-            Size = UDim2.new(1, -36, 1, 0), Position = UDim2.new(0, 32, 0, 0),
-            BackgroundTransparency = 1, Font = Enum.Font.GothamMedium,
-            TextSize = 13, TextColor3 = Theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Text = name,
-            Parent = btn,
-        })
-        titleLbl.Name = "TitleLabel"
-        btn.IconLabel = iconLbl
-        btn.TitleLabel = titleLbl
-
-        btn.MouseButton1Click:Connect(function() selectTab(name) end)
-        tabButtons[name] = btn
-
-        local page = create("ScrollingFrame", {
-            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
-            BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0),
-            ScrollBarThickness = 4, ScrollBarImageColor3 = Theme.Accent,
-            AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false,
-            Parent = content,
-        })
-        local pageLayout = Instance.new("UIListLayout")
-        pageLayout.Padding = UDim.new(0, 8)
-        pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        pageLayout.Parent = page
-        padding(page, 4, 6, 12, 4)
-        tabs[name] = page
-
-        local tabObj = { Page = page, Name = name }
-        setmetatable(tabObj, WindUI)
-
-        function tabObj:Section(secOpts)
-            secOpts = secOpts or {}
-            local holder = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
-                Parent = page,
-            })
-            local header = create("TextButton", {
-                Size = UDim2.new(1, 0, 0, 34),
-                BackgroundColor3 = Theme.Card, AutoButtonColor = false,
-                Text = "", Parent = holder,
-            })
-            corner(header, UDim.new(0, 8))
-            stroke(header, Theme.Stroke, 1)
-            create("TextLabel", {
-                Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 12, 0, 0),
-                BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
-                TextSize = 13, TextColor3 = Theme.Text,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Text = secOpts.Title or "分区", Parent = header,
-            })
-            local arrowLbl = create("TextLabel", {
-                Size = UDim2.fromOffset(16, 16), Position = UDim2.new(1, -22, 0.5, -8),
-                BackgroundTransparency = 1, Font = Enum.Font.GothamBold,
-                TextSize = 12, TextColor3 = Theme.SubText, Text = "▼",
-                Parent = header,
-            })
-
-            local body = create("Frame", {
-                Size = UDim2.new(1, -12, 0, 0), Position = UDim2.new(0, 6, 0, 40),
-                BackgroundColor3 = Theme.Sidebar, BorderSizePixel = 0,
-                Parent = holder,
-            })
-            corner(body, UDim.new(0, 8))
-            stroke(body, Theme.Stroke, 1)
-            local bodyLayout = Instance.new("UIListLayout")
-            bodyLayout.Padding = UDim.new(0, 6)
-            bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            bodyLayout.Parent = body
-            padding(body, 10, 12, 10, 12)
-
-            local function layout()
-                body.Size = UDim2.new(1, -12, 0, bodyLayout.AbsoluteContentSize.Y + 20)
-                holder.Size = UDim2.new(1, 0, 0, body.Size.Y.Offset + 46)
-            end
-            layout()
-            bodyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(layout)
-
-            local open = secOpts.Opened ~= false
-            body.Visible = open
-            arrowLbl.Text = open and "▼" or "▶"
-            if not open then holder.Size = UDim2.new(1, 0, 0, 34) end
-
-            header.MouseButton1Click:Connect(function()
-                open = not open
-                arrowLbl.Text = open and "▼" or "▶"
-                if open then
-                    body.Visible = true
-                    layout()
-                else
-                    body.Visible = false
-                    holder.Size = UDim2.new(1, 0, 0, 34)
-                end
-            end)
-
-            local sec = { Body = body, Holder = holder }
-            setmetatable(sec, WindUI)
-
-            function sec:Toggle(d) return makeToggle(body, d) end
-            function sec:Button(d) return makeButton(body, d) end
-            function sec:Slider(d) return makeSlider(body, d) end
-            function sec:Input(d) return makeInput(body, d) end
-            function sec:Dropdown(d) return makeDropdown(body, d) end
-            function sec:Colorpicker(d) return makeColorpicker(body, d) end
-            function sec:Keybind(d) return makeKeybind(body, d) end
-            function sec:Divider()
-                return create("Frame", {
-                    Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Theme.Stroke,
-                    BorderSizePixel = 0, Parent = body,
-                })
-            end
-            function sec:Label(text)
-                return create("TextLabel", {
-                    Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1,
-                    Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Theme.SubText,
-                    TextXAlignment = Enum.TextXAlignment.Left, Text = text or "",
-                    Parent = body,
-                })
-            end
-            function sec:Paragraph(p)
-                local card = create("Frame", {
-                    Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-                    BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Parent = body,
-                })
-                corner(card, UDim.new(0, 8))
-                padding(card, 10, 12, 10, 12)
-                create("TextLabel", {
-                    Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1,
-                    Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Theme.Text,
-                    TextXAlignment = Enum.TextXAlignment.Left, Text = p.Title or "",
-                    Parent = card,
-                })
-                create("TextLabel", {
-                    Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-                    Position = UDim2.new(0, 0, 0, 20), BackgroundTransparency = 1,
-                    Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Theme.SubText,
-                    TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
-                    TextYAlignment = Enum.TextYAlignment.Top, Text = p.Desc or "",
-                    Parent = card,
-                })
-                return card
-            end
-
-            return sec
-        end
-
-        return tabObj
-    end
-
-    function window:SetTheme(name)
-        local nt = Themes[name]
-        if not nt then return end
-        Theme = nt
-        self.Theme = Theme
-        tween(main, 0.2, { BackgroundColor3 = Theme.Main })
-        tween(titleBar, 0.2, { BackgroundColor3 = Theme.Sidebar })
-        tween(sidebar, 0.2, { BackgroundColor3 = Theme.Sidebar })
-        for _, btn in pairs(tabButtons) do
-            if btn.BackgroundColor3 ~= Theme.Accent then
-                tween(btn, 0.2, { BackgroundColor3 = Theme.Card })
-            end
-            btn.TitleLabel.TextColor3 = Theme.Text
-            btn.IconLabel.TextColor3 = Theme.Accent
-        end
-        tween(miniBtn, 0.2, { BackgroundColor3 = Theme.Accent })
-    end
-
-    function window:Toggle()
-        gui.Enabled = not gui.Enabled
-        miniHolder.Enabled = gui.Enabled
-    end
-
-    function window:Destroy()
-        gui:Destroy()
-        miniHolder:Destroy()
-        if NotifyHolder then NotifyHolder:Destroy() end
-    end
-
-    -- 快捷键
-    local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == toggleKey then
-            window:Toggle()
-        end
-    end)
-
-    local first = next(tabs)
-    if first then selectTab(first) end
-
-    return window
+    return false
 end
 
-return WindUI
+local function loadMainScript()
+    return loadScriptFromURLs({ LOAD_SCRIPT_URL, LOAD_SCRIPT_URL_BACKUP }, "付费版脚本")
+end
+
+local function loadFreeScript()
+    return loadScriptFromURLs({ LOAD_FREE_SCRIPT_URL, LOAD_FREE_SCRIPT_URL_BACKUP }, "免费版脚本")
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "wdfexKakaAuth"
+ScreenGui.Parent = localPlayer.PlayerGui
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 100
+
+local BackgroundOverlay = Instance.new("Frame")
+BackgroundOverlay.Parent = ScreenGui
+BackgroundOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BackgroundOverlay.BackgroundTransparency = 0.7
+BackgroundOverlay.Size = UDim2.new(1, 0, 1, 0)
+BackgroundOverlay.ZIndex = 1
+
+local MainWin = Instance.new("Frame")
+MainWin.Parent = ScreenGui
+MainWin.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainWin.Position = UDim2.new(0.5, -150, 0.5, -210)
+MainWin.Size = UDim2.new(0, 300, 0, 420)
+MainWin.ZIndex = 2
+MainWin.Active = true
+MainWin.Selectable = true
+
+local WinCorner = Instance.new("UICorner")
+WinCorner.Parent = MainWin
+WinCorner.CornerRadius = UDim.new(0, 12)
+
+local WinGlow = Instance.new("UIStroke")
+WinGlow.Parent = MainWin
+WinGlow.Color = Color3.fromRGB(90, 90, 90)
+WinGlow.Thickness = 1.5
+WinGlow.Transparency = 0.7
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Parent = MainWin
+TitleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+TitleBar.Position = UDim2.new(0, 0, 0, 0)
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.ZIndex = 3
+TitleBar.Active = true
+TitleBar.Selectable = true
+
+local TitleBarCorner = Instance.new("UICorner")
+TitleBarCorner.Parent = TitleBar
+TitleBarCorner.CornerRadius = UDim.new(0, 12, 0, 0)
+
+local StatusLight = Instance.new("Frame")
+StatusLight.Parent = TitleBar
+StatusLight.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+StatusLight.Position = UDim2.new(0, 8, 0.5, -4)
+StatusLight.Size = UDim2.new(0, 8, 0, 8)
+StatusLight.ZIndex = 4
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.Parent = StatusLight
+StatusCorner.CornerRadius = UDim.new(1, 0)
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Parent = TitleBar
+StatusText.BackgroundTransparency = 1
+StatusText.Position = UDim2.new(0, 20, 0.5, -6)
+StatusText.Size = UDim2.new(0, 80, 0, 12)
+StatusText.Font = Enum.Font.GothamMedium
+StatusText.Text = "未验证"
+StatusText.TextColor3 = Color3.fromRGB(255, 150, 150)
+StatusText.TextSize = 9
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.ZIndex = 4
+
+local TitleAccent = Instance.new("Frame")
+TitleAccent.Parent = TitleBar
+TitleAccent.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TitleAccent.Position = UDim2.new(0, 0, 1, -1)
+TitleAccent.Size = UDim2.new(1, 0, 0, 1)
+TitleAccent.ZIndex = 4
+
+local Title = Instance.new("TextLabel")
+Title.Parent = TitleBar
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Font = Enum.Font.GothamBlack
+Title.Text = "wdfex-Hub 卡密验证"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 18
+Title.TextXAlignment = Enum.TextXAlignment.Center
+Title.TextYAlignment = Enum.TextYAlignment.Center
+Title.ZIndex = 4
+
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Parent = TitleBar
+SubTitle.BackgroundTransparency = 1
+SubTitle.Position = UDim2.new(0, 0, 0, 25)
+SubTitle.Size = UDim2.new(1, 0, 0, 12)
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.Text = "卡密通验证系统"
+SubTitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+SubTitle.TextSize = 10
+SubTitle.TextXAlignment = Enum.TextXAlignment.Center
+SubTitle.ZIndex = 4
+
+local UIDLabel = Instance.new("TextLabel")
+UIDLabel.Parent = MainWin
+UIDLabel.BackgroundTransparency = 1
+UIDLabel.Position = UDim2.new(0, 12, 0, 45)
+UIDLabel.Size = UDim2.new(1, -24, 0, 16)
+UIDLabel.Font = Enum.Font.Gotham
+UIDLabel.Text = "设备UID: " .. FP
+UIDLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+UIDLabel.TextSize = 10
+UIDLabel.TextXAlignment = Enum.TextXAlignment.Left
+UIDLabel.TextTruncate = Enum.TextTruncate.AtEnd
+UIDLabel.ZIndex = 3
+
+local WarningCard = Instance.new("Frame")
+WarningCard.Parent = MainWin
+WarningCard.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+WarningCard.Position = UDim2.new(0.5, -135, 0, 65)
+WarningCard.Size = UDim2.new(0, 270, 0, 35)
+WarningCard.ZIndex = 3
+
+local WarningCorner = Instance.new("UICorner")
+WarningCorner.Parent = WarningCard
+WarningCorner.CornerRadius = UDim.new(0, 6)
+
+local WarningStroke = Instance.new("UIStroke")
+WarningStroke.Parent = WarningCard
+WarningStroke.Color = Color3.fromRGB(255, 110, 110)
+WarningStroke.Thickness = 1
+WarningStroke.Transparency = 0.2
+
+local WarningText = Instance.new("TextLabel")
+WarningText.Parent = WarningCard
+WarningText.BackgroundTransparency = 1
+WarningText.Position = UDim2.new(0, 12, 0, 0)
+WarningText.Size = UDim2.new(1, -24, 1, 0)
+WarningText.Font = Enum.Font.GothamMedium
+WarningText.Text = "购买卡密请找作者购买"
+WarningText.TextColor3 = Color3.fromRGB(255, 180, 180)
+WarningText.TextSize = 11
+WarningText.TextXAlignment = Enum.TextXAlignment.Left
+WarningText.TextYAlignment = Enum.TextYAlignment.Center
+WarningText.ZIndex = 4
+
+local GroupCard = Instance.new("Frame")
+GroupCard.Parent = MainWin
+GroupCard.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
+GroupCard.Position = UDim2.new(0.5, -135, 0, 105)
+GroupCard.Size = UDim2.new(0, 270, 0, 50)
+GroupCard.ZIndex = 3
+
+local GroupCorner = Instance.new("UICorner")
+GroupCorner.Parent = GroupCard
+GroupCorner.CornerRadius = UDim.new(0, 8)
+
+local GroupGlow = Instance.new("UIStroke")
+GroupGlow.Parent = GroupCard
+GroupGlow.Color = Color3.fromRGB(80, 120, 200)
+GroupGlow.Thickness = 1.5
+GroupGlow.Transparency = 0.3
+
+local GroupLabel = Instance.new("TextLabel")
+GroupLabel.Parent = GroupCard
+GroupLabel.BackgroundTransparency = 1
+GroupLabel.Position = UDim2.new(0, 45, 0, 8)
+GroupLabel.Size = UDim2.new(0, 200, 0, 16)
+GroupLabel.Font = Enum.Font.GothamBold
+GroupLabel.Text = "点击复制作者QQ"
+GroupLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+GroupLabel.TextSize = 11
+GroupLabel.TextXAlignment = Enum.TextXAlignment.Left
+GroupLabel.ZIndex = 4
+
+local GroupNumber = Instance.new("TextLabel")
+GroupNumber.Parent = GroupCard
+GroupNumber.BackgroundTransparency = 1
+GroupNumber.Position = UDim2.new(0, 45, 0, 24)
+GroupNumber.Size = UDim2.new(0, 200, 0, 20)
+GroupNumber.Font = Enum.Font.GothamBlack
+GroupNumber.Text = "1687426335"
+GroupNumber.TextColor3 = Color3.fromRGB(255, 255, 255)
+GroupNumber.TextSize = 18
+GroupNumber.TextXAlignment = Enum.TextXAlignment.Left
+GroupNumber.ZIndex = 4
+
+local CopyButton = Instance.new("TextButton")
+CopyButton.Parent = GroupCard
+CopyButton.BackgroundTransparency = 1
+CopyButton.Size = UDim2.new(1, 0, 1, 0)
+CopyButton.Text = ""
+CopyButton.ZIndex = 5
+CopyButton.AutoButtonColor = false
+
+local WhitelistNote = Instance.new("TextLabel")
+WhitelistNote.Parent = MainWin
+WhitelistNote.BackgroundTransparency = 1
+WhitelistNote.Position = UDim2.new(0, 0, 0, 160)
+WhitelistNote.Size = UDim2.new(1, 0, 0, 16)
+WhitelistNote.Font = Enum.Font.GothamMedium
+WhitelistNote.Text = "卡密售价4元"
+WhitelistNote.TextColor3 = Color3.fromRGB(255, 200, 80)
+WhitelistNote.TextSize = 11
+WhitelistNote.TextXAlignment = Enum.TextXAlignment.Center
+WhitelistNote.ZIndex = 3
+
+local VersionDropdown = Instance.new("Frame")
+VersionDropdown.Parent = MainWin
+VersionDropdown.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+VersionDropdown.Position = UDim2.new(0.5, -80, 0, 182)
+VersionDropdown.Size = UDim2.new(0, 160, 0, 30)
+VersionDropdown.ZIndex = 6
+VersionDropdown.Active = true
+
+local VDCorner = Instance.new("UICorner")
+VDCorner.CornerRadius = UDim.new(0, 8)
+VDCorner.Parent = VersionDropdown
+
+local VDStroke = Instance.new("UIStroke")
+VDStroke.Color = Color3.fromRGB(80, 120, 200)
+VDStroke.Thickness = 1
+VDStroke.Parent = VersionDropdown
+
+local VDLabel = Instance.new("TextLabel")
+VDLabel.Size = UDim2.new(1, -34, 1, 0)
+VDLabel.Position = UDim2.new(0, 12, 0, 0)
+VDLabel.BackgroundTransparency = 1
+VDLabel.Text = "付费版"
+VDLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+VDLabel.TextSize = 13
+VDLabel.Font = Enum.Font.GothamBold
+VDLabel.TextXAlignment = Enum.TextXAlignment.Left
+VDLabel.ZIndex = 7
+VDLabel.Parent = VersionDropdown
+
+local VDArrow = Instance.new("TextLabel")
+VDArrow.Size = UDim2.new(0, 20, 1, 0)
+VDArrow.Position = UDim2.new(1, -26, 0, 0)
+VDArrow.BackgroundTransparency = 1
+VDArrow.Text = "▼"
+VDArrow.TextColor3 = Color3.fromRGB(150, 150, 150)
+VDArrow.TextSize = 10
+VDArrow.Font = Enum.Font.GothamBold
+VDArrow.ZIndex = 7
+VDArrow.Parent = VersionDropdown
+
+local VDOptions = Instance.new("Frame")
+VDOptions.Parent = MainWin
+VDOptions.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+VDOptions.Position = UDim2.new(0.5, -80, 0, 214)
+VDOptions.Size = UDim2.new(0, 160, 0, 60)
+VDOptions.ZIndex = 20
+VDOptions.Visible = false
+
+local VDOptionsCorner = Instance.new("UICorner")
+VDOptionsCorner.CornerRadius = UDim.new(0, 8)
+VDOptionsCorner.Parent = VDOptions
+
+local VDOptionsStroke = Instance.new("UIStroke")
+VDOptionsStroke.Color = Color3.fromRGB(80, 120, 200)
+VDOptionsStroke.Thickness = 1
+VDOptionsStroke.Parent = VDOptions
+
+local PaidOption = Instance.new("TextButton")
+PaidOption.Size = UDim2.new(1, 0, 0.5, 0)
+PaidOption.Position = UDim2.new(0, 0, 0, 0)
+PaidOption.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+PaidOption.Text = "付费版"
+PaidOption.TextColor3 = Color3.fromRGB(255, 255, 255)
+PaidOption.TextSize = 13
+PaidOption.Font = Enum.Font.GothamBold
+PaidOption.BorderSizePixel = 0
+PaidOption.ZIndex = 21
+PaidOption.Parent = VDOptions
+
+local PaidCorner = Instance.new("UICorner")
+PaidCorner.CornerRadius = UDim.new(0, 8, 0, 8)
+PaidCorner.Parent = PaidOption
+
+local FreeOption = Instance.new("TextButton")
+FreeOption.Size = UDim2.new(1, 0, 0.5, 0)
+FreeOption.Position = UDim2.new(0, 0, 0.5, 0)
+FreeOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+FreeOption.Text = "免费版"
+FreeOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+FreeOption.TextSize = 13
+FreeOption.Font = Enum.Font.GothamBold
+FreeOption.BorderSizePixel = 0
+FreeOption.ZIndex = 21
+FreeOption.Parent = VDOptions
+
+local FreeCorner = Instance.new("UICorner")
+FreeCorner.CornerRadius = UDim.new(0, 8, 0, 8)
+FreeCorner.Parent = FreeOption
+
+local function updateVersionUI()
+    if currentVersion == "paid" then
+        VDLabel.Text = "付费版"
+        WhitelistNote.Text = "卡密售价4元"
+        WhitelistNote.TextColor3 = Color3.fromRGB(255, 200, 80)
+        PaidOption.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+        PaidOption.TextColor3 = Color3.fromRGB(255, 255, 255)
+        FreeOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        FreeOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+    else
+        VDLabel.Text = "免费版"
+        WhitelistNote.Text = "当前选择的是免费版 卡密随便输入即可"
+        WhitelistNote.TextColor3 = Color3.fromRGB(80, 255, 80)
+        PaidOption.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        PaidOption.TextColor3 = Color3.fromRGB(200, 200, 200)
+        FreeOption.BackgroundColor3 = Color3.fromRGB(30, 55, 30)
+        FreeOption.TextColor3 = Color3.fromRGB(80, 255, 80)
+    end
+end
+
+VersionDropdown.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        VDOptions.Visible = not VDOptions.Visible
+    end
+end)
+
+PaidOption.MouseButton1Click:Connect(function()
+    currentVersion = "paid"
+    updateVersionUI()
+    VDOptions.Visible = false
+    playSound("rbxassetid://62339698", 0.3)
+end)
+
+FreeOption.MouseButton1Click:Connect(function()
+    currentVersion = "free"
+    updateVersionUI()
+    VDOptions.Visible = false
+    playSound("rbxassetid://62339698", 0.3)
+end)
+
+local InputContainer = Instance.new("Frame")
+InputContainer.Parent = MainWin
+InputContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
+InputContainer.Size = UDim2.new(0, 240, 0, 36)
+InputContainer.ZIndex = 3
+
+local InputContainerCorner = Instance.new("UICorner")
+InputContainerCorner.Parent = InputContainer
+InputContainerCorner.CornerRadius = UDim.new(0, 8)
+
+local InputContainerStroke = Instance.new("UIStroke")
+InputContainerStroke.Parent = InputContainer
+InputContainerStroke.Color = Color3.fromRGB(50, 50, 50)
+InputContainerStroke.Thickness = 1
+
+local Input = Instance.new("TextBox")
+Input.Parent = InputContainer
+Input.BackgroundTransparency = 1
+Input.Position = UDim2.new(0, 12, 0, 0)
+Input.Size = UDim2.new(1, -24, 1, 0)
+Input.Font = Enum.Font.Gotham
+Input.Text = ""
+Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+Input.TextSize = 13
+Input.PlaceholderText = "请输入卡密..."
+Input.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+Input.ClearTextOnFocus = false
+Input.ZIndex = 4
+
+local ClearInputButton = Instance.new("TextButton")
+ClearInputButton.Parent = InputContainer
+ClearInputButton.BackgroundTransparency = 1
+ClearInputButton.Position = UDim2.new(1, -50, 0.5, -8)
+ClearInputButton.Size = UDim2.new(0, 20, 0, 20)
+ClearInputButton.Font = Enum.Font.GothamBold
+ClearInputButton.Text = "×"
+ClearInputButton.TextColor3 = Color3.fromRGB(120, 120, 120)
+ClearInputButton.TextSize = 12
+ClearInputButton.Visible = false
+ClearInputButton.ZIndex = 4
+
+local VerifyBtn = Instance.new("TextButton")
+VerifyBtn.Parent = MainWin
+VerifyBtn.Position = UDim2.new(0.5, -95, 0, 268)
+VerifyBtn.Size = UDim2.new(0, 190, 0, 36)
+VerifyBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+VerifyBtn.Font = Enum.Font.SourceSansBold
+VerifyBtn.Text = "验证卡密"
+VerifyBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+VerifyBtn.TextSize = 16
+VerifyBtn.TextStrokeTransparency = 1
+VerifyBtn.TextXAlignment = Enum.TextXAlignment.Center
+VerifyBtn.TextYAlignment = Enum.TextYAlignment.Center
+VerifyBtn.BorderSizePixel = 0
+VerifyBtn.AutoButtonColor = false
+VerifyBtn.ZIndex = 3
+
+local VerifyBtnCorner = Instance.new("UICorner")
+VerifyBtnCorner.Parent = VerifyBtn
+VerifyBtnCorner.CornerRadius = UDim.new(0, 8)
+
+local VerifyBtnStroke = Instance.new("UIStroke")
+VerifyBtnStroke.Parent = VerifyBtn
+VerifyBtnStroke.Color = Color3.fromRGB(50, 50, 50)
+VerifyBtnStroke.Thickness = 1.5
+
+local UnbindBtn = Instance.new("TextButton")
+UnbindBtn.Parent = MainWin
+UnbindBtn.Position = UDim2.new(0.5, -95, 0, 312)
+UnbindBtn.Size = UDim2.new(0, 190, 0, 30)
+UnbindBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 60)
+UnbindBtn.Font = Enum.Font.GothamBold
+UnbindBtn.Text = "解绑当前设备"
+UnbindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+UnbindBtn.TextSize = 13
+UnbindBtn.TextXAlignment = Enum.TextXAlignment.Center
+UnbindBtn.BorderSizePixel = 0
+UnbindBtn.AutoButtonColor = false
+UnbindBtn.ZIndex = 3
+
+local UnbindCorner = Instance.new("UICorner")
+UnbindCorner.Parent = UnbindBtn
+UnbindCorner.CornerRadius = UDim.new(0, 8)
+
+local AttemptsDisplay = Instance.new("TextLabel")
+AttemptsDisplay.Parent = MainWin
+AttemptsDisplay.BackgroundTransparency = 1
+AttemptsDisplay.Position = UDim2.new(0, 0, 1, -38)
+AttemptsDisplay.Size = UDim2.new(1, 0, 0, 14)
+AttemptsDisplay.Font = Enum.Font.GothamMedium
+AttemptsDisplay.Text = string.format("剩余尝试次数: %d/%d", maxAttempts - attempts, maxAttempts)
+AttemptsDisplay.TextColor3 = Color3.fromRGB(180, 180, 180)
+AttemptsDisplay.TextSize = 10
+AttemptsDisplay.TextXAlignment = Enum.TextXAlignment.Center
+AttemptsDisplay.ZIndex = 3
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Parent = MainWin
+CloseBtn.Position = UDim2.new(1, -35, 0, 8)
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+CloseBtn.TextSize = 18
+CloseBtn.TextXAlignment = Enum.TextXAlignment.Center
+CloseBtn.BorderSizePixel = 0
+CloseBtn.AutoButtonColor = false
+CloseBtn.ZIndex = 30
+
+local CloseBtnCorner = Instance.new("UICorner")
+CloseBtnCorner.Parent = CloseBtn
+CloseBtnCorner.CornerRadius = UDim.new(0, 6)
+
+local Msg = Instance.new("TextLabel")
+Msg.Parent = MainWin
+Msg.BackgroundTransparency = 1
+Msg.Position = UDim2.new(0, 0, 1, -20)
+Msg.Size = UDim2.new(1, 0, 0, 16)
+Msg.Font = Enum.Font.Gotham
+Msg.Text = ""
+Msg.TextColor3 = Color3.fromRGB(150, 150, 150)
+Msg.TextSize = 10
+Msg.TextXAlignment = Enum.TextXAlignment.Center
+Msg.Visible = false
+Msg.ZIndex = 3
+
+local TouchDragArea = Instance.new("TextButton")
+TouchDragArea.Parent = MainWin
+TouchDragArea.BackgroundTransparency = 1
+TouchDragArea.Size = UDim2.new(1, 0, 0, 60)
+TouchDragArea.Text = ""
+TouchDragArea.ZIndex = 5
+TouchDragArea.AutoButtonColor = false
+TouchDragArea.Visible = isMobile
+
+MainWin.Size = UDim2.new(0, 0, 0, 0)
+MainWin.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainWin.BackgroundTransparency = 1
+
+local entranceTween = TweenService:Create(MainWin, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Size = UDim2.new(0, 300, 0, 420),
+    Position = UDim2.new(0.5, -150, 0.5, -210),
+    BackgroundTransparency = 0
+})
+entranceTween:Play()
+
+local function updateAttemptsDisplay()
+    AttemptsDisplay.Text = string.format("剩余尝试次数: %d/%d", maxAttempts - attempts, maxAttempts)
+end
+
+local function playSound(soundId, volume)
+    local sound = Instance.new("Sound")
+    sound.Parent = SoundService
+    sound.SoundId = soundId
+    sound.Volume = volume or 0.5
+    sound:Play()
+    game:GetService("Debris"):AddItem(sound, 1)
+end
+
+local function showMessage(text, color, duration)
+    Msg.Text = text
+    Msg.TextColor3 = color
+    Msg.Visible = true
+    if duration then task.wait(duration); Msg.Visible = false end
+end
+
+local function updateStatus(color, text)
+    StatusLight.BackgroundColor3 = color
+    StatusText.Text = text
+    StatusText.TextColor3 = color
+end
+
+Input.Focused:Connect(function()
+    InputContainerStroke.Color = Color3.fromRGB(255, 255, 255)
+    TweenService:Create(InputContainer, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    }):Play()
+    if #Input.Text > 0 then ClearInputButton.Visible = true end
+end)
+
+Input.FocusLost:Connect(function()
+    InputContainerStroke.Color = Color3.fromRGB(50, 50, 50)
+    TweenService:Create(InputContainer, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    }):Play()
+    ClearInputButton.Visible = false
+end)
+
+Input:GetPropertyChangedSignal("Text"):Connect(function()
+    ClearInputButton.Visible = #Input.Text > 0
+end)
+
+ClearInputButton.MouseEnter:Connect(function()
+    TweenService:Create(ClearInputButton, TweenInfo.new(0.2), {
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+end)
+
+ClearInputButton.MouseLeave:Connect(function()
+    TweenService:Create(ClearInputButton, TweenInfo.new(0.2), {
+        TextColor3 = Color3.fromRGB(120, 120, 120)
+    }):Play()
+end)
+
+ClearInputButton.MouseButton1Click:Connect(function()
+    Input.Text = ""
+    Input:CaptureFocus()
+    playSound("rbxassetid://62339698", 0.3)
+end)
+
+VerifyBtn.MouseEnter:Connect(function()
+    TweenService:Create(VerifyBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+    }):Play()
+    TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.2), {
+        Color = Color3.fromRGB(75, 75, 75)
+    }):Play()
+end)
+
+VerifyBtn.MouseLeave:Connect(function()
+    TweenService:Create(VerifyBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+    TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.2), {
+        Color = Color3.fromRGB(50, 50, 50)
+    }):Play()
+end)
+
+VerifyBtn.MouseButton1Down:Connect(function()
+    TweenService:Create(VerifyBtn, TweenInfo.new(0.1), {
+        BackgroundColor3 = Color3.fromRGB(225, 225, 225),
+        Size = UDim2.new(0, 185, 0, 34)
+    }):Play()
+    playSound("rbxassetid://62339698", 0.2)
+end)
+
+VerifyBtn.MouseButton1Up:Connect(function()
+    TweenService:Create(VerifyBtn, TweenInfo.new(0.1), {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        Size = UDim2.new(0, 190, 0, 36)
+    }):Play()
+end)
+
+CloseBtn.MouseEnter:Connect(function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(55, 55, 55),
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+end)
+
+CloseBtn.MouseLeave:Connect(function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+        TextColor3 = Color3.fromRGB(200, 200, 200)
+    }):Play()
+end)
+
+CopyButton.MouseEnter:Connect(function()
+    TweenService:Create(GroupCard, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(30, 35, 55),
+        Size = UDim2.new(0, 275, 0, 52)
+    }):Play()
+    TweenService:Create(GroupGlow, TweenInfo.new(0.2), {
+        Color = Color3.fromRGB(120, 160, 240),
+        Thickness = 2,
+        Transparency = 0.2
+    }):Play()
+    TweenService:Create(GroupNumber, TweenInfo.new(0.2), {
+        TextColor3 = Color3.fromRGB(255, 255, 230)
+    }):Play()
+end)
+
+CopyButton.MouseLeave:Connect(function()
+    TweenService:Create(GroupCard, TweenInfo.new(0.3), {
+        BackgroundColor3 = Color3.fromRGB(20, 25, 40),
+        Size = UDim2.new(0, 270, 0, 50)
+    }):Play()
+    TweenService:Create(GroupGlow, TweenInfo.new(0.3), {
+        Color = Color3.fromRGB(80, 120, 200),
+        Thickness = 1.5,
+        Transparency = 0.3
+    }):Play()
+    TweenService:Create(GroupNumber, TweenInfo.new(0.3), {
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+end)
+
+CopyButton.MouseButton1Down:Connect(function()
+    TweenService:Create(GroupCard, TweenInfo.new(0.1), {
+        BackgroundColor3 = Color3.fromRGB(15, 20, 35),
+        Size = UDim2.new(0, 265, 0, 48)
+    }):Play()
+    TweenService:Create(GroupGlow, TweenInfo.new(0.1), {
+        Color = Color3.fromRGB(150, 190, 255),
+        Thickness = 2.2
+    }):Play()
+    playSound("rbxassetid://62339698", 0.2)
+end)
+
+CopyButton.MouseButton1Up:Connect(function()
+    TweenService:Create(GroupCard, TweenInfo.new(0.1), {
+        Size = UDim2.new(0, 270, 0, 50)
+    }):Play()
+    TweenService:Create(GroupGlow, TweenInfo.new(0.1), {
+        Thickness = 1.5
+    }):Play()
+end)
+
+CopyButton.MouseButton1Click:Connect(function()
+    if copyCooldown then return end
+    copyCooldown = true
+    playSound("rbxassetid://62339698", 0.5)
+    pcall(function() setclipboard("1687426335") end)
+    TweenService:Create(GroupNumber, TweenInfo.new(0.2), {
+        TextColor3 = Color3.fromRGB(80, 255, 80)
+    }):Play()
+    for i = 1, 2 do
+        TweenService:Create(GroupCard, TweenInfo.new(0.1), {
+            BackgroundColor3 = Color3.fromRGB(30, 55, 30)
+        }):Play()
+        TweenService:Create(GroupGlow, TweenInfo.new(0.1), {
+            Color = Color3.fromRGB(100, 255, 100)
+        }):Play()
+        task.wait(0.1)
+        TweenService:Create(GroupCard, TweenInfo.new(0.1), {
+            BackgroundColor3 = Color3.fromRGB(20, 25, 40)
+        }):Play()
+        TweenService:Create(GroupGlow, TweenInfo.new(0.1), {
+            Color = Color3.fromRGB(80, 120, 200)
+        }):Play()
+        task.wait(0.1)
+    end
+    task.wait(1.5)
+    TweenService:Create(GroupNumber, TweenInfo.new(0.3), {
+        TextColor3 = Color3.fromRGB(255, 255, 255)
+    }):Play()
+    showMessage("作者QQ号已复制到剪贴板", Color3.fromRGB(80, 255, 80), 2)
+    task.wait(1)
+    copyCooldown = false
+end)
+
+local function startDrag(input)
+    if (isMouse and input.UserInputType == Enum.UserInputType.MouseButton1) or
+        (isMobile and input.UserInputType == Enum.UserInputType.Touch) then
+        isDragging = true
+        dragStart = input.Position
+        frameStart = MainWin.Position
+        TweenService:Create(TitleBar, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        }):Play()
+        TweenService:Create(TitleAccent, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+        }):Play()
+        showMessage("拖动中...", Color3.fromRGB(200, 200, 200))
+    end
+end
+
+local function endDrag()
+    if isDragging then
+        isDragging = false
+        TweenService:Create(TitleBar, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        }):Play()
+        TweenService:Create(TitleAccent, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        }):Play()
+        Msg.Visible = false
+    end
+end
+
+if isMobile then
+    TouchDragArea.InputBegan:Connect(startDrag)
+else
+    TitleBar.InputBegan:Connect(startDrag)
+end
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging then
+        local delta = input.Position - dragStart
+        local newX = frameStart.X.Offset + delta.X
+        local newY = frameStart.Y.Offset + delta.Y
+        local screenWidth = workspace.CurrentCamera.ViewportSize.X
+        local screenHeight = workspace.CurrentCamera.ViewportSize.Y
+        newX = math.clamp(newX, 0, screenWidth - MainWin.Size.X.Offset)
+        newY = math.clamp(newY, 0, screenHeight - MainWin.Size.Y.Offset)
+        MainWin.Position = UDim2.new(0, newX, 0, newY)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if isDragging and ((isMouse and input.UserInputType == Enum.UserInputType.MouseButton1) or
+        (isMobile and input.UserInputType == Enum.UserInputType.Touch)) then
+        endDrag()
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    playSound("rbxassetid://62339698", 0.3)
+    local exitTween = TweenService:Create(MainWin, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 1
+    })
+    exitTween:Play()
+    exitTween.Completed:Wait()
+    ScreenGui:Destroy()
+end)
+
+VerifyBtn.MouseButton1Click:Connect(function()
+    local key = Input.Text
+    if #key == 0 then
+        showMessage("请输入卡密", Color3.fromRGB(255, 180, 80), 1.5)
+        for i = 1, 3 do
+            InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 3 or -3), 0, 224)
+            task.wait(0.05)
+        end
+        InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
+        return
+    end
+
+    local verSnapshot = currentVersion
+
+    VerifyBtn.Text = "验证中..."
+    VerifyBtn.AutoButtonColor = false
+
+    task.spawn(function()
+        if verSnapshot == "free" then
+            updateStatus(Color3.fromRGB(80, 255, 80), "已验证")
+            showMessage("验证成功，正在加载wdfex-Hub免费版...", Color3.fromRGB(80, 255, 80), 2)
+            VerifyBtn.Text = "✓ 成功"
+            VerifyBtn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+            TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80)
+            }):Play()
+            TweenService:Create(WinGlow, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80),
+                Thickness = 2
+            }):Play()
+            playSound("rbxassetid://62339698", 0.6)
+            task.wait(1.5)
+            ScreenGui:Destroy()
+            loadFreeScript()
+            return
+        end
+
+        local switch = getSwitch()
+        if switch == "OFF" then
+            showMessage("验证已关闭，直接进入", Color3.fromRGB(80, 255, 80), 2)
+            task.wait(1)
+            ScreenGui:Destroy()
+            loadMainScript()
+            return
+        elseif switch == "LOCKED" then
+            showMessage("系统已被锁死", Color3.fromRGB(255, 80, 80), 2)
+            VerifyBtn.Text = "验证卡密"
+            return
+        end
+
+        local ok, msg, expireTime = checkCard(key)
+        if ok then
+            saveCard(key)
+            updateStatus(Color3.fromRGB(80, 255, 80), "已验证")
+            showMessage("验证成功，到期时间: " .. tostring(expireTime), Color3.fromRGB(80, 255, 80), 2)
+            VerifyBtn.Text = "✓ 成功"
+            VerifyBtn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+            TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80)
+            }):Play()
+            TweenService:Create(WinGlow, TweenInfo.new(0.3), {
+                Color = Color3.fromRGB(80, 255, 80),
+                Thickness = 2
+            }):Play()
+            playSound("rbxassetid://62339698", 0.6)
+            task.wait(1.5)
+            ScreenGui:Destroy()
+            loadMainScript()
+        else
+            attempts = attempts + 1
+            updateAttemptsDisplay()
+            showMessage("验证失败: " .. tostring(msg), Color3.fromRGB(255, 110, 110), 2)
+            TweenService:Create(VerifyBtn, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(255, 110, 110)
+            }):Play()
+            TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.2), {
+                Color = Color3.fromRGB(255, 110, 110)
+            }):Play()
+            playSound("rbxassetid://62339698", 0.3)
+            for i = 1, 3 do
+                InputContainer.Position = UDim2.new(0.5, -120 + (i % 2 == 1 and 4 or -4), 0, 224)
+                task.wait(0.05)
+            end
+            InputContainer.Position = UDim2.new(0.5, -120, 0, 224)
+            for i = 1, 2 do
+                TweenService:Create(WarningStroke, TweenInfo.new(0.1), {
+                    Color = Color3.fromRGB(255, 80, 80)
+                }):Play()
+                task.wait(0.1)
+                TweenService:Create(WarningStroke, TweenInfo.new(0.1), {
+                    Color = Color3.fromRGB(255, 110, 110)
+                }):Play()
+                task.wait(0.1)
+            end
+            task.wait(0.5)
+            if attempts >= maxAttempts then
+                updateStatus(Color3.fromRGB(255, 80, 80), "已锁定")
+                showMessage("尝试次数过多，界面将在3秒后关闭", Color3.fromRGB(255, 80, 80), 3)
+                VerifyBtn.AutoButtonColor = false
+                VerifyBtn.Active = false
+                Input.TextEditable = false
+                task.wait(3)
+                local exitTween = TweenService:Create(MainWin, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+                    Size = UDim2.new(0, 0, 0, 0),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    BackgroundTransparency = 1
+                })
+                exitTween:Play()
+                exitTween.Completed:Wait()
+                ScreenGui:Destroy()
+                return
+            else
+                TweenService:Create(VerifyBtn, TweenInfo.new(0.2), {
+                    BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                }):Play()
+                TweenService:Create(VerifyBtnStroke, TweenInfo.new(0.2), {
+                    Color = Color3.fromRGB(50, 50, 50)
+                }):Play()
+                Input.Text = ""
+            end
+            VerifyBtn.Text = "验证卡密"
+        end
+    end)
+end)
+
+Input.FocusLost:Connect(function(enterPressed)
+    if enterPressed then VerifyBtn.MouseButton1Click:Fire() end
+end)
+
+UnbindBtn.MouseEnter:Connect(function()
+    TweenService:Create(UnbindBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(210, 60, 70)
+    }):Play()
+end)
+
+UnbindBtn.MouseLeave:Connect(function()
+    TweenService:Create(UnbindBtn, TweenInfo.new(0.2), {
+        BackgroundColor3 = Color3.fromRGB(180, 50, 60)
+    }):Play()
+end)
+
+UnbindBtn.MouseButton1Click:Connect(function()
+    if unbindCooldown then return end
+    local key = Input.Text
+    if #key == 0 then
+        showMessage("请先输入卡密", Color3.fromRGB(255, 180, 80), 1.5)
+        return
+    end
+    unbindCooldown = true
+    UnbindBtn.Text = "解绑中..."
+    UnbindBtn.BackgroundColor3 = Color3.fromRGB(100, 80, 80)
+    task.spawn(function()
+        local ok, msg = unbindCard(key)
+        if ok then
+            deleteSavedCard()
+            showMessage("解绑成功，已清除本地卡密", Color3.fromRGB(80, 255, 80), 2)
+            Input.Text = ""
+            UnbindBtn.BackgroundColor3 = Color3.fromRGB(80, 180, 100)
+            task.wait(1.5)
+            UnbindBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 60)
+        else
+            showMessage("解绑失败: " .. tostring(msg), Color3.fromRGB(255, 110, 110), 2)
+            UnbindBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 60)
+        end
+        UnbindBtn.Text = "解绑当前设备"
+        unbindCooldown = false
+    end)
+end)
+
+coroutine.wrap(function()
+    while WinGlow.Parent do
+        TweenService:Create(WinGlow, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), {
+            Transparency = 0.8
+        }):Play()
+        task.wait(2)
+    end
+end)()
+
+coroutine.wrap(function()
+    while VerifyBtnStroke.Parent do
+        TweenService:Create(VerifyBtnStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), {
+            Transparency = 0.5
+        }):Play()
+        task.wait(1.5)
+    end
+end)()
+
+coroutine.wrap(function()
+    while StatusLight.Parent do
+        TweenService:Create(StatusLight, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), {
+            BackgroundTransparency = 0.3
+        }):Play()
+        task.wait(1)
+    end
+end)()
+
+if isMobile then
+    local function onTextFieldFocused()
+        TweenService:Create(MainWin, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(0.5, -150, 0, 50)
+        }):Play()
+    end
+    local function onTextFieldFocusLost()
+        TweenService:Create(MainWin, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(0.5, -150, 0.5, -210)
+        }):Play()
+    end
+    Input.Focused:Connect(onTextFieldFocused)
+    Input.FocusLost:Connect(onTextFieldFocusLost)
+    local lastTapTime = 0
+    local doubleTapThreshold = 0.3
+    TouchDragArea.MouseButton1Click:Connect(function()
+        local currentTime = tick()
+        if currentTime - lastTapTime < doubleTapThreshold then
+            CloseBtn.MouseButton1Click:Fire()
+        end
+        lastTapTime = currentTime
+    end)
+end
+
+task.spawn(function()
+    task.wait(0.3)
+    local saved = loadSavedCard()
+    if saved and saved ~= "" then
+        Input.Text = saved
+    end
+end)
+
+probeDomain()
+updateVersionUI()
+updateAttemptsDisplay()
+updateStatus(Color3.fromRGB(255, 100, 100), "未验证")
+
+print("[wdfex-Hub] 卡密验证 UI 已加载")
+print("[wdfex-Hub] 应用: " .. APP_NAME .. " | 用户: " .. USER_ID)
+print("[wdfex-Hub] 付费版脚本: " .. LOAD_SCRIPT_URL)
+print("[wdfex-Hub] 免费版脚本: " .. LOAD_FREE_SCRIPT_URL)
