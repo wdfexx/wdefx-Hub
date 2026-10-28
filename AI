@@ -1,225 +1,457 @@
--- ============================================
--- Roblox 悬浮窗 UI 示例 (LocalScript)
--- 放到 StarterPlayer > StarterPlayerScripts 下
--- ============================================
+-- ============================================================
+-- 悬浮窗 + 侧边栏分类 + 透视开关
+-- 执行器：Krnl / Fluxus / Synapse 等
+-- ============================================================
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+-- ============================================================
+-- 1. 创建 GUI
+-- ============================================================
+local parentGui = (gethui and gethui()) or CoreGui
 
--- ============ 1. 创建 ScreenGui ============
-local gui = Instance.new("ScreenGui")
-gui.Name = "FloatingMenuGui"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = playerGui
+if parentGui:FindFirstChild("LierHub") then
+    parentGui.LierHub:Destroy()
+end
 
--- ============ 2. 创建主悬浮窗 ============
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 220, 0, 260)
-mainFrame.Position = UDim2.new(0.5, -110, 0.5, -130)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Parent = gui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LierHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = parentGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = mainFrame
+-- 主窗口
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 420, 0, 300)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -150)
+MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(90, 90, 120)
-stroke.Thickness = 1.5
-stroke.Parent = mainFrame
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
 
--- ============ 3. 标题栏（可拖动） ============
-local titleBar = Instance.new("Frame")
-titleBar.Name = "TitleBar"
-titleBar.Size = UDim2.new(1, 0, 0, 36)
-titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(60, 60, 75)
+UIStroke.Thickness = 1
+UIStroke.Parent = MainFrame
 
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 10)
-titleCorner.Parent = titleBar
+-- 标题栏
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 36)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
 
-local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -50, 1, 0)
-titleText.Position = UDim2.new(0, 12, 0, 0)
-titleText.BackgroundTransparency = 1
-titleText.Text = "✨ 悬浮菜单"
-titleText.TextColor3 = Color3.fromRGB(230, 230, 255)
-titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Font = Enum.Font.GothamBold
-titleText.TextSize = 16
-titleText.Parent = titleBar
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
 
--- ============ 4. 拖拽逻辑 ============
-local dragging = false
-local dragStart, startPos
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -70, 1, 0)
+TitleLabel.Position = UDim2.new(0, 12, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Lier Hub  |  v1.0"
+TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 235)
+TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
 
-titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-        -- 悬浮时置顶
-        mainFrame.ZIndex = 10
-        titleBar.ZIndex = 11
-        titleText.ZIndex = 12
-    end
+-- 关闭按钮
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -34, 0, 4)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 40)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
 end)
 
-titleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
+-- 侧边栏
+local Sidebar = Instance.new("Frame")
+Sidebar.Name = "Sidebar"
+Sidebar.Size = UDim2.new(0, 100, 1, -36)
+Sidebar.Position = UDim2.new(0, 0, 0, 36)
+Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
 
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
-end)
+local SidebarCorner = Instance.new("UICorner")
+SidebarCorner.CornerRadius = UDim.new(0, 8)
+SidebarCorner.Parent = Sidebar
 
--- ============ 5. 内容区域 ============
-local content = Instance.new("ScrollingFrame")
-content.Name = "Content"
-content.Size = UDim2.new(1, -16, 1, -50)
-content.Position = UDim2.new(0, 8, 0, 42)
-content.BackgroundTransparency = 1
-content.BorderSizePixel = 0
-content.ScrollBarThickness = 4
-content.CanvasSize = UDim2.new(0, 0, 0, 0)
-content.AutomaticCanvasSize = Enum.AutomaticSize.Y
-content.Parent = mainFrame
+local SidebarLayout = Instance.new("UIListLayout")
+SidebarLayout.Padding = UDim.new(0, 4)
+SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+SidebarLayout.Parent = Sidebar
 
-local list = Instance.new("UIListLayout")
-list.Padding = UDim.new(0, 6)
-list.SortOrder = Enum.SortOrder.LayoutOrder
-list.Parent = content
+local SidebarPadding = Instance.new("UIPadding")
+SidebarPadding.PaddingTop = UDim.new(0, 8)
+SidebarPadding.PaddingLeft = UDim.new(0, 6)
+SidebarPadding.PaddingRight = UDim.new(0, 6)
+SidebarPadding.Parent = Sidebar
 
--- 生成按钮的辅助函数
-local function makeButton(text, callback, color)
+-- 内容区
+local Content = Instance.new("Frame")
+Content.Name = "Content"
+Content.Size = UDim2.new(1, -100, 1, -36)
+Content.Position = UDim2.new(0, 100, 0, 36)
+Content.BackgroundTransparency = 1
+Content.Parent = MainFrame
+
+local ContentPadding = Instance.new("UIPadding")
+ContentPadding.PaddingTop = UDim.new(0, 8)
+ContentPadding.PaddingLeft = UDim.new(0, 8)
+ContentPadding.PaddingRight = UDim.new(0, 8)
+ContentPadding.Parent = Content
+
+-- ============================================================
+-- 2. 分类页面管理
+-- ============================================================
+local pages = {}
+local buttons = {}
+
+local function CreatePage(name)
+    local page = Instance.new("ScrollingFrame")
+    page.Name = name .. "Page"
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 4
+    page.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
+    page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = Content
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = page
+
+    pages[name] = page
+    return page
+end
+
+local function CreateSidebarButton(name, order)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -6, 0, 34)
-    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
+    btn.Name = name .. "Btn"
+    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(180, 180, 200)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.Gotham
     btn.BorderSizePixel = 0
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(240, 240, 255)
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextSize = 14
-    btn.AutoButtonColor = true
-    btn.Parent = content
+    btn.LayoutOrder = order
+    btn.Parent = Sidebar
 
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 6)
-    c.Parent = btn
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
 
-    btn.MouseButton1Click:Connect(callback)
+    btn.MouseButton1Click:Connect(function()
+        for n, p in pairs(pages) do
+            p.Visible = (n == name)
+        end
+        for _, b in pairs(buttons) do
+            b.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+            b.TextColor3 = Color3.fromRGB(180, 180, 200)
+        end
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+        btn.TextColor3 = Color3.fromRGB(120, 200, 255)
+    end)
+
+    buttons[name] = btn
     return btn
 end
 
--- ============ 6. 示例功能按钮 ============
+-- ============================================================
+-- 3. 功能条目工厂
+-- ============================================================
+local function CreateToggle(parent, text, callback)
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1, 0, 0, 34)
+    holder.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    holder.BorderSizePixel = 0
+    holder.Parent = parent
 
--- 功能 1：显示通知消息
-makeButton("📢 显示提示", function()
-    local hint = Instance.new("TextLabel")
-    hint.Size = UDim2.new(0, 300, 0, 40)
-    hint.Position = UDim2.new(0.5, -150, 0.1, 0)
-    hint.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-    hint.BackgroundTransparency = 0.2
-    hint.Text = "这是一个提示消息！"
-    hint.TextColor3 = Color3.fromRGB(255, 255, 255)
-    hint.Font = Enum.Font.GothamBold
-    hint.TextSize = 16
-    hint.Parent = gui
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = hint
+    local hc = Instance.new("UICorner")
+    hc.CornerRadius = UDim.new(0, 6)
+    hc.Parent = holder
 
-    task.delay(2, function()
-        local tween = TweenService:Create(hint, TweenInfo.new(0.5), {BackgroundTransparency = 1, TextTransparency = 1})
-        tween:Play()
-        tween.Completed:Wait()
-        hint:Destroy()
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(210, 210, 225)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = holder
+
+    local toggleBg = Instance.new("Frame")
+    toggleBg.Size = UDim2.new(0, 44, 0, 22)
+    toggleBg.Position = UDim2.new(1, -54, 0.5, -11)
+    toggleBg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    toggleBg.BorderSizePixel = 0
+    toggleBg.Parent = holder
+
+    local tbc = Instance.new("UICorner")
+    tbc.CornerRadius = UDim.new(1, 0)
+    tbc.Parent = toggleBg
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.Position = UDim2.new(0, 2, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
+    knob.BorderSizePixel = 0
+    knob.Parent = toggleBg
+
+    local kc = Instance.new("UICorner")
+    kc.CornerRadius = UDim.new(1, 0)
+    kc.Parent = knob
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.Parent = holder
+
+    local state = false
+
+    local function setState(v)
+        state = v
+        if v then
+            toggleBg.BackgroundColor3 = Color3.fromRGB(70, 140, 220)
+            knob.Position = UDim2.new(1, -20, 0.5, -9)
+            knob.BackgroundColor3 = Color3.fromRGB(240, 240, 255)
+        else
+            toggleBg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+            knob.Position = UDim2.new(0, 2, 0.5, -9)
+            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
+        end
+        if callback then
+            pcall(callback, v)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        setState(not state)
     end)
-end, Color3.fromRGB(70, 100, 180))
 
--- 功能 2：改变角色行走速度（仅对自己的角色有效）
-makeButton("🏃 行走速度 +5", function()
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then
-        local hum = char.Humanoid
-        hum.WalkSpeed = hum.WalkSpeed + 5
+    holder.Parent = parent
+    return setState
+end
+
+-- ============================================================
+-- 4. 建页面 + 建按钮
+-- ============================================================
+CreatePage("Visualize")
+CreatePage("Player")
+CreatePage("Misc")
+
+CreateSidebarButton("Visualize", 1)
+CreateSidebarButton("Player", 2)
+CreateSidebarButton("Misc", 3)
+
+-- 默认选中第一个
+buttons["Visualize"].BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+buttons["Visualize"].TextColor3 = Color3.fromRGB(120, 200, 255)
+pages["Visualize"].Visible = true
+
+-- ============================================================
+-- 5. 透视（ESP）实现
+-- ============================================================
+local espEnabled = false
+local espObjects = {} -- [player] = {box, name, highlight}
+local espConnection = nil
+
+local function CreateESPForPlayer(player)
+    if player == LocalPlayer then return end
+    if espObjects[player] then return end
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "LierESP_Box"
+    box.Adornee = nil
+    box.AlwaysOnTop = true
+    box.ZIndex = 5
+    box.Size = Vector3.new(4, 5, 4)
+    box.Transparency = 0.6
+    box.Color3 = Color3.fromRGB(255, 60, 60)
+    box.Parent = (gethui and gethui()) or CoreGui
+
+    local name = Instance.new("BillboardGui")
+    name.Name = "LierESP_Name"
+    name.AlwaysOnTop = true
+    name.Size = UDim2.new(0, 200, 0, 40)
+    name.StudsOffset = Vector3.new(0, 3, 0)
+    name.Adornee = nil
+    name.Parent = (gethui and gethui()) or CoreGui
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = ""
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextSize = 14
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.Parent = name
+
+    espObjects[player] = {
+        box = box,
+        name = name,
+        nameLabel = nameLabel,
+    }
+end
+
+local function DestroyESPForPlayer(player)
+    local obj = espObjects[player]
+    if obj then
+        if obj.box then obj.box:Destroy() end
+        if obj.name then obj.name:Destroy() end
+        espObjects[player] = nil
     end
-end, Color3.fromRGB(80, 150, 90))
+end
 
--- 功能 3：跳跃力 +5
-makeButton("🦘 跳跃力 +5", function()
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then
-        char.Humanoid.JumpPower = char.Humanoid.JumpPower + 5
+local function IsPlayerVisible(player)
+    if not player.Character then return false end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    -- 判断是否被墙挡住（射线检测）
+    local origin = Camera.CFrame.Position
+    local target = hrp.Position
+    local dir = target - origin
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { Camera, player.Character, LocalPlayer.Character }
+
+    local result = workspace:Raycast(origin, dir, params)
+    if not result then return true end
+    if result.Instance:IsDescendantOf(player.Character) then return true end
+    return false
+end
+
+local function UpdateESP()
+    if not espEnabled then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            if not espObjects[player] then
+                CreateESPForPlayer(player)
+            end
+
+            local obj = espObjects[player]
+            if obj and player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+
+                if hrp and humanoid and humanoid.Health > 0 then
+                    local visible = IsPlayerVisible(player)
+                    obj.box.Adornee = hrp
+                    obj.box.Transparency = visible and 0.4 or 0.7
+                    obj.box.Color3 = visible and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(255, 180, 60)
+
+                    obj.name.Adornee = hrp
+                    obj.nameLabel.Text = string.format(
+                        "%s [%d]%s",
+                        player.Name,
+                        math.floor(humanoid.Health),
+                        visible and "" or "  [WALL]"
+                    )
+                    obj.nameLabel.TextColor3 = visible and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(255, 180, 60)
+                else
+                    obj.box.Adornee = nil
+                    obj.name.Adornee = nil
+                end
+            end
+        end
     end
-end, Color3.fromRGB(150, 110, 70))
+end
 
--- 功能 4：重置属性
-makeButton("♻️ 恢复默认属性", function()
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then
-        char.Humanoid.WalkSpeed = 16
-        char.Humanoid.JumpPower = 50
+local function StartESP()
+    -- 给已有玩家建对象
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            CreateESPForPlayer(player)
+        end
     end
-end, Color3.fromRGB(120, 60, 60))
 
--- 功能 5：隐藏/显示悬浮窗
-makeButton("👁️ 隐藏菜单", function()
-    mainFrame.Visible = false
-    -- 创建一个小的恢复按钮
-    local reopen = Instance.new("TextButton")
-    reopen.Name = "ReopenBtn"
-    reopen.Size = UDim2.new(0, 50, 0, 50)
-    reopen.Position = UDim2.new(0, 20, 0.5, -25)
-    reopen.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
-    reopen.BorderSizePixel = 0
-    reopen.Text = "☰"
-    reopen.TextColor3 = Color3.fromRGB(230, 230, 255)
-    reopen.TextSize = 24
-    reopen.Font = Enum.Font.GothamBold
-    reopen.Parent = gui
-
-    local rc = Instance.new("UICorner")
-    rc.CornerRadius = UDim.new(1, 0)
-    rc.Parent = reopen
-
-    reopen.MouseButton1Click:Connect(function()
-        mainFrame.Visible = true
-        reopen:Destroy()
+    -- 玩家加入/离开
+    local joinConn = Players.PlayerAdded:Connect(function(p)
+        if espEnabled and p ~= LocalPlayer then
+            CreateESPForPlayer(p)
+        end
     end)
-end, Color3.fromRGB(90, 60, 120))
+    local leaveConn = Players.PlayerRemoving:Connect(function(p)
+        DestroyESPForPlayer(p)
+    end)
 
--- ============ 7. 快捷键：按 RightShift 显示/隐藏 ============
-local toggleKey = Enum.KeyCode.RightShift
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == toggleKey then
-        mainFrame.Visible = not mainFrame.Visible
+    -- 每帧更新
+    espConnection = RunService.RenderStepped:Connect(UpdateESP)
+
+    -- 保存连接
+    espObjects._joinConn = joinConn
+    espObjects._leaveConn = leaveConn
+end
+
+local function StopESP()
+    for player, _ in pairs(espObjects) do
+        if typeof(player) == "Instance" then
+            DestroyESPForPlayer(player)
+        end
+    end
+    espObjects = {}
+
+    if espConnection then
+        espConnection:Disconnect()
+        espConnection = nil
+    end
+end
+
+-- ============================================================
+-- 6. 挂载透视开关到 Visualize 分类
+-- ============================================================
+CreateToggle(pages["Visualize"], "透视 (ESP)", function(state)
+    espEnabled = state
+    if state then
+        StartESP()
+    else
+        StopESP()
     end
 end)
 
--- ============ 8. 启动提示 ============
-print("[FloatingMenu] 已加载，按 RightShift 可显示/隐藏菜单")
+-- ============================================================
+-- 7. 清理（角色重生时）
+-- ============================================================
+LocalPlayer.CharacterAdded:Connect(function()
+    if espEnabled then
+        collectgarbage()
+    end
+end)
+
+print("[Lier Hub] 加载完成。透视开关在 Visualize 分类中。")
