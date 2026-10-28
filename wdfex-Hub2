@@ -249,24 +249,20 @@ function createUI()
     Window:Tag({ Title = "wdfex-HubNB", Color = Color3.fromHex("#00ffff") })
     Window:EditOpenButton({ Title = 'wdfex-<font color="rgb(255, 255, 0)">Hub</font>', RichText = true, Icon = "crown", IconThemed = true, CornerRadius = UDim.new(0,16), StrokeThickness = 4, Color = ColorSequence.new(Color3.fromHex("FF6B6B")), Draggable = true })
 
-    -- ================= 【新增快捷键控制】 =================
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         if input.KeyCode == Enum.KeyCode.Zero then
-            -- 0键：打开
             pcall(function()
                 if Window.Open then Window:Open() else Window:Toggle() end
             end)
             local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
             if mainGui then mainGui.Enabled = true end
         elseif input.KeyCode == Enum.KeyCode.Minus then
-            -- 减号键：关闭
             pcall(function()
                 if Window.Close then Window:Close() else Window:Toggle() end
             end)
         end
     end)
-    -- ======================================================
 
     task.spawn(function()
         task.wait(1)
@@ -348,25 +344,23 @@ function createUI()
         end)
     end)
 
-    -- ================= 【更新公告】 =================
     local UpdateTab = Window:Tab({ Title = "更新公告", Icon = "bell" })
     local UpdateSection = UpdateTab:Section({ Title = "5.5更新公告", Opened = true })
-    
+
     UpdateSection:Paragraph({
         Title = "5.5更新公告",
         Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型是DeepSeek\n可能会增加用户聊天使用wdfex-Hub的用户可以在里面和其他的wdefx-Hub用户进行聊天",
         ThumbnailSize = 150,
     })
-    
+
     local FixedSection = UpdateTab:Section({ Title = "已修复的问题", Opened = true })
     FixedSection:Paragraph({
         Title = "已修复的问题",
         Desc = "修复电脑最小化之后无法继续打开主悬浮窗的问题打开主悬浮窗点一下键盘上面的0最小化悬浮窗点一下-就行了或者是点悬浮窗里面自带的\n优化卡顿",
         ThumbnailSize = 150,
     })
-    
+
     UpdateTab:Select()
-    -- ======================================================
 
     local MainSection = Window:Section({ Title = "主功能", Opened = true })
     local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
@@ -547,7 +541,6 @@ function createUI()
     local playerEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
     local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
 
-    -- =================== 远程更换队伍 ===================
     local teamConfigs = {
         ["警察"] = {
             pos = Vector3.new(3376.82, -337.46, -485.25),
@@ -559,13 +552,8 @@ function createUI()
                     task.wait(0.03)
                 end
                 if dept and dept:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = dept._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = dept._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 警察局抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
@@ -579,13 +567,8 @@ function createUI()
                     task.wait(0.03)
                 end
                 if hospital and hospital:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = hospital._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = hospital._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 医院抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
@@ -599,13 +582,8 @@ function createUI()
                     task.wait(0.03)
                 end
                 if fireDept and fireDept:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = fireDept._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = fireDept._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 消防局抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
@@ -619,13 +597,8 @@ function createUI()
                     task.wait(0.03)
                 end
                 if transit and transit:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = transit._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = transit._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 转运中心抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
@@ -639,13 +612,8 @@ function createUI()
                     task.wait(0.03)
                 end
                 if delivery and delivery:FindFirstChild("ScriptedPersistent") and delivery.ScriptedPersistent:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = delivery.ScriptedPersistent._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = delivery.ScriptedPersistent._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 配送中心抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
@@ -659,23 +627,15 @@ function createUI()
                     task.wait(0.03)
                 end
                 if road and road:FindFirstChild("_TeamChangeWithEntrance") then
-                    local args = {
-                        [1] = "selectTeam",
-                        [2] = road._TeamChangeWithEntrance._Interaction.TeamChange
-                    }
+                    local args = { [1] = "selectTeam", [2] = road._TeamChangeWithEntrance._Interaction.TeamChange }
                     ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
-                else
-                    warn("[wdfex-Hub] 道路服务抓包对象未找到，可能服务器未加载或距离过远")
                 end
             end
         },
         ["退出队伍"] = {
             pos = Vector3.new(3743.60, 3.72, -437.37),
             execute = function()
-                local args = {
-                    [1] = "selectTeam",
-                    [2] = "LeaveTeam"
-                }
+                local args = { [1] = "selectTeam", [2] = "LeaveTeam" }
                 ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
             end
         }
@@ -694,22 +654,14 @@ function createUI()
         Callback = function()
             local config = teamConfigs[selectedTeamChange]
             if not config then return end
-            
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not root then return end
-            
             local originalCFrame = root.CFrame
             root.CFrame = CFrame.new(config.pos)
             task.wait(0.2)
-            
-            local success, err = pcall(config.execute)
-            if not success then
-                warn("[wdfex-Hub] 抓包执行失败: " .. tostring(err))
-            end
-            
+            pcall(config.execute)
             task.wait(0.9)
-            
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 player.Character.HumanoidRootPart.CFrame = originalCFrame
             end
@@ -729,29 +681,20 @@ function createUI()
         Callback = function()
             local config = teamConfigs[selectedQuit]
             if not config then return end
-            
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not root then return end
-            
             local originalCFrame = root.CFrame
             root.CFrame = CFrame.new(config.pos)
             task.wait(0.2)
-            
-            local success, err = pcall(config.execute)
-            if not success then
-                warn("[wdfex-Hub] 抓包执行失败: " .. tostring(err))
-            end
-            
+            pcall(config.execute)
             task.wait(0.9)
-            
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 player.Character.HumanoidRootPart.CFrame = originalCFrame
             end
         end
     })
 
-    -- =================== 车辆功能 ===================
     VehicleTab:Divider({ Text = "车辆加速" })
     VehicleTab:Divider({ Text = "生成车辆" })
     VehicleTab:Button({
@@ -764,18 +707,15 @@ function createUI()
             local spawnPoint = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Interactive") and workspace.World.Interactive:FindFirstChild("Main Civilian Spawn") and workspace.World.Interactive["Main Civilian Spawn"]:FindFirstChild("VehicleSpawns") and workspace.World.Interactive["Main Civilian Spawn"].VehicleSpawns:GetChildren()[1]
             if not carModel or not spawnPoint then return end
             local vehiclesFolder = workspace:FindFirstChild("Gameplay") and workspace.Gameplay:FindFirstChild("Vehicles")
-            -- 记录旧车辆集合，用来识别新生成的车
             local oldSet = {}
             if vehiclesFolder then
                 for _, v in ipairs(vehiclesFolder:GetChildren()) do oldSet[v] = true end
             end
-            -- 发起生成
             local success = pcall(function()
                 local args = { [1] = "spawnVehicle", [2] = carModel, [3] = spawnPoint }
                 ReplicatedStorage.Remote.PlayerFunc:InvokeServer(unpack(args))
             end)
             if not success then return end
-            -- 秒级轮询，一旦发现新车辆就立即定位到自己脚下地面
             task.spawn(function()
                 local deadline = tick() + 3
                 local newCar = nil
@@ -795,7 +735,6 @@ function createUI()
                     task.wait(0.03)
                 end
                 if not newCar then return end
-                -- 找玩家脚下的地面高度
                 local charNow = player.Character
                 local rootNow = charNow and charNow:FindFirstChild("HumanoidRootPart")
                 if not rootNow then return end
@@ -808,21 +747,14 @@ function createUI()
                 local rayOrigin = rootNow.Position + Vector3.new(0, 5, 0)
                 local groundResult = workspace:Raycast(rayOrigin, Vector3.new(0, -500, 0), rayParams)
                 local groundY = groundResult and groundResult.Position.Y or (rootNow.Position.Y - 3)
-                -- 目标：玩家水平位置，地面高度 + 小偏移（让车贴地不砸头）
                 local targetPos = Vector3.new(rootNow.Position.X, groundY + 2.5, rootNow.Position.Z)
-                -- 朝向：相机水平方向
                 local cam = workspace.CurrentCamera
                 local lookDir = cam and Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z) or Vector3.new(0, 0, -1)
                 if lookDir.Magnitude < 0.001 then lookDir = Vector3.new(0, 0, -1) end
                 lookDir = lookDir.Unit
                 local targetCFrame = CFrame.lookAt(targetPos, targetPos + lookDir)
                 pcall(function()
-                    if newCar:IsA("Model") then
-                        newCar:PivotTo(targetCFrame)
-                    elseif newCar:IsA("BasePart") then
-                        newCar.CFrame = targetCFrame
-                    end
-                    -- 清零速度防止甩飞
+                    if newCar:IsA("Model") then newCar:PivotTo(targetCFrame) elseif newCar:IsA("BasePart") then newCar.CFrame = targetCFrame end
                     for _, part in ipairs(newCar:GetDescendants()) do
                         if part:IsA("BasePart") then
                             part.AssemblyLinearVelocity = Vector3.zero
@@ -846,15 +778,12 @@ function createUI()
                     local VCoreGui = game:GetService("CoreGui")
                     local VLocalPlayer = VPlayers.LocalPlayer
                     local GLOBAL_CLEANUP_KEY = "__CAR_SPEED_GUI_CLEANUP"
-                    local LEGACY_CLEANUP_KEYS = { "__CAR_SPEED_GUI_CLEANUP", "__CAR_SPEED_GUI_FINAL_CLEANUP_V88", "__DRIVE_MATRIX_FINAL_CLEANUP_V86" }
                     local sharedEnvironment = nil
                     pcall(function() if typeof(getgenv) == "function" then sharedEnvironment = getgenv() end end)
                     if sharedEnvironment then
-                        for _, cleanupKey in ipairs(LEGACY_CLEANUP_KEYS) do
-                            local previousCleanup = sharedEnvironment[cleanupKey]
-                            if typeof(previousCleanup) == "function" then pcall(previousCleanup) end
-                            sharedEnvironment[cleanupKey] = nil
-                        end
+                        local previousCleanup = sharedEnvironment[GLOBAL_CLEANUP_KEY]
+                        if typeof(previousCleanup) == "function" then pcall(previousCleanup) end
+                        sharedEnvironment[GLOBAL_CLEANUP_KEY] = nil
                     end
                     local oldGuiNames = { "wdfex车辆加速", "驾驶矩阵界面" }
                     for _, guiName in ipairs(oldGuiNames) do
@@ -1583,10 +1512,9 @@ function createUI()
         end
     })
 
-    -- =================== 飞车（完全套用飞天逻辑 + 严格上下车联动） ===================
     local CarFly = {
         Enabled = false,
-        Speed = 139,
+        Speed = 678,
         DriveDir = 0,
         StrafeDir = 0,
         UpDown = 0,
@@ -1688,7 +1616,6 @@ function createUI()
         return vehicleRoot, bestPart
     end
 
-    -- 严格上车检测
     local function CF_flyRefreshParts()
         local char = player.Character
         if not char then CarFly.hrp = nil; CarFly.hum = nil; return end
@@ -1976,24 +1903,15 @@ function createUI()
     end)
 
     VehicleTab:Divider({ Text = "飞车" })
-    do
-        local inputCreated = false
-        local ok = pcall(function()
-            VehicleTab:Input({
-                Title = "飞车速度",
-                Value = "139",
-                Placeholder = "139",
-                Callback = function(text)
-                    local n = tonumber(text)
-                    if n and n > 0 then CarFly.Speed = math.clamp(n, 1, 1000) end
-                end
-            })
-            inputCreated = true
-        end)
-        if not ok or not inputCreated then
-            VehicleTab:Slider({ Title = "飞车速度", Value = { Min = 1, Max = 600, Default = 139 }, Step = 1, Callback = function(v) CarFly.Speed = v end })
+    VehicleTab:Input({
+        Title = "飞车速度",
+        Value = "678",
+        Placeholder = "678",
+        Callback = function(text)
+            local n = tonumber(text)
+            if n and n > 0 then CarFly.Speed = n end
         end
-    end
+    })
     local carFlyToggle
     carFlyToggle = VehicleTab:Toggle({
         Title = "飞车",
@@ -2005,6 +1923,107 @@ function createUI()
             else
                 CarFly_Stop()
             end
+        end
+    })
+
+    local carFlyQuickScreenGui = nil
+    local carFlyQuickButton = nil
+    local carFlyQuickStrokeConn = nil
+    local lockCarFlyBtn = false
+
+    local function DestroyCarFlyQuickToggle()
+        if carFlyQuickStrokeConn then carFlyQuickStrokeConn:Disconnect(); carFlyQuickStrokeConn = nil end
+        if carFlyQuickScreenGui then carFlyQuickScreenGui:Destroy(); carFlyQuickScreenGui = nil; carFlyQuickButton = nil end
+    end
+
+    local function CreateCarFlyQuickToggle()
+        if carFlyQuickButton then return end
+        carFlyQuickScreenGui = Instance.new("ScreenGui")
+        carFlyQuickScreenGui.Name = "CarFlyQuickToggle"
+        carFlyQuickScreenGui.ResetOnSpawn = false
+        carFlyQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        carFlyQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(0, 115, 0, 46)
+        button.Position = UDim2.new(0.5, -58, 0.3, 0)
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        button.BackgroundTransparency = 0.15
+        button.BorderSizePixel = 0
+        button.Text = CarFly.Enabled and "飞车: 开" or "飞车: 关"
+        button.TextColor3 = Color3.fromHSV(0, 1, 1)
+        button.TextSize = 14
+        button.Font = Enum.Font.GothamBold
+        button.Parent = carFlyQuickScreenGui
+        carFlyQuickButton = button
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 2
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Color = Color3.fromHSV(0, 1, 1)
+        stroke.Parent = button
+        carFlyQuickStrokeConn = RunService.Heartbeat:Connect(function()
+            if button and button.Parent then
+                local hue = (tick() * 0.15) % 1
+                stroke.Color = Color3.fromHSV(hue, 1, 1)
+                button.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+            end
+        end)
+        local dragging = false
+        local dragStart = nil
+        local startPos = nil
+        button.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if lockCarFlyBtn then return end
+                dragging = true
+                dragStart = input.Position
+                startPos = button.Position
+            end
+        end)
+        button.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+        button.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        button.MouseButton1Click:Connect(function()
+            if CarFly.Enabled then
+                CarFly_Stop()
+                if carFlyToggle then pcall(function() carFlyToggle:SetValue(false) end) end
+            else
+                local ok = CarFly_Start()
+                if ok then
+                    if carFlyToggle then pcall(function() carFlyToggle:SetValue(true) end) end
+                end
+            end
+            button.Text = CarFly.Enabled and "飞车: 开" or "飞车: 关"
+        end)
+        task.spawn(function()
+            while carFlyQuickScreenGui and carFlyQuickScreenGui.Parent and button and button.Parent do
+                task.wait(0.3)
+                button.Text = CarFly.Enabled and "飞车: 开" or "飞车: 关"
+            end
+        end)
+    end
+
+    VehicleTab:Toggle({
+        Title = "飞车快捷开关",
+        Value = false,
+        Callback = function(value)
+            if value then CreateCarFlyQuickToggle() else DestroyCarFlyQuickToggle() end
+        end
+    })
+    VehicleTab:Toggle({
+        Title = "锁定飞车快捷开关",
+        Value = false,
+        Callback = function(value)
+            lockCarFlyBtn = value
         end
     })
 
@@ -2171,7 +2190,7 @@ function createUI()
         end)
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
-    
+
     do
         local tbl2 = tbl2 or {}
         tbl2.HoldTime = 0
@@ -2255,15 +2274,7 @@ function createUI()
                     for _, plr in ipairs(Players:GetPlayers()) do
                         if plr ~= player and plr.Character then
                             local isWanted = false
-                            if (plr:GetAttribute("WantedLevel") or 0) > 0 then
-                                isWanted = true
-                            end
-                            if not isWanted and plr.Team then
-                                local tn = plr.Team.Name
-                                if (tn == "Civilian" or tn == "Citizen" or tn == "平民") and (plr:GetAttribute("WantedLevel") or 0) > 0 then
-                                    isWanted = true
-                                end
-                            end
+                            if (plr:GetAttribute("WantedLevel") or 0) > 0 then isWanted = true end
                             if isWanted then
                                 local targetRoot = plr.Character:FindFirstChild("HumanoidRootPart")
                                 if targetRoot then
@@ -2276,9 +2287,7 @@ function createUI()
                             end
                         end
                     end
-                    if closest then
-                        myRoot.CFrame = closest.CFrame + Vector3.new(0, 3, 0)
-                    end
+                    if closest then myRoot.CFrame = closest.CFrame + Vector3.new(0, 3, 0) end
                 end
             end
             task.wait(PoliceSettings.delay)
@@ -2323,52 +2332,18 @@ function createUI()
                     while loopTeleportLowHpEnabled and not isDestroyed do
                         local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                         if myRoot then
-                            if onlyNearbyTeleport then
-                                local nearest, nearestDist = nil, nearbyDistance
-                                for _, p in ipairs(Players:GetPlayers()) do
-                                    if p ~= player and p.Character then
-                                        local isPolice = false
-                                        local isCivilian = false
-                                        if p.Team then
-                                            local tn = p.Team.Name
-                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
-                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
-                                        end
-                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
-                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                                            if hum and hum.Health < 100 and targetRoot then
-                                                local d = (targetRoot.Position - myRoot.Position).Magnitude
-                                                if d < nearestDist then nearestDist = d; nearest = targetRoot end
-                                            end
-                                        end
-                                    end
-                                end
-                                if nearest then myRoot.CFrame = nearest.CFrame + Vector3.new(0, 3, 0) end
-                            else
-                                for _, p in ipairs(Players:GetPlayers()) do
-                                    if p ~= player and p.Character then
-                                        local isPolice = false
-                                        local isCivilian = false
-                                        if p.Team then
-                                            local tn = p.Team.Name
-                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
-                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
-                                        end
-                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
-                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                                            if hum and hum.Health < 100 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
-                                        end
-                                    end
+                            for _, p in ipairs(Players:GetPlayers()) do
+                                if p ~= player and p.Character then
+                                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                                    local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
+                                    if hum and hum.Health < 100 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
                                 end
                             end
                         end
                         task.wait(0.1)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送低血量玩家", Duration = 2 })
-            else WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送低血量玩家", Duration = 2 }) end
+            end
         end
     })
     DoctorTab:Toggle({
@@ -2381,52 +2356,18 @@ function createUI()
                     while loopTeleportZeroHpEnabled and not isDestroyed do
                         local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                         if myRoot then
-                            if onlyNearbyTeleport then
-                                local nearest, nearestDist = nil, nearbyDistance
-                                for _, p in ipairs(Players:GetPlayers()) do
-                                    if p ~= player and p.Character then
-                                        local isPolice = false
-                                        local isCivilian = false
-                                        if p.Team then
-                                            local tn = p.Team.Name
-                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
-                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
-                                        end
-                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
-                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                                            if hum and hum.Health <= 0 and targetRoot then
-                                                local d = (targetRoot.Position - myRoot.Position).Magnitude
-                                                if d < nearestDist then nearestDist = d; nearest = targetRoot end
-                                            end
-                                        end
-                                    end
-                                end
-                                if nearest then myRoot.CFrame = nearest.CFrame + Vector3.new(0, 3, 0) end
-                            else
-                                for _, p in ipairs(Players:GetPlayers()) do
-                                    if p ~= player and p.Character then
-                                        local isPolice = false
-                                        local isCivilian = false
-                                        if p.Team then
-                                            local tn = p.Team.Name
-                                            if tn:find("Police") or tn:find("警察") or tn:find("Cop") then isPolice = true end
-                                            if tn:find("Civilian") or tn:find("平民") or tn:find("Citizen") then isCivilian = true end
-                                        end
-                                        if not (skipPoliceTeleport and isPolice) and not (skipCivilianTeleport and isCivilian) then
-                                            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                                            local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                                            if hum and hum.Health <= 0 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
-                                        end
-                                    end
+                            for _, p in ipairs(Players:GetPlayers()) do
+                                if p ~= player and p.Character then
+                                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                                    local targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
+                                    if hum and hum.Health <= 0 and targetRoot then myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0); break end
                                 end
                             end
                         end
                         task.wait(0.1)
                     end
                 end)
-                WindUI:Notify({ Title = "wdfex-Hub", Content = "已开启循环传送血量为0的玩家", Duration = 2 })
-            else WindUI:Notify({ Title = "wdfex-Hub", Content = "已关闭循环传送血量为0的玩家", Duration = 2 }) end
+            end
         end
     })
     DoctorTab:Toggle({ Title = "不传送警察队伍的玩家", Value = false, Callback = function(value) skipPoliceTeleport = value end })
@@ -2980,47 +2921,9 @@ function createUI()
                         damageFactor = tbl11.auraDamage,
                         bulletProofTool = false,
                     })
-                    if tbl11.auraBeam and fn90 then
-                        fn90(position, v39.Position)
-                    end
+                    if tbl11.auraBeam and fn90 then fn90(position, v39.Position) end
                 end)
                 n10 = now
-            end
-        end
-        if tbl11.affectNPC and now - lastNPCCheckAura >= 0.5 then
-            lastNPCCheckAura = now
-            local playerPos = v34.Position
-            local nearbyParts = Workspace:GetPartBoundsInRadius(playerPos, 20)
-            local nearestNPC, nearestNPCHead, nearestNPCDist = nil, nil, nil
-            for _, part in ipairs(nearbyParts) do
-                local model = part:FindFirstAncestorOfClass("Model")
-                if model and not Players:GetPlayerFromCharacter(model) then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
-                        if head then
-                            local dist = (head.Position - playerPos).Magnitude
-                            if dist <= 20 and (not nearestNPCDist or dist < nearestNPCDist) then
-                                nearestNPC = model; nearestNPCHead = head; nearestNPCDist = dist
-                            end
-                        end
-                    end
-                end
-            end
-            if nearestNPC and nearestNPCHead then
-                pcall(function()
-                    playerEvent:FireServer("damage", {
-                        bodyParts = { { "Head", 1 } },
-                        shotCode = { playerPos, (nearestNPCHead.Position - playerPos).Unit },
-                        pos = nearestNPCHead.Position,
-                        target = nearestNPC,
-                        damageFactor = tbl11.auraDamage,
-                        bulletProofTool = false,
-                    })
-                    if tbl11.auraBeam and fn90 then
-                        fn90(playerPos, nearestNPCHead.Position)
-                    end
-                end)
             end
         end
     end)
@@ -3036,15 +2939,12 @@ function createUI()
         if value then if tbl11.auraEnabled then CreateTargetDisplay(); UpdateTargetDisplay() end
         else DestroyTargetDisplay() end
     end })
-    C:Toggle({ Title = "弹道显示", Value = false, Callback = function(value)
-        tbl11.auraBeam = value
-    end })
+    C:Toggle({ Title = "弹道显示", Value = false, Callback = function(value) tbl11.auraBeam = value end })
     C:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl11.affectNPC = v end })
     C:Toggle({ Title = "战斗检测", Default = false, Callback = function(v) tbl11.auraCombatCheck = v end })
     C:Slider({ Title = "攻击范围", Value = { Min = 10, Max = 800, Default = 50 }, Callback = function(v) tbl11.auraRange = v end })
     C:Slider({ Title = "伤害倍率", Value = { Min = 1, Max = 100, Default = 5 }, Callback = function(v) tbl11.auraDamage = v end })
 
-    -- =================== 自动卸车胎 ===================
     do
         local RS = game:GetService("ReplicatedStorage")
         local LocalPlayer = player
@@ -3266,7 +3166,6 @@ function createUI()
         Callback = function(v) if FL_TIRE then FL_TIRE.ShotInterval = v end end
     })
 
-    -- =================== Ragebot ===================
     tbl13 = {
         enabled = false,
         range = 150,
@@ -3301,51 +3200,30 @@ function createUI()
                 table.insert(list, model)
             end
         end
-        pcall(function()
-            add(arg11.Character)
-        end)
+        pcall(function() add(arg11.Character) end)
         pcall(function()
             local charactersFolder = Workspace:FindFirstChild("Characters")
-            if charactersFolder then
-                add(charactersFolder:FindFirstChild(arg11.Name))
-            end
+            if charactersFolder then add(charactersFolder:FindFirstChild(arg11.Name)) end
         end)
         for _, character in ipairs(list) do
             local humanoid = character:FindFirstChildOfClass("Humanoid") or character:FindFirstChild("Humanoid", true)
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-                or character:FindFirstChild("Torso")
-                or character:FindFirstChild("UpperTorso")
-                or (humanoid and humanoid.RootPart)
-            if not humanoidRootPart then
-                humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart")
-            end
-            if humanoidRootPart then
-                return character, humanoid, humanoidRootPart
-            end
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or (humanoid and humanoid.RootPart)
+            if not humanoidRootPart then humanoidRootPart = character.PrimaryPart or character:FindFirstChildWhichIsA("BasePart") end
+            if humanoidRootPart then return character, humanoid, humanoidRootPart end
         end
     end
 
-    fn63 = function(arg11)
-        return arg11 and arg11.Team and arg11.Team.Name or "Civilian"
-    end
+    fn63 = function(arg11) return arg11 and arg11.Team and arg11.Team.Name or "Civilian" end
 
     fn84 = function(arg11, arg12, arg13)
-        if not arg11 or arg11 == player then
-            return false
-        end
-        if arg12 then
-            return arg11.Team and arg11.Team.Name == "Police"
-        end
-        if arg13 then
-            return arg11.Team and arg11.Team.Name == "Civilian"
-        end
+        if not arg11 or arg11 == player then return false end
+        if arg12 then return arg11.Team and arg11.Team.Name == "Police" end
+        if arg13 then return arg11.Team and arg11.Team.Name == "Civilian" end
         return true
     end
 
     fn85 = function(arg11, arg12)
-        if not arg12 then
-            return true
-        end
+        if not arg12 then return true end
         return arg11:GetAttribute("CombatMode") == true or arg11:GetAttribute("Pursuit") == true
     end
 
@@ -3353,9 +3231,7 @@ function createUI()
         local tbl29 = tbl26[tbl12.targetPart] or { "Head" }
         for _, v33 in ipairs(tbl29) do
             local v34 = arg11:FindFirstChild(v33)
-            if v34 then
-                return v34
-            end
+            if v34 then return v34 end
         end
         return arg11:FindFirstChild("HumanoidRootPart")
     end
@@ -3363,7 +3239,6 @@ function createUI()
     fn90 = function(position, position2)
         local part = Instance.new("Part")
         local part2 = Instance.new("Part")
-
         for _, v32 in ipairs({ part, part2 }) do
             v32.Anchored = true
             v32.CanCollide = false
@@ -3371,7 +3246,6 @@ function createUI()
             v32.Size = Vector3.new(0.1, 0.1, 0.1)
             v32.Parent = Workspace
         end
-
         part.Position = position
         part2.Position = position2
         local attachment = Instance.new("Attachment", part)
@@ -3390,19 +3264,15 @@ function createUI()
             ColorSequenceKeypoint.new(0.84, Color3.fromRGB(0, 0, 255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(148, 0, 211))
         })
-
         local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://6534948092"
         sound.Volume = 0.5
         sound.Parent = part
         local soundEndedConn
         soundEndedConn = sound.Ended:Connect(function()
-            if part and part.Parent then
-                sound:Play()
-            end
+            if part and part.Parent then sound:Play() end
         end)
         sound:Play()
-
         task.delay(0.8, function()
             pcall(function()
                 if soundEndedConn then soundEndedConn:Disconnect() end
@@ -3421,27 +3291,19 @@ function createUI()
                     local position = v34.Position
                     local v35 = fn63(player)
                     for _, player2 in ipairs(Players:GetPlayers()) do
-                        if player2 ~= player
-                            and fn84(player2, tbl13.policeLock, tbl13.civilianLock)
-                            and fn85(player2, tbl13.combatCheck) then
+                        if player2 ~= player and fn84(player2, tbl13.policeLock, tbl13.civilianLock) and fn85(player2, tbl13.combatCheck) then
                             local v36, v37, v38Part = fn40(player2)
                             local v38 = v36 and (v36:FindFirstChild(tbl13.bodyPart) or fn87(v36))
                             if v36 and v37 and v38 and v37.Health > 0 then
-                                if tbl13.jobCheck and fn63(player2) == v35 then
-                                    continue
-                                end
-
+                                if tbl13.jobCheck and fn63(player2) == v35 then continue end
                                 if (v38.Position - position).Magnitude <= tbl13.range then
                                     if tbl13.wallCheck then
                                         local raycastParams = RaycastParams.new()
                                         raycastParams.FilterDescendantsInstances = { player.Character, Workspace.CurrentCamera }
                                         raycastParams.FilterType = Enum.RaycastFilterType.Exclude
                                         local hit = Workspace:Raycast(Workspace.CurrentCamera.CFrame.Position, v38.Position - Workspace.CurrentCamera.CFrame.Position, raycastParams)
-                                        if hit and not hit.Instance:IsDescendantOf(v36) then
-                                            continue
-                                        end
+                                        if hit and not hit.Instance:IsDescendantOf(v36) then continue end
                                     end
-
                                     pcall(function()
                                         playerEvent:FireServer("damage", {
                                             bodyParts = { { tbl13.bodyPart, 1 } },
@@ -3451,12 +3313,8 @@ function createUI()
                                             damageFactor = 1.5,
                                             bulletProofTool = false,
                                         })
-
-                                        if tbl13.beam then
-                                            fn90(position, v38.Position)
-                                        end
+                                        if tbl13.beam then fn90(position, v38.Position) end
                                     end)
-
                                     continue
                                 end
                             end
@@ -3464,7 +3322,6 @@ function createUI()
                     end
                 end
             end
-
             task.wait(tbl13.interval)
         end
     end)
@@ -3472,107 +3329,48 @@ function createUI()
     F:Toggle({
         Title = "Ragebot",
         Default = false,
-        Callback = function(enabled)
-            tbl13.enabled = enabled
-        end,
+        Callback = function(enabled) tbl13.enabled = enabled end,
     })
-
     F:Slider({
         Title = "攻击距离",
         Value = { Min = 10, Max = 500, Default = 150 },
         Step = 1,
-        Callback = function(range)
-            tbl13.range = range
-        end,
+        Callback = function(range) tbl13.range = range end,
     })
-
     F:Slider({
         Title = "攻击间隔",
         Value = { Min = 0.01, Max = 1, Default = 0.05 },
         Step = 0.01,
-        Callback = function(interval)
-            tbl13.interval = interval
-        end,
+        Callback = function(interval) tbl13.interval = interval end,
     })
-
     F:Dropdown({
         Title = "攻击部位",
         Values = { "头部", "躯干", "左臂", "右臂", "左腿", "右腿" },
         Value = "头部",
-        Callback = function(arg11)
-            tbl13.bodyPart = tbl14[arg11] or "Head"
-        end,
+        Callback = function(arg11) tbl13.bodyPart = tbl14[arg11] or "Head" end,
     })
-
-    F:Toggle({
-        Title = "职业检测",
-        Default = false,
-        Callback = function(jobCheck)
-            tbl13.jobCheck = jobCheck
-        end,
-    })
-
-    F:Toggle({
-        Title = "墙壁检测",
-        Default = false,
-        Callback = function(wallCheck)
-            tbl13.wallCheck = wallCheck
-        end,
-    })
-
-    F:Toggle({
-        Title = "活体检测",
-        Default = false,
-        Callback = function(aliveCheck)
-            tbl13.aliveCheck = aliveCheck
-        end,
-    })
-
-    F:Toggle({
-        Title = "战斗状态检测",
-        Default = false,
-        Callback = function(combatCheck)
-            tbl13.combatCheck = combatCheck
-        end,
-    })
-
+    F:Toggle({ Title = "职业检测", Default = false, Callback = function(jobCheck) tbl13.jobCheck = jobCheck end })
+    F:Toggle({ Title = "墙壁检测", Default = false, Callback = function(wallCheck) tbl13.wallCheck = wallCheck end })
+    F:Toggle({ Title = "活体检测", Default = false, Callback = function(aliveCheck) tbl13.aliveCheck = aliveCheck end })
+    F:Toggle({ Title = "战斗状态检测", Default = false, Callback = function(combatCheck) tbl13.combatCheck = combatCheck end })
     F:Toggle({
         Title = "锁定警察",
         Default = false,
         Callback = function(policeLock)
             tbl13.policeLock = policeLock
-            if policeLock then
-                tbl13.civilianLock = false
-            end
+            if policeLock then tbl13.civilianLock = false end
         end,
     })
-
     F:Toggle({
         Title = "锁定平民",
         Default = false,
         Callback = function(civilianLock)
             tbl13.civilianLock = civilianLock
-            if civilianLock then
-                tbl13.policeLock = false
-            end
+            if civilianLock then tbl13.policeLock = false end
         end,
     })
-
-    F:Toggle({
-        Title = "攻击NPC",
-        Default = false,
-        Callback = function(v)
-            tbl13.affectNPC = v
-        end,
-    })
-
-    F:Toggle({
-        Title = "弹道显示",
-        Default = false,
-        Callback = function(beam)
-            tbl13.beam = beam
-        end,
-    })
+    F:Toggle({ Title = "攻击NPC", Default = false, Callback = function(v) tbl13.affectNPC = v end })
+    F:Toggle({ Title = "弹道显示", Default = false, Callback = function(beam) tbl13.beam = beam end })
 
     D:Toggle({ Title = "启用传送", Value = false, Callback = function(value) Settings.TeleportEnabled = value end })
     local function doTeleport(pos, name)
