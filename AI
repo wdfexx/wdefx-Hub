@@ -1,207 +1,361 @@
 -- ============================================================
--- 悬浮窗 + 侧边栏分类 + 透视开关
+-- ESP 独立悬浮窗（从 wdfex-Hub 抽取，去 WindUI 依赖）
 -- 执行器：Krnl / Fluxus / Synapse 等
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 -- ============================================================
--- 1. 创建 GUI
+-- 1. ESP 状态（与原脚本同名同义）
 -- ============================================================
-local parentGui = (gethui and gethui()) or CoreGui
+local ESP_ENABLED       = false
+local ESP_SHOW_NAME     = true
+local ESP_SHOW_TEAM     = true
+local ESP_SHOW_HEALTH   = true
+local ESP_SHOW_DIST     = true
+local ESP_SHOW_SELF     = false
+local ESP_SHOW_PEERS    = true
+local ESP_LIST          = {}
+local ESP_REFRESH_COUNT = 0
 
-if parentGui:FindFirstChild("LierHub") then
-    parentGui.LierHub:Destroy()
+-- ============================================================
+-- 2. 数据获取（原样搬过来）
+-- ============================================================
+local function GetTeam(p)
+    if p.Team then
+        local teamName = p.Team.Name
+        local teamMap = {
+            ["Police"]="警察",["Fire"]="火焰",["Medical"]="医疗",["Road"]="道路",
+            ["Civilian"]="平民",["Citizen"]="平民",["Criminal"]="匪徒",["Gang"]="黑帮",
+            ["Military"]="军人",["Delivery"]="送货",["Farmer"]="农民",["Banker"]="银行家",
+            ["Mayor"]="市长",["Journalist"]="记者",["Lawyer"]="律师",["Prisoner"]="囚犯",
+            ["Guard"]="狱警",["Driver"]="司机",["Chef"]="厨师",["Builder"]="建筑工",
+            ["Miner"]="矿工",["Fisherman"]="渔夫",["Merchant"]="商人",["Student"]="学生",
+            ["Teacher"]="老师",["Engineer"]="工程师",["Scientist"]="科学家",["Pilot"]="飞行员",
+            ["Courier"]="快递员",["BusDriver"]="公交车司机"
+        }
+        return teamMap[teamName] or teamName
+    end
+    return "平民"
+end
+
+local function GetTeamColor(p)
+    if p.Team then return p.Team.TeamColor.Color end
+    return Color3.fromRGB(200, 200, 200)
+end
+
+local function GetHealth(p)
+    local c = p.Character
+    if not c then return 0 end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if not h then return 0 end
+    return math.floor(h.Health)
+end
+
+local function GetDist(p)
+    local mc = LocalPlayer.Character
+    if not mc then return 0 end
+    local mr = mc:FindFirstChild("HumanoidRootPart")
+    if not mr then return 0 end
+    local tc = p.Character
+    if not tc then return 0 end
+    local tr = tc:FindFirstChild("HumanoidRootPart")
+    if not tr then return 0 end
+    return math.floor((mr.Position - tr.Position).Magnitude)
+end
+
+-- ============================================================
+-- 3. ESP 对象管理（原样搬过来）
+-- ============================================================
+local function RemoveESP(id)
+    local d = ESP_LIST[id]
+    if d then
+        if d.Billboard then d.Billboard:Destroy() end
+        ESP_LIST[id] = nil
+    end
+end
+
+local function BuildESP(p)
+    if not p.Character then return end
+    if not ESP_SHOW_SELF and p == LocalPlayer then return end
+    local head = p.Character:FindFirstChild("Head")
+    if not head then return end
+    if ESP_LIST[p.UserId] then
+        if ESP_LIST[p.UserId].Billboard then ESP_LIST[p.UserId].Billboard.Enabled = true end
+        return
+    end
+    local bb = Instance.new("BillboardGui")
+    bb.Size = UDim2.new(0, 200, 0, 100)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.MaxDistance = 764
+    bb.Parent = head
+
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 1, 0)
+    f.BackgroundTransparency = 1
+    f.Parent = bb
+
+    ESP_LIST[p.UserId] = { Billboard = bb, Frame = f }
+end
+
+local function RefreshESP()
+    if not ESP_ENABLED then
+        for _, d in pairs(ESP_LIST) do
+            if d.Billboard then d.Billboard.Enabled = false end
+        end
+        return
+    end
+    ESP_REFRESH_COUNT = ESP_REFRESH_COUNT + 1
+    if ESP_REFRESH_COUNT % 3 ~= 0 then return end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if not ESP_SHOW_SELF and p == LocalPlayer then RemoveESP(p.UserId) continue end
+        if not p.Character then RemoveESP(p.UserId) continue end
+        if ESP_REFRESH_COUNT % 30 == 0 and ESP_LIST[p.UserId] then RemoveESP(p.UserId) end
+        if not ESP_LIST[p.UserId] then BuildESP(p) end
+        local d = ESP_LIST[p.UserId]
+        if not d then continue end
+        if not d.Billboard or not d.Billboard.Parent then
+            ESP_LIST[p.UserId] = nil
+            BuildESP(p)
+            d = ESP_LIST[p.UserId]
+            if not d then continue end
+        end
+        d.Billboard.Enabled = true
+
+        local f = d.Frame
+        for _, c in ipairs(f:GetChildren()) do c:Destroy() end
+
+        local y, lines = 0, 0
+        local team, color, hp, dist = GetTeam(p), GetTeamColor(p), GetHealth(p), GetDist(p)
+
+        if ESP_SHOW_NAME then
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, 0, 0, 20)
+            l.Position = UDim2.new(0, 0, 0, y)
+            l.BackgroundTransparency = 1
+            if p == LocalPlayer then
+                if ESP_SHOW_PEERS then l.Text = "wdfex-Hub"; l.TextColor3 = Color3.fromRGB(0, 255, 255)
+                else l.Text = p.Name .. " (你)"; l.TextColor3 = Color3.fromRGB(0, 255, 255) end
+            else
+                l.Text = p.Name
+                l.TextColor3 = color
+            end
+            l.TextSize = 15
+            l.Font = Enum.Font.GothamBold
+            l.TextStrokeTransparency = 0.3
+            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            l.TextXAlignment = Enum.TextXAlignment.Center
+            l.Parent = f
+            y = y + 22; lines = lines + 1
+        end
+
+        if ESP_SHOW_TEAM then
+            local isWanted = false
+            if p:GetAttribute("Wanted") then isWanted = p:GetAttribute("Wanted")
+            elseif p:GetAttribute("WantedLevel") and p:GetAttribute("WantedLevel") > 0 then isWanted = true
+            elseif p:GetAttribute("Bounty") and p:GetAttribute("Bounty") > 0 then isWanted = true
+            elseif p:GetAttribute("IsWanted") then isWanted = true end
+            if p.Character then
+                for _, child in pairs(p.Character:GetChildren()) do
+                    if child:IsA("ObjectValue") then
+                        if child.Name:lower():match("wanted") or child.Name:lower():match("bounty") then
+                            isWanted = true
+                        end
+                    end
+                end
+            end
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, 0, 0, 18)
+            l.Position = UDim2.new(0, 0, 0, y)
+            l.BackgroundTransparency = 1
+            l.TextSize = 13
+            l.Font = Enum.Font.GothamBold
+            l.TextStrokeTransparency = 0.3
+            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            l.TextXAlignment = Enum.TextXAlignment.Center
+            l.Parent = f
+            if isWanted then
+                l.Text = "[通缉]"
+                l.TextColor3 = Color3.fromRGB(255, 50, 50)
+            else
+                l.Text = "[" .. team .. "]"
+                l.TextColor3 = color
+            end
+            y = y + 20; lines = lines + 1
+        end
+
+        if ESP_SHOW_HEALTH then
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, 0, 0, 18)
+            l.Position = UDim2.new(0, 0, 0, y)
+            l.BackgroundTransparency = 1
+            local c = hp > 70 and Color3.fromRGB(0, 255, 100)
+                   or hp > 40 and Color3.fromRGB(255, 200, 0)
+                   or Color3.fromRGB(255, 50, 50)
+            l.Text = hp .. "HP"
+            l.TextColor3 = c
+            l.TextSize = 13
+            l.Font = Enum.Font.GothamBold
+            l.TextStrokeTransparency = 0.3
+            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            l.TextXAlignment = Enum.TextXAlignment.Center
+            l.Parent = f
+            y = y + 20; lines = lines + 1
+        end
+
+        if ESP_SHOW_DIST then
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, 0, 0, 18)
+            l.Position = UDim2.new(0, 0, 0, y)
+            l.BackgroundTransparency = 1
+            l.Text = dist .. "m"
+            l.TextColor3 = Color3.fromRGB(200, 200, 200)
+            l.TextSize = 13
+            l.Font = Enum.Font.Gotham
+            l.TextStrokeTransparency = 0.3
+            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            l.TextXAlignment = Enum.TextXAlignment.Center
+            l.Parent = f
+            y = y + 20; lines = lines + 1
+        end
+
+        d.Billboard.Size = UDim2.new(0, 200, 0, lines * 20 + 10)
+    end
+end
+
+-- 原脚本的刷新循环 + 玩家进出绑定
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if ESP_ENABLED then RefreshESP() end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        task.wait(0.3)
+        if ESP_ENABLED then RefreshESP() end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    RemoveESP(p.UserId)
+end)
+
+-- ============================================================
+-- 4. 独立悬浮窗 UI（替代原 WindUI 的 E:Toggle）
+-- ============================================================
+local parentGui = (gethui and gethui()) or game:GetService("CoreGui")
+if parentGui:FindFirstChild("ESPStandalone") then
+    parentGui.ESPStandalone:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "LierHub"
+ScreenGui.Name = "ESPStandalone"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = parentGui
 
--- 主窗口
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 420, 0, 300)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -150)
-MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 220, 0, 320)
+Main.Position = UDim2.new(0.5, -110, 0.5, -160)
+Main.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = MainFrame
+local mc = Instance.new("UICorner")
+mc.CornerRadius = UDim.new(0, 8)
+mc.Parent = Main
 
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(60, 60, 75)
-UIStroke.Thickness = 1
-UIStroke.Parent = MainFrame
+local ms = Instance.new("UIStroke")
+ms.Color = Color3.fromRGB(60, 60, 80)
+ms.Thickness = 1
+ms.Parent = Main
 
--- 标题栏
 local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 36)
+TitleBar.Size = UDim2.new(1, 0, 0, 32)
 TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+TitleBar.Parent = Main
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = TitleBar
+local tc = Instance.new("UICorner")
+tc.CornerRadius = UDim.new(0, 8)
+tc.Parent = TitleBar
 
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -70, 1, 0)
-TitleLabel.Position = UDim2.new(0, 12, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Lier Hub  |  v1.0"
-TitleLabel.TextColor3 = Color3.fromRGB(220, 220, 235)
-TitleLabel.TextSize = 14
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.Parent = TitleBar
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "ESP 透视"
+Title.TextColor3 = Color3.fromRGB(220, 220, 235)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
 
--- 关闭按钮
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -34, 0, 4)
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.Position = UDim2.new(1, -28, 0, 4)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 40)
 CloseBtn.Text = "X"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-CloseBtn.TextSize = 14
+CloseBtn.TextSize = 12
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.BorderSizePixel = 0
 CloseBtn.Parent = TitleBar
 
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseBtn
+local cc = Instance.new("UICorner")
+cc.CornerRadius = UDim.new(0, 5)
+cc.Parent = CloseBtn
 
 CloseBtn.MouseButton1Click:Connect(function()
+    -- 关闭时清掉所有 ESP 对象，避免残影
+    ESP_ENABLED = false
+    for _, d in pairs(ESP_LIST) do
+        if d.Billboard then d.Billboard:Destroy() end
+    end
+    ESP_LIST = {}
     ScreenGui:Destroy()
 end)
 
--- 侧边栏
-local Sidebar = Instance.new("Frame")
-Sidebar.Name = "Sidebar"
-Sidebar.Size = UDim2.new(0, 100, 1, -36)
-Sidebar.Position = UDim2.new(0, 0, 0, 36)
-Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-Sidebar.BorderSizePixel = 0
-Sidebar.Parent = MainFrame
-
-local SidebarCorner = Instance.new("UICorner")
-SidebarCorner.CornerRadius = UDim.new(0, 8)
-SidebarCorner.Parent = Sidebar
-
-local SidebarLayout = Instance.new("UIListLayout")
-SidebarLayout.Padding = UDim.new(0, 4)
-SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-SidebarLayout.Parent = Sidebar
-
-local SidebarPadding = Instance.new("UIPadding")
-SidebarPadding.PaddingTop = UDim.new(0, 8)
-SidebarPadding.PaddingLeft = UDim.new(0, 6)
-SidebarPadding.PaddingRight = UDim.new(0, 6)
-SidebarPadding.Parent = Sidebar
-
--- 内容区
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.Size = UDim2.new(1, -100, 1, -36)
-Content.Position = UDim2.new(0, 100, 0, 36)
+local Content = Instance.new("ScrollingFrame")
+Content.Size = UDim2.new(1, -16, 1, -48)
+Content.Position = UDim2.new(0, 8, 0, 40)
 Content.BackgroundTransparency = 1
-Content.Parent = MainFrame
+Content.BorderSizePixel = 0
+Content.ScrollBarThickness = 4
+Content.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
+Content.CanvasSize = UDim2.new(0, 0, 0, 0)
+Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Content.Parent = Main
 
-local ContentPadding = Instance.new("UIPadding")
-ContentPadding.PaddingTop = UDim.new(0, 8)
-ContentPadding.PaddingLeft = UDim.new(0, 8)
-ContentPadding.PaddingRight = UDim.new(0, 8)
-ContentPadding.Parent = Content
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = Content
 
--- ============================================================
--- 2. 分类页面管理
--- ============================================================
-local pages = {}
-local buttons = {}
-
-local function CreatePage(name)
-    local page = Instance.new("ScrollingFrame")
-    page.Name = name .. "Page"
-    page.Size = UDim2.new(1, 0, 1, 0)
-    page.BackgroundTransparency = 1
-    page.BorderSizePixel = 0
-    page.ScrollBarThickness = 4
-    page.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.Visible = false
-    page.Parent = Content
-
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 6)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = page
-
-    pages[name] = page
-    return page
-end
-
-local function CreateSidebarButton(name, order)
-    local btn = Instance.new("TextButton")
-    btn.Name = name .. "Btn"
-    btn.Size = UDim2.new(1, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
-    btn.Text = name
-    btn.TextColor3 = Color3.fromRGB(180, 180, 200)
-    btn.TextSize = 13
-    btn.Font = Enum.Font.Gotham
-    btn.BorderSizePixel = 0
-    btn.LayoutOrder = order
-    btn.Parent = Sidebar
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = btn
-
-    btn.MouseButton1Click:Connect(function()
-        for n, p in pairs(pages) do
-            p.Visible = (n == name)
-        end
-        for _, b in pairs(buttons) do
-            b.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
-            b.TextColor3 = Color3.fromRGB(180, 180, 200)
-        end
-        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-        btn.TextColor3 = Color3.fromRGB(120, 200, 255)
-    end)
-
-    buttons[name] = btn
-    return btn
-end
-
--- ============================================================
--- 3. 功能条目工厂
--- ============================================================
-local function CreateToggle(parent, text, callback)
+-- Toggle 工厂
+local function CreateToggle(text, initial, callback, order)
     local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 34)
+    holder.Size = UDim2.new(1, 0, 0, 32)
     holder.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     holder.BorderSizePixel = 0
-    holder.Parent = parent
+    holder.LayoutOrder = order
+    holder.Parent = Content
 
     local hc = Instance.new("UICorner")
     hc.CornerRadius = UDim.new(0, 6)
     hc.Parent = holder
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Size = UDim2.new(1, -60, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
@@ -211,27 +365,42 @@ local function CreateToggle(parent, text, callback)
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = holder
 
-    local toggleBg = Instance.new("Frame")
-    toggleBg.Size = UDim2.new(0, 44, 0, 22)
-    toggleBg.Position = UDim2.new(1, -54, 0.5, -11)
-    toggleBg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    toggleBg.BorderSizePixel = 0
-    toggleBg.Parent = holder
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(0, 40, 0, 20)
+    bg.Position = UDim2.new(1, -50, 0.5, -10)
+    bg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    bg.BorderSizePixel = 0
+    bg.Parent = holder
 
-    local tbc = Instance.new("UICorner")
-    tbc.CornerRadius = UDim.new(1, 0)
-    tbc.Parent = toggleBg
+    local bgc = Instance.new("UICorner")
+    bgc.CornerRadius = UDim.new(1, 0)
+    bgc.Parent = bg
 
     local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 18, 0, 18)
-    knob.Position = UDim2.new(0, 2, 0.5, -9)
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new(0, 2, 0.5, -8)
     knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
     knob.BorderSizePixel = 0
-    knob.Parent = toggleBg
+    knob.Parent = bg
 
     local kc = Instance.new("UICorner")
     kc.CornerRadius = UDim.new(1, 0)
     kc.Parent = knob
+
+    local state = initial
+    local function setState(v)
+        state = v
+        if v then
+            bg.BackgroundColor3 = Color3.fromRGB(70, 140, 220)
+            knob.Position = UDim2.new(1, -18, 0.5, -8)
+            knob.BackgroundColor3 = Color3.fromRGB(240, 240, 255)
+        else
+            bg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+            knob.Position = UDim2.new(0, 2, 0.5, -8)
+            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
+        end
+        if callback then pcall(callback, v) end
+    end
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 1, 0)
@@ -239,219 +408,21 @@ local function CreateToggle(parent, text, callback)
     btn.Text = ""
     btn.Parent = holder
 
-    local state = false
-
-    local function setState(v)
-        state = v
-        if v then
-            toggleBg.BackgroundColor3 = Color3.fromRGB(70, 140, 220)
-            knob.Position = UDim2.new(1, -20, 0.5, -9)
-            knob.BackgroundColor3 = Color3.fromRGB(240, 240, 255)
-        else
-            toggleBg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-            knob.Position = UDim2.new(0, 2, 0.5, -9)
-            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
-        end
-        if callback then
-            pcall(callback, v)
-        end
-    end
-
     btn.MouseButton1Click:Connect(function()
         setState(not state)
     end)
 
-    holder.Parent = parent
+    setState(initial)
     return setState
 end
 
--- ============================================================
--- 4. 建页面 + 建按钮
--- ============================================================
-CreatePage("Visualize")
-CreatePage("Player")
-CreatePage("Misc")
+-- 挂控件（顺序、初值、回调全按原脚本的 E:Toggle）
+CreateToggle("透视总开关", false, function(v) ESP_ENABLED = v; if v then RefreshESP() end end, 1)
+CreateToggle("显示名字",  true,  function(v) ESP_SHOW_NAME = v;   if ESP_ENABLED then RefreshESP() end end, 2)
+CreateToggle("显示队伍",  true,  function(v) ESP_SHOW_TEAM = v;   if ESP_ENABLED then RefreshESP() end end, 3)
+CreateToggle("显示血量",  true,  function(v) ESP_SHOW_HEALTH = v; if ESP_ENABLED then RefreshESP() end end, 4)
+CreateToggle("显示距离",  true,  function(v) ESP_SHOW_DIST = v;   if ESP_ENABLED then RefreshESP() end end, 5)
+CreateToggle("透视自己",  false, function(v) ESP_SHOW_SELF = v;   if ESP_ENABLED then RefreshESP() end end, 6)
+CreateToggle("同行显示",  true,  function(v) ESP_SHOW_PEERS = v;  if ESP_ENABLED then RefreshESP() end end, 7)
 
-CreateSidebarButton("Visualize", 1)
-CreateSidebarButton("Player", 2)
-CreateSidebarButton("Misc", 3)
-
--- 默认选中第一个
-buttons["Visualize"].BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-buttons["Visualize"].TextColor3 = Color3.fromRGB(120, 200, 255)
-pages["Visualize"].Visible = true
-
--- ============================================================
--- 5. 透视（ESP）实现
--- ============================================================
-local espEnabled = false
-local espObjects = {} -- [player] = {box, name, highlight}
-local espConnection = nil
-
-local function CreateESPForPlayer(player)
-    if player == LocalPlayer then return end
-    if espObjects[player] then return end
-
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = "LierESP_Box"
-    box.Adornee = nil
-    box.AlwaysOnTop = true
-    box.ZIndex = 5
-    box.Size = Vector3.new(4, 5, 4)
-    box.Transparency = 0.6
-    box.Color3 = Color3.fromRGB(255, 60, 60)
-    box.Parent = (gethui and gethui()) or CoreGui
-
-    local name = Instance.new("BillboardGui")
-    name.Name = "LierESP_Name"
-    name.AlwaysOnTop = true
-    name.Size = UDim2.new(0, 200, 0, 40)
-    name.StudsOffset = Vector3.new(0, 3, 0)
-    name.Adornee = nil
-    name.Parent = (gethui and gethui()) or CoreGui
-
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0, 1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = ""
-    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextStrokeTransparency = 0
-    nameLabel.TextSize = 14
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.Parent = name
-
-    espObjects[player] = {
-        box = box,
-        name = name,
-        nameLabel = nameLabel,
-    }
-end
-
-local function DestroyESPForPlayer(player)
-    local obj = espObjects[player]
-    if obj then
-        if obj.box then obj.box:Destroy() end
-        if obj.name then obj.name:Destroy() end
-        espObjects[player] = nil
-    end
-end
-
-local function IsPlayerVisible(player)
-    if not player.Character then return false end
-    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-
-    -- 判断是否被墙挡住（射线检测）
-    local origin = Camera.CFrame.Position
-    local target = hrp.Position
-    local dir = target - origin
-
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = { Camera, player.Character, LocalPlayer.Character }
-
-    local result = workspace:Raycast(origin, dir, params)
-    if not result then return true end
-    if result.Instance:IsDescendantOf(player.Character) then return true end
-    return false
-end
-
-local function UpdateESP()
-    if not espEnabled then return end
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            if not espObjects[player] then
-                CreateESPForPlayer(player)
-            end
-
-            local obj = espObjects[player]
-            if obj and player.Character then
-                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                local humanoid = player.Character:FindFirstChild("Humanoid")
-
-                if hrp and humanoid and humanoid.Health > 0 then
-                    local visible = IsPlayerVisible(player)
-                    obj.box.Adornee = hrp
-                    obj.box.Transparency = visible and 0.4 or 0.7
-                    obj.box.Color3 = visible and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(255, 180, 60)
-
-                    obj.name.Adornee = hrp
-                    obj.nameLabel.Text = string.format(
-                        "%s [%d]%s",
-                        player.Name,
-                        math.floor(humanoid.Health),
-                        visible and "" or "  [WALL]"
-                    )
-                    obj.nameLabel.TextColor3 = visible and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(255, 180, 60)
-                else
-                    obj.box.Adornee = nil
-                    obj.name.Adornee = nil
-                end
-            end
-        end
-    end
-end
-
-local function StartESP()
-    -- 给已有玩家建对象
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            CreateESPForPlayer(player)
-        end
-    end
-
-    -- 玩家加入/离开
-    local joinConn = Players.PlayerAdded:Connect(function(p)
-        if espEnabled and p ~= LocalPlayer then
-            CreateESPForPlayer(p)
-        end
-    end)
-    local leaveConn = Players.PlayerRemoving:Connect(function(p)
-        DestroyESPForPlayer(p)
-    end)
-
-    -- 每帧更新
-    espConnection = RunService.RenderStepped:Connect(UpdateESP)
-
-    -- 保存连接
-    espObjects._joinConn = joinConn
-    espObjects._leaveConn = leaveConn
-end
-
-local function StopESP()
-    for player, _ in pairs(espObjects) do
-        if typeof(player) == "Instance" then
-            DestroyESPForPlayer(player)
-        end
-    end
-    espObjects = {}
-
-    if espConnection then
-        espConnection:Disconnect()
-        espConnection = nil
-    end
-end
-
--- ============================================================
--- 6. 挂载透视开关到 Visualize 分类
--- ============================================================
-CreateToggle(pages["Visualize"], "透视 (ESP)", function(state)
-    espEnabled = state
-    if state then
-        StartESP()
-    else
-        StopESP()
-    end
-end)
-
--- ============================================================
--- 7. 清理（角色重生时）
--- ============================================================
-LocalPlayer.CharacterAdded:Connect(function()
-    if espEnabled then
-        collectgarbage()
-    end
-end)
-
-print("[Lier Hub] 加载完成。透视开关在 Visualize 分类中。")
+print("[ESP Standalone] 加载完成")
