@@ -1,0 +1,225 @@
+-- ============================================
+-- Roblox 悬浮窗 UI 示例 (LocalScript)
+-- 放到 StarterPlayer > StarterPlayerScripts 下
+-- ============================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ============ 1. 创建 ScreenGui ============
+local gui = Instance.new("ScreenGui")
+gui.Name = "FloatingMenuGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+-- ============ 2. 创建主悬浮窗 ============
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 220, 0, 260)
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -130)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(90, 90, 120)
+stroke.Thickness = 1.5
+stroke.Parent = mainFrame
+
+-- ============ 3. 标题栏（可拖动） ============
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -50, 1, 0)
+titleText.Position = UDim2.new(0, 12, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "✨ 悬浮菜单"
+titleText.TextColor3 = Color3.fromRGB(230, 230, 255)
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 16
+titleText.Parent = titleBar
+
+-- ============ 4. 拖拽逻辑 ============
+local dragging = false
+local dragStart, startPos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        -- 悬浮时置顶
+        mainFrame.ZIndex = 10
+        titleBar.ZIndex = 11
+        titleText.ZIndex = 12
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- ============ 5. 内容区域 ============
+local content = Instance.new("ScrollingFrame")
+content.Name = "Content"
+content.Size = UDim2.new(1, -16, 1, -50)
+content.Position = UDim2.new(0, 8, 0, 42)
+content.BackgroundTransparency = 1
+content.BorderSizePixel = 0
+content.ScrollBarThickness = 4
+content.CanvasSize = UDim2.new(0, 0, 0, 0)
+content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+content.Parent = mainFrame
+
+local list = Instance.new("UIListLayout")
+list.Padding = UDim.new(0, 6)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Parent = content
+
+-- 生成按钮的辅助函数
+local function makeButton(text, callback, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -6, 0, 34)
+    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
+    btn.BorderSizePixel = 0
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(240, 240, 255)
+    btn.Font = Enum.Font.GothamMedium
+    btn.TextSize = 14
+    btn.AutoButtonColor = true
+    btn.Parent = content
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = btn
+
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+-- ============ 6. 示例功能按钮 ============
+
+-- 功能 1：显示通知消息
+makeButton("📢 显示提示", function()
+    local hint = Instance.new("TextLabel")
+    hint.Size = UDim2.new(0, 300, 0, 40)
+    hint.Position = UDim2.new(0.5, -150, 0.1, 0)
+    hint.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    hint.BackgroundTransparency = 0.2
+    hint.Text = "这是一个提示消息！"
+    hint.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hint.Font = Enum.Font.GothamBold
+    hint.TextSize = 16
+    hint.Parent = gui
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = hint
+
+    task.delay(2, function()
+        local tween = TweenService:Create(hint, TweenInfo.new(0.5), {BackgroundTransparency = 1, TextTransparency = 1})
+        tween:Play()
+        tween.Completed:Wait()
+        hint:Destroy()
+    end)
+end, Color3.fromRGB(70, 100, 180))
+
+-- 功能 2：改变角色行走速度（仅对自己的角色有效）
+makeButton("🏃 行走速度 +5", function()
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        local hum = char.Humanoid
+        hum.WalkSpeed = hum.WalkSpeed + 5
+    end
+end, Color3.fromRGB(80, 150, 90))
+
+-- 功能 3：跳跃力 +5
+makeButton("🦘 跳跃力 +5", function()
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.JumpPower = char.Humanoid.JumpPower + 5
+    end
+end, Color3.fromRGB(150, 110, 70))
+
+-- 功能 4：重置属性
+makeButton("♻️ 恢复默认属性", function()
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = 16
+        char.Humanoid.JumpPower = 50
+    end
+end, Color3.fromRGB(120, 60, 60))
+
+-- 功能 5：隐藏/显示悬浮窗
+makeButton("👁️ 隐藏菜单", function()
+    mainFrame.Visible = false
+    -- 创建一个小的恢复按钮
+    local reopen = Instance.new("TextButton")
+    reopen.Name = "ReopenBtn"
+    reopen.Size = UDim2.new(0, 50, 0, 50)
+    reopen.Position = UDim2.new(0, 20, 0.5, -25)
+    reopen.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+    reopen.BorderSizePixel = 0
+    reopen.Text = "☰"
+    reopen.TextColor3 = Color3.fromRGB(230, 230, 255)
+    reopen.TextSize = 24
+    reopen.Font = Enum.Font.GothamBold
+    reopen.Parent = gui
+
+    local rc = Instance.new("UICorner")
+    rc.CornerRadius = UDim.new(1, 0)
+    rc.Parent = reopen
+
+    reopen.MouseButton1Click:Connect(function()
+        mainFrame.Visible = true
+        reopen:Destroy()
+    end)
+end, Color3.fromRGB(90, 60, 120))
+
+-- ============ 7. 快捷键：按 RightShift 显示/隐藏 ============
+local toggleKey = Enum.KeyCode.RightShift
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == toggleKey then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+-- ============ 8. 启动提示 ============
+print("[FloatingMenu] 已加载，按 RightShift 可显示/隐藏菜单")
