@@ -1,1140 +1,395 @@
---=====================================================
--- LierUI v4 · 悬浮球展开式控制台
--- 架构：圆形悬浮球(收起) → 点击展开 → 左图标导航+右内容
--- 放到 LocalScript，位置：StarterPlayer > StarterPlayerScripts
---=====================================================
-
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local player = Players.LocalPlayer
 
-local LP = Players.LocalPlayer
-local PG = LP:WaitForChild("PlayerGui")
+for _, p in ipairs({ player:FindFirstChild("PlayerGui"), game:GetService("CoreGui") }) do
+    if p then pcall(function()
+        local old = p:FindFirstChild("RemoteVehicleGui")
+        if old then old:Destroy() end
+    end) end
+end
 
---=====================================================
--- 主题
---=====================================================
-local T = {
-    Bg = Color3.fromRGB(16, 17, 24),
-    Bg2 = Color3.fromRGB(22, 23, 33),
-    Card = Color3.fromRGB(28, 30, 42),
-    CardHover = Color3.fromRGB(36, 38, 54),
-    Line = Color3.fromRGB(45, 48, 66),
-    Acc = Color3.fromRGB(130, 110, 255),
-    Acc2 = Color3.fromRGB(90, 190, 255),
-    Acc3 = Color3.fromRGB(255, 110, 200),
-    OK = Color3.fromRGB(110, 230, 150),
-    Bad = Color3.fromRGB(255, 100, 120),
-    Warn = Color3.fromRGB(255, 200, 100),
-    Tx = Color3.fromRGB(235, 238, 250),
-    Tx2 = Color3.fromRGB(150, 155, 180),
-    Tx3 = Color3.fromRGB(90, 95, 120),
-    W = 560,
-    H = 400,
-    Ball = 52,
-    SideW = 60,
-    TopH = 46,
-    BotH = 32,
-    R = 14,
-    ItemH = 44,
-    T1 = 0.12,
-    T2 = 0.22,
-    T3 = 0.38,
+local Controller = {
+    ControlledVehicle = nil,
+    OriginalCameraSubject = nil,
+    IsControlling = false,
+    Speed = 300,
+    Mode = "ground", -- 默认不飞天 (贴地跑)
+    FlyThread = nil,
+    HRP = nil,
+    BV = nil, 
+    AlignOrientation = nil, 
+    OriginalReplicationFocus = player.ReplicationFocus,
 }
 
---=====================================================
--- 工具
---=====================================================
-local U = {}
-function U.corner(p, r)
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or T.R); c.Parent = p; return c
-end
-function U.stroke(p, col, th, tr)
-    local s = Instance.new("UIStroke")
-    s.Color = col or T.Line; s.Thickness = th or 1
-    s.Transparency = tr or 0.6; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Parent = p; return s
-end
-function U.grad(p, c1, c2, rot)
-    local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, c1), ColorSequenceKeypoint.new(1, c2)})
-    g.Rotation = rot or 90; g.Parent = p; return g
-end
-function U.pad(p, t, r, b, l)
-    local pa = Instance.new("UIPadding")
-    pa.PaddingTop = UDim.new(0, t or 0); pa.PaddingRight = UDim.new(0, r or 0)
-    pa.PaddingBottom = UDim.new(0, b or 0); pa.PaddingLeft = UDim.new(0, l or 0)
-    pa.Parent = p; return pa
-end
-function U.tw(o, t, props, st, d)
-    local tw = TweenService:Create(o, TweenInfo.new(t, st or Enum.EasingStyle.Quint, d or Enum.EasingDirection.Out), props)
-    tw:Play(); return tw
-end
-function U.txt(parent, text, size, col, bold, align)
-    local l = Instance.new("TextLabel")
-    l.BackgroundTransparency = 1; l.Text = text
-    l.TextColor3 = col or T.Tx; l.TextSize = size or 12
-    l.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
-    l.TextXAlignment = align or Enum.TextXAlignment.Left
-    l.TextYAlignment = Enum.TextYAlignment.Center
-    l.Parent = parent; return l
-end
+local PlayerModule = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
 
---=====================================================
--- 窗口类
---=====================================================
-local Win = {}
-Win.__index = Win
-
-function Win.new(cfg)
-    cfg = cfg or {}
-    local self = setmetatable({}, Win)
-
-    self.title = cfg.Title or "LierUI"
-    self.sub = cfg.Subtitle or "v4"
-    self.w = cfg.Width or T.W
-    self.h = cfg.Height or T.H
-    self.opened = false
-    self.tabs = {}
-    self.current = nil
-    self.conns = {}
-    self.ballPos = UDim2.new(0, 20, 0.5, -T.Ball / 2)
-
-    -- ScreenGui
-    self.gui = Instance.new("ScreenGui")
-    self.gui.Name = "LierUIv4_" .. tostring(math.random(1, 99999))
-    self.gui.ResetOnSpawn = false
-    self.gui.IgnoreGuiInset = true
-    self.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    self.gui.Parent = PG
-
-    --=========================================
-    -- 悬浮球
-    --=========================================
-    self.ball = Instance.new("TextButton")
-    self.ball.Name = "Ball"
-    self.ball.Size = UDim2.new(0, T.Ball, 0, T.Ball)
-    self.ball.Position = self.ballPos
-    self.ball.BackgroundColor3 = T.Bg
-    self.ball.BackgroundTransparency = 0.05
-    self.ball.Text = ""
-    self.ball.BorderSizePixel = 0
-    self.ball.AutoButtonColor = false
-    self.ball.ZIndex = 100
-    self.ball.Parent = self.gui
-    U.corner(self.ball, T.Ball / 2)
-    U.stroke(self.ball, T.Acc, 1.5, 0.3)
-
-    -- 球内的光晕
-    local ballGlow = Instance.new("Frame")
-    ballGlow.Size = UDim2.new(1, -8, 1, -8)
-    ballGlow.Position = UDim2.new(0, 4, 0, 4)
-    ballGlow.BackgroundColor3 = T.Acc
-    ballGlow.BackgroundTransparency = 0.7
-    ballGlow.BorderSizePixel = 0
-    ballGlow.ZIndex = 101
-    ballGlow.Parent = self.ball
-    U.corner(ballGlow, (T.Ball - 8) / 2)
-    U.grad(ballGlow, T.Acc, T.Acc2, 45)
-
-    -- 球内图标（三条线）
-    local iconLines = Instance.new("Frame")
-    iconLines.Size = UDim2.new(0, 20, 0, 16)
-    iconLines.Position = UDim2.new(0.5, -10, 0.5, -8)
-    iconLines.BackgroundTransparency = 1
-    iconLines.ZIndex = 102
-    iconLines.Parent = self.ball
-
-    for i = 1, 3 do
-        local line = Instance.new("Frame")
-        line.Size = UDim2.new(i == 2 and 0.7 or 1, 0, 0, 2)
-        line.Position = UDim2.new(i == 2 and 0.15 or 0, 0, 0, (i - 1) * 6)
-        line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        line.BorderSizePixel = 0
-        line.ZIndex = 103
-        line.Parent = iconLines
-        U.corner(line, 1)
-    end
-
-    -- 球的呼吸光圈
-    local ring = Instance.new("Frame")
-    ring.Size = UDim2.new(1, 10, 1, 10)
-    ring.Position = UDim2.new(0, -5, 0, -5)
-    ring.BackgroundTransparency = 1
-    ring.BorderSizePixel = 0
-    ring.ZIndex = 99
-    ring.Parent = self.ball
-    U.corner(ring, (T.Ball + 10) / 2)
-    U.stroke(ring, T.Acc, 1.5, 0.6)
-    self.ballRing = ring
-
-    TweenService:Create(ring, TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        Size = UDim2.new(1, 20, 1, 20),
-        Position = UDim2.new(0, -10, 0, -10),
-    }):Play()
-
-    --=========================================
-    -- 主面板（初始为0尺寸，从球位置展开）
-    --=========================================
-    self.panel = Instance.new("Frame")
-    self.panel.Name = "Panel"
-    self.panel.Size = UDim2.new(0, 0, 0, 0)
-    self.panel.Position = UDim2.new(0, self.ballPos.X.Offset + T.Ball, 0.5, -self.h / 2)
-    self.panel.BackgroundColor3 = T.Bg
-    self.panel.BackgroundTransparency = 0.06
-    self.panel.BorderSizePixel = 0
-    self.panel.ClipsDescendants = true
-    self.panel.Active = true
-    self.panel.Visible = false
-    self.panel.ZIndex = 50
-    self.panel.Parent = self.gui
-    U.corner(self.panel, T.R)
-    U.stroke(self.panel, Color3.fromRGB(255, 255, 255), 1, 0.88)
-
-    -- 背景渐变
-    local panelGrad = Instance.new("Frame")
-    panelGrad.Size = UDim2.new(1, 0, 1, 0)
-    panelGrad.BackgroundColor3 = T.Bg2
-    panelGrad.BackgroundTransparency = 0.3
-    panelGrad.BorderSizePixel = 0
-    panelGrad.ZIndex = 51
-    panelGrad.Parent = self.panel
-    U.corner(panelGrad, T.R)
-    U.grad(panelGrad, Color3.fromRGB(24, 26, 38), Color3.fromRGB(14, 15, 22), 135)
-
-    -- 左上光斑
-    local glowA = Instance.new("Frame")
-    glowA.Size = UDim2.new(0, 220, 0, 220)
-    glowA.Position = UDim2.new(0, -80, 0, -80)
-    glowA.BackgroundColor3 = T.Acc
-    glowA.BackgroundTransparency = 0.93
-    glowA.BorderSizePixel = 0
-    glowA.ZIndex = 51
-    glowA.Parent = self.panel
-    U.corner(glowA, 110)
-
-    --=========================================
-    -- 顶部栏
-    --=========================================
-    self.top = Instance.new("Frame")
-    self.top.Name = "Top"
-    self.top.Size = UDim2.new(1, 0, 0, T.TopH)
-    self.top.BackgroundTransparency = 1
-    self.top.ZIndex = 60
-    self.top.Parent = self.panel
-
-    -- 应用标识
-    local appIcon = Instance.new("Frame")
-    appIcon.Size = UDim2.new(0, 26, 0, 26)
-    appIcon.Position = UDim2.new(0, 16, 0.5, -13)
-    appIcon.BackgroundColor3 = T.Acc
-    appIcon.BorderSizePixel = 0
-    appIcon.ZIndex = 61
-    appIcon.Parent = self.top
-    U.corner(appIcon, 9)
-    U.grad(appIcon, T.Acc, T.Acc2, 45)
-
-    local iconDot = Instance.new("Frame")
-    iconDot.Size = UDim2.new(0, 8, 0, 8)
-    iconDot.Position = UDim2.new(0.5, -4, 0.5, -4)
-    iconDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    iconDot.BorderSizePixel = 0
-    iconDot.ZIndex = 62
-    iconDot.Parent = appIcon
-    U.corner(iconDot, 4)
-
-    local titleL = U.txt(self.top, self.title, 14, T.Tx, true)
-    titleL.Size = UDim2.new(1, -260, 1, 0)
-    titleL.Position = UDim2.new(0, 52, 0, 0)
-    titleL.ZIndex = 61
-
-    local subL = U.txt(self.top, self.sub, 10, T.Tx3, false)
-    subL.Size = UDim2.new(0, 50, 1, 0)
-    subL.Position = UDim2.new(0, 52 + titleL.TextBounds.X + 8, 0, 0)
-    subL.ZIndex = 61
-
-    -- 搜索框
-    local searchWrap = Instance.new("Frame")
-    searchWrap.Size = UDim2.new(0, 160, 0, 28)
-    searchWrap.Position = UDim2.new(1, -220, 0.5, -14)
-    searchWrap.BackgroundColor3 = T.Card
-    searchWrap.BackgroundTransparency = 0.4
-    searchWrap.BorderSizePixel = 0
-    searchWrap.ZIndex = 61
-    searchWrap.Parent = self.top
-    U.corner(searchWrap, 8)
-    U.stroke(searchWrap, T.Line, 1, 0.7)
-
-    local searchIcon = U.txt(searchWrap, "⌕", 14, T.Tx3, false, Enum.TextXAlignment.Center)
-    searchIcon.Size = UDim2.new(0, 20, 1, 0)
-    searchIcon.Position = UDim2.new(0, 8, 0, 0)
-    searchIcon.ZIndex = 62
-
-    local searchBox = Instance.new("TextBox")
-    searchBox.Size = UDim2.new(1, -32, 1, 0)
-    searchBox.Position = UDim2.new(0, 28, 0, 0)
-    searchBox.BackgroundTransparency = 1
-    searchBox.Text = ""
-    searchBox.PlaceholderText = "搜索..."
-    searchBox.PlaceholderColor3 = T.Tx3
-    searchBox.TextColor3 = T.Tx
-    searchBox.TextSize = 11
-    searchBox.Font = Enum.Font.Gotham
-    searchBox.TextXAlignment = Enum.TextXAlignment.Left
-    searchBox.ClearTextOnFocus = false
-    searchBox.ZIndex = 62
-    searchBox.Parent = searchWrap
-    self.searchBox = searchBox
-
-    -- 收起按钮
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 26, 0, 26)
-    closeBtn.Position = UDim2.new(1, -46, 0.5, -13)
-    closeBtn.BackgroundColor3 = T.Card
-    closeBtn.BackgroundTransparency = 0.4
-    closeBtn.Text = "×"
-    closeBtn.TextColor3 = T.Bad
-    closeBtn.TextSize = 16
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.BorderSizePixel = 0
-    closeBtn.AutoButtonColor = false
-    closeBtn.ZIndex = 61
-    closeBtn.Parent = self.top
-    U.corner(closeBtn, 8)
-    U.stroke(closeBtn, T.Line, 1, 0.7)
-    self.closeBtn = closeBtn
-
-    closeBtn.MouseEnter:Connect(function()
-        U.tw(closeBtn, T.T1, {BackgroundColor3 = T.Bad, BackgroundTransparency = 0.15})
-        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end)
-    closeBtn.MouseLeave:Connect(function()
-        U.tw(closeBtn, T.T1, {BackgroundColor3 = T.Card, BackgroundTransparency = 0.4})
-        closeBtn.TextColor3 = T.Bad
-    end)
-
-    --=========================================
-    -- 左侧图标栏
-    --=========================================
-    self.side = Instance.new("Frame")
-    self.side.Name = "Side"
-    self.side.Size = UDim2.new(0, T.SideW, 1, -T.TopH - T.BotH - 12)
-    self.side.Position = UDim2.new(0, 10, 0, T.TopH + 4)
-    self.side.BackgroundColor3 = T.Card
-    self.side.BackgroundTransparency = 0.5
-    self.side.BorderSizePixel = 0
-    self.side.ZIndex = 55
-    self.side.Parent = self.panel
-    U.corner(self.side, 12)
-    U.stroke(self.side, T.Line, 1, 0.7)
-
-    local sideLay = Instance.new("UIListLayout")
-    sideLay.Padding = UDim.new(0, 6)
-    sideLay.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    sideLay.SortOrder = Enum.SortOrder.LayoutOrder
-    sideLay.Parent = self.side
-    U.pad(self.side, 10, 0, 10, 0)
-
-    --=========================================
-    -- 右侧内容区
-    --=========================================
-    self.content = Instance.new("Frame")
-    self.content.Name = "Content"
-    self.content.Size = UDim2.new(1, -T.SideW - 30, 1, -T.TopH - T.BotH - 12)
-    self.content.Position = UDim2.new(0, T.SideW + 20, 0, T.TopH + 4)
-    self.content.BackgroundTransparency = 1
-    self.content.ZIndex = 55
-    self.content.ClipsDescendants = true
-    self.content.Parent = self.panel
-
-    --=========================================
-    -- 底部状态栏
-    --=========================================
-    self.bot = Instance.new("Frame")
-    self.bot.Size = UDim2.new(1, -20, 0, T.BotH - 4)
-    self.bot.Position = UDim2.new(0, 10, 1, -T.BotH)
-    self.bot.BackgroundColor3 = T.Card
-    self.bot.BackgroundTransparency = 0.5
-    self.bot.BorderSizePixel = 0
-    self.bot.ZIndex = 55
-    self.bot.Parent = self.panel
-    U.corner(self.bot, 8)
-
-    local statDot = Instance.new("Frame")
-    statDot.Size = UDim2.new(0, 6, 0, 6)
-    statDot.Position = UDim2.new(0, 12, 0.5, -3)
-    statDot.BackgroundColor3 = T.OK
-    statDot.BorderSizePixel = 0
-    statDot.ZIndex = 56
-    statDot.Parent = self.bot
-    U.corner(statDot, 3)
-
-    self.statLabel = U.txt(self.bot, "就绪", 10, T.Tx3)
-    self.statLabel.Size = UDim2.new(0.5, 0, 1, 0)
-    self.statLabel.Position = UDim2.new(0, 24, 0, 0)
-    self.statLabel.ZIndex = 56
-
-    self.timeLabel = U.txt(self.bot, "", 10, T.Tx3, false, Enum.TextXAlignment.Right)
-    self.timeLabel.Size = UDim2.new(0.5, -24, 1, 0)
-    self.timeLabel.Position = UDim2.new(0.5, 0, 0, 0)
-    self.timeLabel.ZIndex = 56
-
-    -- 更新时间
-    task.spawn(function()
-        while self.gui.Parent do
-            self.timeLabel.Text = os.date("%H:%M:%S")
-            task.wait(1)
-        end
-    end)
-
-    --=========================================
-    -- 悬浮球拖拽 + 点击展开
-    --=========================================
-    local ballDrag = false
-    local ballStart, ballPosStart
-    local ballMoved = false
-
-    table.insert(self.conns, self.ball.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            ballDrag = true
-            ballMoved = false
-            ballStart = input.Position
-            ballPosStart = self.ball.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    ballDrag = false
-                end
-            end)
-        end
-    end))
-
-    table.insert(self.conns, UserInputService.InputChanged:Connect(function(input)
-        if ballDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local d = input.Position - ballStart
-            if math.abs(d.X) > 4 or math.abs(d.Y) > 4 then ballMoved = true end
-            self.ball.Position = UDim2.new(
-                ballPosStart.X.Scale, ballPosStart.X.Offset + d.X,
-                ballPosStart.Y.Scale, ballPosStart.Y.Offset + d.Y
-            )
-        end
-    end))
-
-    table.insert(self.conns, self.ball.MouseButton1Click:Connect(function()
-        if not ballMoved then
-            self:Toggle()
-        end
-    end))
-
-    --=========================================
-    -- 面板拖拽
-    --=========================================
-    local pDrag, pStart, pPos
-    table.insert(self.conns, self.top.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            pDrag = true
-            pStart = input.Position
-            pPos = self.panel.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then pDrag = false end
-            end)
-        end
-    end))
-
-    table.insert(self.conns, UserInputService.InputChanged:Connect(function(input)
-        if pDrag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local d = input.Position - pStart
-            self.panel.Position = UDim2.new(
-                pPos.X.Scale, pPos.X.Offset + d.X,
-                pPos.Y.Scale, pPos.Y.Offset + d.Y
-            )
-        end
-    end))
-
-    -- 关闭按钮（折叠回球）
-    table.insert(self.conns, closeBtn.MouseButton1Click:Connect(function()
-        self:Toggle()
-    end))
-
-    -- 快捷键
-    table.insert(self.conns, UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            self:Toggle()
-        end
-    end))
-
-    -- 搜索框过滤
-    table.insert(self.conns, searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-        self:FilterItems(searchBox.Text)
-    end))
-
-    return self
-end
-
---=====================================================
--- 展开 / 收起
---=====================================================
-function Win:Toggle()
-    self.opened = not self.opened
-    if self.opened then
-        self.panel.Visible = true
-        self.panel.Position = UDim2.new(0, self.ball.Position.X.Offset + T.Ball, 0.5, -self.h / 2)
-        U.tw(self.panel, T.T3, {
-            Size = UDim2.new(0, self.w, 0, self.h),
-        }, Enum.EasingStyle.Back)
-        U.tw(self.ball, T.T2, {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, T.Ball - 20, 0, T.Ball - 20),
-            Position = UDim2.new(0, self.ball.Position.X.Offset + 10, self.ball.Position.Y.Scale, self.ball.Position.Y.Offset + 10),
-        })
-    else
-        U.tw(self.panel, T.T2, {
-            Size = UDim2.new(0, 0, 0, 0),
-        }, Enum.EasingStyle.Quart)
-        U.tw(self.ball, T.T2, {
-            BackgroundTransparency = 0.05,
-            Size = UDim2.new(0, T.Ball, 0, T.Ball),
-            Position = UDim2.new(0, self.ball.Position.X.Offset - 10, self.ball.Position.Y.Scale, self.ball.Position.Y.Offset - 10),
-        }, Enum.EasingStyle.Back)
-        task.delay(T.T2, function()
-            if not self.opened then self.panel.Visible = false end
-        end)
-    end
-end
-
---=====================================================
--- 创建分类（左侧图标）
---=====================================================
-function Win:CreateTab(name, iconText)
-    local tab = {}
-    tab.name = name
-    tab.icon = iconText or "•"
-    tab.items = {}
-    tab.window = self
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 40, 0, 40)
-    btn.BackgroundColor3 = T.CardHover
-    btn.BackgroundTransparency = 1
-    btn.Text = tab.icon
-    btn.TextColor3 = T.Tx2
-    btn.TextSize = 18
-    btn.Font = Enum.Font.GothamBold
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = false
-    btn.ZIndex = 56
-    btn.Parent = self.side
-    U.corner(btn, 10)
-
-    -- tooltip
-    local tip = Instance.new("TextLabel")
-    tip.Size = UDim2.new(0, 100, 0, 24)
-    tip.Position = UDim2.new(1, 8, 0.5, -12)
-    tip.BackgroundColor3 = T.Bg
-    tip.BackgroundTransparency = 0.1
-    tip.Text = name
-    tip.TextColor3 = T.Tx
-    tip.TextSize = 11
-    tip.Font = Enum.Font.Gotham
-    tip.BorderSizePixel = 0
-    tip.ZIndex = 70
-    tip.Visible = false
-    tip.Parent = btn
-    U.corner(tip, 6)
-    U.stroke(tip, T.Line, 1, 0.5)
-
-    -- 内容容器
-    local container = Instance.new("ScrollingFrame")
-    container.Size = UDim2.new(1, 0, 1, 0)
-    container.BackgroundTransparency = 1
-    container.BorderSizePixel = 0
-    container.ScrollBarThickness = 3
-    container.ScrollBarImageColor3 = T.Acc
-    container.ScrollBarImageTransparency = 0.5
-    container.CanvasSize = UDim2.new(0, 0, 0, 0)
-    container.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    container.Visible = false
-    container.ZIndex = 55
-    container.Parent = self.content
-
-    local lay = Instance.new("UIListLayout")
-    lay.Padding = UDim.new(0, 8)
-    lay.SortOrder = Enum.SortOrder.LayoutOrder
-    lay.Parent = container
-    U.pad(container, 0, 8, 20, 0)
-
-    tab.button = btn
-    tab.tip = tip
-    tab.container = container
-
-    btn.MouseEnter:Connect(function()
-        if self.current ~= tab then
-            U.tw(btn, T.T1, {BackgroundTransparency = 0.6})
-            U.tw(btn, T.T1, {TextColor3 = T.Tx})
-        end
-        tip.Visible = true
-        tip.Position = UDim2.new(1, 8, 0.5, -12)
-    end)
-    btn.MouseLeave:Connect(function()
-        if self.current ~= tab then
-            U.tw(btn, T.T1, {BackgroundTransparency = 1})
-            U.tw(btn, T.T1, {TextColor3 = T.Tx2})
-        end
-        tip.Visible = false
-    end)
-    btn.MouseButton1Click:Connect(function()
-        self:SelectTab(tab)
-    end)
-
-    table.insert(self.tabs, tab)
-    if #self.tabs == 1 then
-        self:SelectTab(tab)
-    end
-
-    return tab
-end
-
-function Win:SelectTab(tab)
-    for _, t in ipairs(self.tabs) do
-        t.container.Visible = false
-        U.tw(t.button, T.T1, {BackgroundTransparency = 1})
-        U.tw(t.button, T.T1, {TextColor3 = T.Tx2})
-    end
-    tab.container.Visible = true
-    U.tw(tab.button, T.T1, {BackgroundTransparency = 0.4, BackgroundColor3 = T.Acc})
-    U.tw(tab.button, T.T1, {TextColor3 = Color3.fromRGB(255, 255, 255)})
-    tab.container.Position = UDim2.new(0, 16, 0, 0)
-    U.tw(tab.container, T.T2, {Position = UDim2.new(0, 0, 0, 0)})
-    self.current = tab
-end
-
---=====================================================
--- 搜索过滤
---=====================================================
-function Win:FilterItems(text)
-    text = text:lower()
-    for _, tab in ipairs(self.tabs) do
-        for _, child in ipairs(tab.container:GetChildren()) do
-            if child:IsA("Frame") or child:IsA("TextButton") then
-                local lbl = child:FindFirstChildWhichIsA("TextLabel", true)
-                if lbl then
-                    child.Visible = (text == "" or lbl.Text:lower():find(text) ~= nil)
-                end
+local function GetSortedVehicles()
+    local vehiclesFolder = Workspace:FindFirstChild("Gameplay") and Workspace.Gameplay:FindFirstChild("Vehicles")
+    if not vehiclesFolder then return {} end
+    
+    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return {} end
+    
+    local myPos = myRoot.Position
+    local list = {}
+    
+    for _, veh in ipairs(vehiclesFolder:GetChildren()) do
+        if veh:IsA("Model") then
+            local root = veh.PrimaryPart or veh:FindFirstChildWhichIsA("BasePart", true)
+            if root then
+                local dist = (root.Position - myPos).Magnitude
+                table.insert(list, { Vehicle = veh, Name = veh.Name, Distance = dist })
             end
         end
     end
+    
+    table.sort(list, function(a, b) return a.Distance < b.Distance end)
+    return list
 end
 
---=====================================================
--- 开关
---=====================================================
-function Win:AddToggle(tab, cfg)
-    local name = cfg.Name or "Toggle"
-    local def = cfg.Default or false
-    local cb = cfg.Callback
-
-    local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, 0, 0, T.ItemH)
-    item.BackgroundColor3 = T.Card
-    item.BackgroundTransparency = 0.5
-    item.BorderSizePixel = 0
-    item.ZIndex = 56
-    item.Parent = tab.container
-    U.corner(item, 12)
-    U.stroke(item, T.Line, 1, 0.7)
-
-    local lbl = U.txt(item, name, 12, T.Tx)
-    lbl.Size = UDim2.new(1, -90, 1, 0)
-    lbl.Position = UDim2.new(0, 16, 0, 0)
-    lbl.ZIndex = 57
-
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(0, 42, 0, 24)
-    track.Position = UDim2.new(1, -58, 0.5, -12)
-    track.BackgroundColor3 = def and T.Acc or Color3.fromRGB(48, 52, 68)
-    track.BorderSizePixel = 0
-    track.ZIndex = 57
-    track.Parent = item
-    U.corner(track, 12)
-
-    if def then
-        U.grad(track, T.Acc, T.Acc2, 0)
+-- ================= 核心物理与移动逻辑 =================
+local function FlyMicroStepLoop()
+    while Controller.IsControlling and Controller.HRP and Controller.HRP.Parent do
+        local cam = workspace.CurrentCamera
+        if not cam then break end
+        local camCF = cam.CFrame
+        
+        -- 提取相机纯水平方向 (用于秒转)
+        local camLook = camCF.LookVector
+        local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
+        if flatLook.Magnitude > 0.01 then
+            flatLook = flatLook.Unit
+        else
+            flatLook = Vector3.new(0, 0, -1)
+        end
+        
+        -- 读取左下角移动轮盘
+        local mv = Controls:GetMoveVector()
+        local driveDir = -mv.Z
+        local strafeDir = mv.X
+        
+        -- 计算移动方向
+        local moveDir = (camCF.LookVector * driveDir) + (camCF.RightVector * strafeDir)
+        if moveDir.Magnitude > 1 then moveDir = moveDir.Unit end
+        
+        -- 🟢 应用速度逻辑 (区分飞天和地面)
+        if Controller.BV then
+            if Controller.Mode == "fly" then
+                -- 飞天模式：朝准星方向飞（视角朝上就往上）
+                Controller.BV.Velocity = moveDir * Controller.Speed
+            else
+                -- 不飞天模式：抹除 Y 轴，强制贴地跑
+                local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
+                -- 稍微给一点向下的力，防止车子在马路上飘起来
+                Controller.BV.Velocity = flatMove * Controller.Speed + Vector3.new(0, -5, 0) 
+            end
+        end
+        
+        -- 🟢 绝对秒转 & 防倾斜 (AlignOrientation)
+        if Controller.AlignOrientation then
+            local targetCF = CFrame.lookAt(Controller.HRP.Position, Controller.HRP.Position + flatLook)
+            Controller.AlignOrientation.CFrame = targetCF
+        end
+        
+        -- 强制保持网络所有权
+        pcall(function() Controller.HRP:SetNetworkOwner(player) end)
+        
+        RunService.Heartbeat:Wait()
     end
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 18, 0, 18)
-    knob.Position = def and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.BorderSizePixel = 0
-    knob.ZIndex = 58
-    knob.Parent = track
-    U.corner(knob, 9)
-
-    local click = Instance.new("TextButton")
-    click.Size = UDim2.new(1, 0, 1, 0)
-    click.BackgroundTransparency = 1
-    click.Text = ""
-    click.ZIndex = 59
-    click.Parent = item
-
-    local state = def
-
-    click.MouseButton1Click:Connect(function()
-        state = not state
-        U.tw(track, T.T2, {BackgroundColor3 = state and T.Acc or Color3.fromRGB(48, 52, 68)})
-        U.tw(knob, T.T2, {
-            Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9),
-        }, Enum.EasingStyle.Back)
-        -- 弹动效果
-        local orig = item.Size
-        item.Size = UDim2.new(1, 4, 0, T.ItemH + 2)
-        U.tw(item, 0.13, {Size = orig}, Enum.EasingStyle.Back)
-        if cb then cb(state) end
-    end)
-
-    item.MouseEnter:Connect(function()
-        U.tw(item, T.T1, {BackgroundTransparency = 0.3})
-    end)
-    item.MouseLeave:Connect(function()
-        U.tw(item, T.T1, {BackgroundTransparency = 0.5})
-    end)
-
-    return {
-        Set = function(v)
-            state = v
-            U.tw(track, T.T1, {BackgroundColor3 = state and T.Acc or Color3.fromRGB(48, 52, 68)})
-            U.tw(knob, T.T2, {
-                Position = state and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9),
-            })
-        end,
-        Get = function() return state end,
-    }
 end
 
---=====================================================
--- 滑块
---=====================================================
-function Win:AddSlider(tab, cfg)
-    local name = cfg.Name or "Slider"
-    local mn = cfg.Min or 0
-    local mx = cfg.Max or 100
-    local def = cfg.Default or mn
-    local sfx = cfg.Suffix or ""
-    local cb = cfg.Callback
+local function StopControl()
+    if not Controller.IsControlling then return end
+    Controller.IsControlling = false
+    
+    if Controller.FlyThread then
+        task.cancel(Controller.FlyThread)
+        Controller.FlyThread = nil
+    end
+    
+    if Controller.BV then Controller.BV:Destroy(); Controller.BV = nil end
+    if Controller.AlignOrientation then Controller.AlignOrientation:Destroy(); Controller.AlignOrientation = nil end
+    
+    if Controller.OriginalReplicationFocus then
+        player.ReplicationFocus = Controller.OriginalReplicationFocus
+    end
+    
+    if Controller.OriginalCameraSubject then
+        Workspace.CurrentCamera.CameraSubject = Controller.OriginalCameraSubject
+    end
+    
+    if Controller.HRP then
+        Controller.HRP.Anchored = false
+    end
+end
 
-    local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, 0, 0, 60)
-    item.BackgroundColor3 = T.Card
-    item.BackgroundTransparency = 0.5
-    item.BorderSizePixel = 0
-    item.ZIndex = 56
-    item.Parent = tab.container
-    U.corner(item, 12)
-    U.stroke(item, T.Line, 1, 0.7)
+local function StartControl(vehicleModel)
+    StopControl()
+    
+    if not vehicleModel or not vehicleModel.Parent then return false, "车辆不存在" end
+    local root = vehicleModel.PrimaryPart or vehicleModel:FindFirstChildWhichIsA("BasePart", true)
+    if not root then return false, "找不到车辆的主部件" end
+    
+    Controller.IsControlling = true
+    Controller.ControlledVehicle = vehicleModel
+    Controller.HRP = root
+    
+    -- 切换相机视角到车辆
+    Controller.OriginalCameraSubject = Workspace.CurrentCamera.CameraSubject
+    Workspace.CurrentCamera.CameraSubject = root
+    
+    -- 核心修复：把玩家的复制焦点设置为这辆车
+    player.ReplicationFocus = root
+    pcall(function() root:SetNetworkOwner(player) end)
+    
+    -- 物理运动组件
+    Controller.BV = Instance.new("BodyVelocity")
+    Controller.BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    Controller.BV.P = 1250
+    Controller.BV.Velocity = Vector3.zero
+    Controller.BV.Parent = root
+    
+    local att = Instance.new("Attachment")
+    att.Parent = root
+    
+    Controller.AlignOrientation = Instance.new("AlignOrientation")
+    Controller.AlignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+    Controller.AlignOrientation.Attachment0 = att
+    Controller.AlignOrientation.RigidityEnabled = true
+    Controller.AlignOrientation.CFrame = root.CFrame
+    Controller.AlignOrientation.Parent = root
+    
+    Controller.FlyThread = task.spawn(FlyMicroStepLoop)
+    return true, "接管成功"
+end
 
-    local lbl = U.txt(item, name, 12, T.Tx)
-    lbl.Size = UDim2.new(1, -100, 0, 20)
-    lbl.Position = UDim2.new(0, 16, 0, 8)
-    lbl.ZIndex = 57
+-- ================= 快捷开关 UI =================
+local carFlyQuickScreenGui = nil
+local carFlyQuickButton = nil
+local carFlyQuickStrokeConn = nil
+local lockCarFlyBtn = false
+local currentSelectedVehicle = nil 
 
-    local valLbl = U.txt(item, tostring(def) .. sfx, 12, T.Acc, true, Enum.TextXAlignment.Right)
-    valLbl.Size = UDim2.new(0, 80, 0, 20)
-    valLbl.Position = UDim2.new(1, -96, 0, 8)
-    valLbl.ZIndex = 57
+local function updateCarFlyStatus()
+    if carFlyQuickButton then 
+        carFlyQuickButton.Text = Controller.IsControlling and "车辆控制: 开" or "车辆控制: 关" 
+    end
+end
 
-    local track = Instance.new("Frame")
-    track.Size = UDim2.new(1, -32, 0, 5)
-    track.Position = UDim2.new(0, 16, 0, 40)
-    track.BackgroundColor3 = Color3.fromRGB(44, 48, 64)
-    track.BorderSizePixel = 0
-    track.ZIndex = 57
-    track.Parent = item
-    U.corner(track, 3)
+local function DestroyCarFlyQuickToggle()
+    if carFlyQuickStrokeConn then carFlyQuickStrokeConn:Disconnect(); carFlyQuickStrokeConn = nil end
+    if carFlyQuickScreenGui then carFlyQuickScreenGui:Destroy(); carFlyQuickScreenGui = nil; carFlyQuickButton = nil end
+end
 
-    local ratio = (def - mn) / (mx - mn)
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(ratio, 0, 1, 0)
-    fill.BackgroundColor3 = T.Acc
-    fill.BorderSizePixel = 0
-    fill.ZIndex = 58
-    fill.Parent = track
-    U.corner(fill, 3)
-    U.grad(fill, T.Acc, T.Acc2, 0)
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.Position = UDim2.new(ratio, -7, 0.5, -7)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.BorderSizePixel = 0
-    knob.ZIndex = 59
-    knob.Parent = track
-    U.corner(knob, 7)
-    U.stroke(knob, T.Acc, 2, 0)
-
-    local cur = def
+local function CreateCarFlyQuickToggle()
+    if carFlyQuickButton then return end
+    carFlyQuickScreenGui = Instance.new("ScreenGui")
+    carFlyQuickScreenGui.Name = "CarFlyQuickToggle"
+    carFlyQuickScreenGui.ResetOnSpawn = false
+    carFlyQuickScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    carFlyQuickScreenGui.Parent = player:WaitForChild("PlayerGui")
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 115, 0, 46)
+    button.Position = UDim2.new(0.5, -58, 0.3, 0)
+    button.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+    button.BackgroundTransparency = 0.15
+    button.BorderSizePixel = 0
+    button.Text = Controller.IsControlling and "车辆控制: 开" or "车辆控制: 关"
+    button.TextColor3 = Color3.fromHSV(0, 1, 1)
+    button.TextSize = 14
+    button.Font = Enum.Font.GothamBold
+    button.Parent = carFlyQuickScreenGui
+    carFlyQuickButton = button
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = button
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Color = Color3.fromHSV(0, 1, 1)
+    stroke.Parent = button
+    
+    carFlyQuickStrokeConn = RunService.Heartbeat:Connect(function()
+        if button and button.Parent then
+            local hue = (tick() * 0.15) % 1
+            stroke.Color = Color3.fromHSV(hue, 1, 1)
+            button.TextColor3 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+        end
+    end)
+    
     local dragging = false
-
-    local function upd(input)
-        local x = input.Position.X
-        local tx = track.AbsolutePosition.X
-        local tw = track.AbsoluteSize.X
-        local r = math.clamp((x - tx) / tw, 0, 1)
-        local v = math.floor(mn + (mx - mn) * r)
-        cur = v
-        fill.Size = UDim2.new(r, 0, 1, 0)
-        knob.Position = UDim2.new(r, -7, 0.5, -7)
-        valLbl.Text = tostring(v) .. sfx
-        if cb then cb(v) end
-    end
-
-    track.InputBegan:Connect(function(input)
+    local dragStart = nil
+    local startPos = nil
+    
+    button.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if lockCarFlyBtn then return end
             dragging = true
-            local orig = item.Size
-            item.Size = UDim2.new(1, 3, 0, 63)
-            U.tw(item, 0.12, {Size = orig}, Enum.EasingStyle.Back)
-            upd(input)
+            dragStart = input.Position
+            startPos = button.Position
         end
     end)
-
-    UserInputService.InputChanged:Connect(function(input)
+    
+    button.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            upd(input)
+            local delta = input.Position - dragStart
+            button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-
-    UserInputService.InputEnded:Connect(function(input)
+    
+    button.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
-
-    return {
-        Set = function(v)
-            v = math.clamp(v, mn, mx)
-            cur = v
-            local r = (v - mn) / (mx - mn)
-            fill.Size = UDim2.new(r, 0, 1, 0)
-            knob.Position = UDim2.new(r, -7, 0.5, -7)
-            valLbl.Text = tostring(v) .. sfx
-        end,
-        Get = function() return cur end,
-    }
-end
-
---=====================================================
--- 按钮
---=====================================================
-function Win:AddButton(tab, cfg)
-    local name = cfg.Name or "Button"
-    local cb = cfg.Callback
-    local col = cfg.Color or T.Acc
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, T.ItemH)
-    btn.BackgroundColor3 = col
-    btn.BackgroundTransparency = 0.75
-    btn.Text = name
-    btn.TextColor3 = T.Tx
-    btn.TextSize = 12
-    btn.Font = Enum.Font.GothamBold
-    btn.BorderSizePixel = 0
-    btn.AutoButtonColor = false
-    btn.ZIndex = 56
-    btn.Parent = tab.container
-    U.corner(btn, 12)
-    U.stroke(btn, col, 1, 0.4)
-
-    btn.MouseEnter:Connect(function()
-        U.tw(btn, T.T1, {BackgroundTransparency = 0.45})
-    end)
-    btn.MouseLeave:Connect(function()
-        U.tw(btn, T.T1, {BackgroundTransparency = 0.75})
-    end)
-    btn.MouseButton1Click:Connect(function()
-        local orig = btn.Size
-        btn.Size = UDim2.new(1, 4, 0, T.ItemH + 2)
-        U.tw(btn, 0.1, {Size = orig}, Enum.EasingStyle.Back)
-        if cb then cb() end
-    end)
-
-    return btn
-end
-
---=====================================================
--- 下拉菜单
---=====================================================
-function Win:AddDropdown(tab, cfg)
-    local name = cfg.Name or "Dropdown"
-    local options = cfg.Options or {}
-    local def = cfg.Default or options[1]
-    local cb = cfg.Callback
-
-    local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, 0, 0, T.ItemH)
-    item.BackgroundColor3 = T.Card
-    item.BackgroundTransparency = 0.5
-    item.BorderSizePixel = 0
-    item.ClipsDescendants = true
-    item.ZIndex = 56
-    item.Parent = tab.container
-    U.corner(item, 12)
-    U.stroke(item, T.Line, 1, 0.7)
-
-    local lbl = U.txt(item, name, 12, T.Tx)
-    lbl.Size = UDim2.new(1, -130, 0, T.ItemH)
-    lbl.Position = UDim2.new(0, 16, 0, 0)
-    lbl.ZIndex = 57
-
-    local curLbl = U.txt(item, tostring(def) .. "  ⌄", 11, T.Acc, true, Enum.TextXAlignment.Right)
-    curLbl.Size = UDim2.new(0, 100, 0, T.ItemH)
-    curLbl.Position = UDim2.new(1, -116, 0, 0)
-    curLbl.ZIndex = 57
-
-    local list = Instance.new("Frame")
-    list.Size = UDim2.new(1, -16, 0, 0)
-    list.Position = UDim2.new(0, 8, 0, T.ItemH)
-    list.BackgroundTransparency = 1
-    list.ZIndex = 57
-    list.Parent = item
-
-    local ll = Instance.new("UIListLayout")
-    ll.Padding = UDim.new(0, 3)
-    ll.SortOrder = Enum.SortOrder.LayoutOrder
-    ll.Parent = list
-
-    local expanded = false
-    local cur = def
-
-    for _, opt in ipairs(options) do
-        local ob = Instance.new("TextButton")
-        ob.Size = UDim2.new(1, 0, 0, 28)
-        ob.BackgroundColor3 = T.CardHover
-        ob.BackgroundTransparency = 0.4
-        ob.Text = "   " .. tostring(opt)
-        ob.TextColor3 = T.Tx
-        ob.TextSize = 11
-        ob.Font = Enum.Font.Gotham
-        ob.TextXAlignment = Enum.TextXAlignment.Left
-        ob.BorderSizePixel = 0
-        ob.AutoButtonColor = false
-        ob.ZIndex = 58
-        ob.Parent = list
-        U.corner(ob, 6)
-        ob.MouseButton1Click:Connect(function()
-            cur = opt
-            curLbl.Text = tostring(opt) .. "  ⌄"
-            if cb then cb(opt) end
-            expanded = false
-            U.tw(item, T.T2, {Size = UDim2.new(1, 0, 0, T.ItemH)}, Enum.EasingStyle.Quart)
-        end)
-    end
-
-    local click = Instance.new("TextButton")
-    click.Size = UDim2.new(1, 0, 0, T.ItemH)
-    click.BackgroundTransparency = 1
-    click.Text = ""
-    click.ZIndex = 59
-    click.Parent = item
-
-    click.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        if expanded then
-            U.tw(item, T.T2, {Size = UDim2.new(1, 0, 0, T.ItemH + #options * 31 + 6)}, Enum.EasingStyle.Quart)
+    
+    button.MouseButton1Click:Connect(function()
+        if Controller.IsControlling then
+            StopControl()
         else
-            U.tw(item, T.T2, {Size = UDim2.new(1, 0, 0, T.ItemH)}, Enum.EasingStyle.Quart)
+            if currentSelectedVehicle and currentSelectedVehicle.Parent then
+                StartControl(currentSelectedVehicle)
+            else
+                WindUI:Notify({ Title = "快捷控制", Content = "请在面板中先选择一辆车", Duration = 2 })
+            end
+        end
+        updateCarFlyStatus()
+    end)
+    
+    task.spawn(function()
+        while carFlyQuickScreenGui and carFlyQuickScreenGui.Parent and button and button.Parent do
+            task.wait(0.3)
+            updateCarFlyStatus()
         end
     end)
-
-    return {
-        Set = function(v)
-            cur = v
-            curLbl.Text = tostring(v) .. "  ⌄"
-        end,
-        Get = function() return cur end,
-    }
 end
 
---=====================================================
--- 说明 / 分隔线 / 文本框 / 按键绑定
---=====================================================
-function Win:AddLabel(tab, text)
-    local l = U.txt(tab.container, text, 11, T.Tx3)
-    l.Size = UDim2.new(1, 0, 0, 22)
-    l.ZIndex = 56
-    return l
-end
+-- ================= WindUI 界面 =================
+local Window = WindUI:CreateWindow({
+    Title = "远程控制车辆",
+    Icon = "car",
+    Author = "wdfex-Hub",
+    Folder = "RemoteCar",
+    Size = UDim2.fromOffset(400, 360),
+    Theme = "Dark",
+    Transparent = true,
+})
 
-function Win:AddDivider(tab)
-    local d = Instance.new("Frame")
-    d.Size = UDim2.new(1, 0, 0, 1)
-    d.BackgroundColor3 = T.Line
-    d.BackgroundTransparency = 0.4
-    d.BorderSizePixel = 0
-    d.ZIndex = 56
-    d.Parent = tab.container
-    return d
-end
+local Tab = Window:Tab({ Title = "远程控制", Icon = "settings" })
+local Section = Tab:Section({ Title = "选择车辆", Opened = true })
 
-function Win:AddTextBox(tab, cfg)
-    local name = cfg.Name or "Input"
-    local ph = cfg.Placeholder or "输入..."
-    local cb = cfg.Callback
+local vehicleNames = {}
+local vehicleDataMap = {}
 
-    local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, 0, 0, 58)
-    item.BackgroundColor3 = T.Card
-    item.BackgroundTransparency = 0.5
-    item.BorderSizePixel = 0
-    item.ZIndex = 56
-    item.Parent = tab.container
-    U.corner(item, 12)
-    U.stroke(item, T.Line, 1, 0.7)
-
-    local lbl = U.txt(item, name, 11, T.Tx, false)
-    lbl.Size = UDim2.new(1, -28, 0, 18)
-    lbl.Position = UDim2.new(0, 16, 0, 6)
-    lbl.ZIndex = 57
-
-    local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -32, 0, 26)
-    box.Position = UDim2.new(0, 16, 0, 26)
-    box.BackgroundColor3 = Color3.fromRGB(20, 22, 32)
-    box.BackgroundTransparency = 0.3
-    box.Text = ""
-    box.PlaceholderText = ph
-    box.PlaceholderColor3 = T.Tx3
-    box.TextColor3 = T.Tx
-    box.TextSize = 11
-    box.Font = Enum.Font.Gotham
-    box.TextXAlignment = Enum.TextXAlignment.Left
-    box.ClearTextOnFocus = false
-    box.BorderSizePixel = 0
-    box.ZIndex = 57
-    box.Parent = item
-    U.corner(box, 6)
-    U.pad(box, 0, 10, 0, 10)
-
-    box.FocusLost:Connect(function()
-        if cb then cb(box.Text) end
-    end)
-    return box
-end
-
-function Win:AddKeybind(tab, cfg)
-    local name = cfg.Name or "Keybind"
-    local def = cfg.Default or Enum.KeyCode.F
-    local cb = cfg.Callback
-
-    local item = Instance.new("Frame")
-    item.Size = UDim2.new(1, 0, 0, T.ItemH)
-    item.BackgroundColor3 = T.Card
-    item.BackgroundTransparency = 0.5
-    item.BorderSizePixel = 0
-    item.ZIndex = 56
-    item.Parent = tab.container
-    U.corner(item, 12)
-    U.stroke(item, T.Line, 1, 0.7)
-
-    local lbl = U.txt(item, name, 12, T.Tx)
-    lbl.Size = UDim2.new(1, -130, 1, 0)
-    lbl.Position = UDim2.new(0, 16, 0, 0)
-    lbl.ZIndex = 57
-
-    local keyBtn = Instance.new("TextButton")
-    keyBtn.Size = UDim2.new(0, 90, 0, 26)
-    keyBtn.Position = UDim2.new(1, -106, 0.5, -13)
-    keyBtn.BackgroundColor3 = T.CardHover
-    keyBtn.BackgroundTransparency = 0.3
-    keyBtn.Text = def.Name
-    keyBtn.TextColor3 = T.Acc
-    keyBtn.TextSize = 11
-    keyBtn.Font = Enum.Font.GothamBold
-    keyBtn.BorderSizePixel = 0
-    keyBtn.AutoButtonColor = false
-    keyBtn.ZIndex = 57
-    keyBtn.Parent = item
-    U.corner(keyBtn, 8)
-
-    local cur = def
-    local listening = false
-
-    keyBtn.MouseButton1Click:Connect(function()
-        listening = true
-        keyBtn.Text = "..."
-        keyBtn.TextColor3 = T.Warn
-    end)
-
-    local conn = UserInputService.InputBegan:Connect(function(input)
-        if not listening then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            cur = input.KeyCode
-            keyBtn.Text = input.KeyCode.Name
-            keyBtn.TextColor3 = T.Acc
-            listening = false
-            if cb then cb(input.KeyCode) end
-        end
-    end)
-    table.insert(self.conns, conn)
-
-    return {
-        Set = function(k)
-            cur = k
-            keyBtn.Text = k.Name
-        end,
-        Get = function() return cur end,
-    }
-end
-
---=====================================================
--- 通知
---=====================================================
-function Win:Notify(text, duration)
-    duration = duration or 3
-    local n = Instance.new("Frame")
-    n.Size = UDim2.new(0, 240, 0, 50)
-    n.Position = UDim2.new(1, 20, 1, -80)
-    n.BackgroundColor3 = T.Card
-    n.BackgroundTransparency = 0.1
-    n.BorderSizePixel = 0
-    n.ZIndex = 200
-    n.Parent = self.gui
-    U.corner(n, 12)
-    U.stroke(n, T.Acc, 1, 0.6)
-
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(0, 3, 0.6, 0)
-    bar.Position = UDim2.new(0, 0, 0.5, -bar.Size.Y.Scale / 2)
-    bar.BackgroundColor3 = T.Acc
-    bar.BorderSizePixel = 0
-    bar.ZIndex = 201
-    bar.Parent = n
-    U.corner(bar, 2)
-    U.grad(bar, T.Acc, T.Acc2, 90)
-
-    local l = U.txt(n, text, 11, T.Tx)
-    l.Size = UDim2.new(1, -24, 1, 0)
-    l.Position = UDim2.new(0, 16, 0, 0)
-    l.TextWrapped = true
-    l.ZIndex = 201
-
-    U.tw(n, T.T2, {Position = UDim2.new(1, -260, 1, -80)}, Enum.EasingStyle.Back)
-    task.delay(duration, function()
-        U.tw(n, T.T2, {Position = UDim2.new(1, 20, 1, -80)}, Enum.EasingStyle.Quart)
-        task.wait(T.T2 + 0.1)
-        n:Destroy()
-    end)
-end
-
---=====================================================
--- 销毁
---=====================================================
-function Win:Destroy()
-    for _, c in ipairs(self.conns) do
-        pcall(function() c:Disconnect() end)
+local function RefreshList()
+    local sorted = GetSortedVehicles()
+    vehicleNames = {}
+    vehicleDataMap = {}
+    for _, data in ipairs(sorted) do
+        local displayName = data.Name .. " [" .. math.floor(data.Distance) .. "m]"
+        table.insert(vehicleNames, displayName)
+        vehicleDataMap[displayName] = data.Vehicle
     end
-    if self.gui then self.gui:Destroy() end
 end
 
-return Win
+RefreshList()
+
+local dropdown = Section:Dropdown({
+    Title = "选择要控制的车辆",
+    Values = vehicleNames,
+    Value = vehicleNames[1],
+    Callback = function(value)
+        currentSelectedVehicle = vehicleDataMap[value]
+    end
+})
+
+if vehicleNames[1] then currentSelectedVehicle = vehicleDataMap[vehicleNames[1]] end
+
+Section:Button({
+    Title = "刷新车辆列表",
+    Callback = function()
+        RefreshList()
+        dropdown:Refresh(vehicleNames)
+        WindUI:Notify({ Title = "提示", Content = "车辆列表已刷新", Duration = 2 })
+    end
+})
+
+Section:Divider({ Text = "模式与速度" })
+
+-- 🟢 按要求修改的模式选择下拉菜单
+Section:Dropdown({
+    Title = "模式选择",
+    Values = {"不飞天", "飞天"},
+    Value = "不飞天",
+    Callback = function(value)
+        Controller.Mode = (value == "飞天") and "fly" or "ground"
+        -- 如果当前正在控制，重启控制以应用新物理
+        if Controller.IsControlling and currentSelectedVehicle then
+            StartControl(currentSelectedVehicle)
+        end
+    end
+})
+
+Section:Input({
+    Title = "移动速度",
+    Value = "300",
+    Placeholder = "300",
+    Callback = function(text)
+        local n = tonumber(text)
+        if n and n > 0 then
+            Controller.Speed = n
+        end
+    end
+})
+
+Section:Divider({ Text = "开关控制" })
+
+local controlToggle
+controlToggle = Section:Toggle({
+    Title = "远程控制车辆开关",
+    Value = false,
+    Callback = function(value)
+        if value then
+            if not currentSelectedVehicle or not currentSelectedVehicle.Parent then
+                WindUI:Notify({ Title = "错误", Content = "请先选择一辆存在的车", Duration = 2 })
+                controlToggle:SetValue(false)
+                return
+            end
+            local ok, msg = StartControl(currentSelectedVehicle)
+            if not ok then
+                WindUI:Notify({ Title = "接管失败", Content = msg, Duration = 3 })
+                controlToggle:SetValue(false)
+            else
+                WindUI:Notify({ Title = "成功", Content = "已接管车辆", Duration = 3 })
+            end
+        else
+            StopControl()
+            WindUI:Notify({ Title = "停止", Content = "已断开车辆控制", Duration = 2 })
+        end
+    end
+})
+
+Section:Divider({ Text = "快捷设置" })
+
+Section:Toggle({
+    Title = "车辆控制快捷开关",
+    Value = false,
+    Callback = function(value)
+        if value then CreateCarFlyQuickToggle() else DestroyCarFlyQuickToggle() end
+    end
+})
+
+Section:Toggle({
+    Title = "锁定车辆控制快捷开关",
+    Value = false,
+    Callback = function(value)
+        lockCarFlyBtn = value
+    end
+})
