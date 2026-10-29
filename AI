@@ -1,267 +1,361 @@
--- LiAel Script Monitor v2.0 (Delta 适配版)
-local Players         = game:GetService("Players")
-local CoreGui         = game:GetService("CoreGui")
-local UserInputService= game:GetService("UserInputService")
-local RunService      = game:GetService("RunService")
-local lp              = Players.LocalPlayer
+-- MonitorGui.lua
+-- 环境要求：Roblox 客户端 / Studio，需要能创建 ScreenGui（LocalScript 或执行器环境）
+-- 依赖：无。纯 CoreGui 之外自建 ScreenGui，不需要插件权限。
 
-local capturing = false
-local captured  = {}
-local seen      = {}
-local ui, listFrame, statusLabel
-local scanConn
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
 
-local CLASS_TAGS = {
-    ModuleScript = true,
-    LocalScript  = true,
-    Script       = true,
+local player = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() and Players.LocalPlayer
+
+-- ============ 可调参数 ============
+local CONFIG = {
+    MaxCharsPerEntry   = 2_000_000,  -- 单条源码最大字符数，防爆内存
+    MaxEntries         = 200,        -- 最多保留多少条
+    PollInterval       = 0.5,        -- 扫描间隔（秒）
+    FontSize           = 13,
+    Font               = Enum.Font.Code,
+    PanelWidth         = 620,
+    PanelHeight        = 420,
+    HookLoadstring     = true,       -- 是否 hook 本进程 loadstring
+    HookRequire        = true,       -- 是否 hook require 记录模块源码
+}
+-- ===================================
+
+------------------------------------------------------------
+-- 1. 数据存储
+------------------------------------------------------------
+local store = {
+    entries = {},   -- {name=string, source=string, time=number, kind=string}
+    index   = {},   -- name -> entry（去重）
 }
 
-local function keyOf(name, src)
-    return (name or "?") .. "::" .. #src .. "::" .. (src:sub(1,128))
-end
-
-local function tryReadSource(obj)
-    local ok, src = pcall(function() return obj.Source end)
-    if ok and type(src) == "string" and #src > 0 then
-        return src
+local function addEntry(name, source, kind)
+    if type(source) ~= "string" or #source == 0 then return end
+    if #source > CONFIG.MaxCharsPerEntry then
+        source = source:sub(1, CONFIG.MaxCharsPerEntry) .. "\n-- [截断：超出 " .. CONFIG.MaxCharsPerEntry .. " 字符]"
     end
-    return nil
+    local key = kind .. "|" .. tostring(name) .. "|" .. tostring(#source)
+    if store.index[key] then return end
+    store.index[key] = true
+    table.insert(store.entries, {
+        name = tostring(name),
+        source = source,
+        kind = kind,
+        time = os.time(),
+    })
+    while #store.entries > CONFIG.MaxEntries do
+        table.remove(store.entries, 1)
+    end
 end
 
-local function addScript(obj, src)
-    local name
-    local ok, full = pcall(function() return obj:GetFullName() end)
-    name = ok and full or obj.ClassName
-    local k = keyOf(name, src)
-    if seen[k] then return end
-    seen[k] = true
-    captured[#captured+1] = {
-        name = name,
-        source = src,
-        class = obj.ClassName,
-        time = os.date("%H:%M:%S"),
-    }
-    -- 列表刷新
-    if listFrame then
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 26)
-        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        btn.TextColor3 = Color3.fromRGB(200, 220, 255)
-        btn.Font = Enum.Font.Code
-        btn.TextSize = 12
-        btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.Text = ("%s  [%s]  %dB"):format(name, obj.ClassName, #src)
-        btn.LayoutOrder = #captured
-        btn.Parent = listFrame
-        btn.MouseButton1Click:Connect(function()
-            if setclipboard then
-                setclipboard(captured[#captured].source)
+------------------------------------------------------------
+-- 2. Hook：loadstring / require
+------------------------------------------------------------
+local hooked = { loadstring = false, require = false }
+
+if CONFIG.HookLoadstring then
+    local ok, realLoadstring = pcall(function() return loadstring end)
+    if ok and type(realLoadstring) == "function" then
+        local wrapper
+        wrapper = function(src, chunkname)
+            if type(src) == "string" then
+                addEntry(chunkname or "loadstring", src, "loadstring")
             end
-        end)
-    end
-    if statusLabel then
-        statusLabel.Text = "状态：监控中 | 已捕获 " .. #captured .. " 个脚本"
+            return realLoadstring(src, chunkname)
+        end
+        pcall(function() loadstring = wrapper end)
+        hooked.loadstring = true
     end
 end
 
--- 深度扫描（Delta 里不要扫 game 全树，太慢，扫常见容器）
-local CONTAINERS = {
-    "ReplicatedStorage",
-    "ReplicatedFirst",
-    "StarterGui",
-    "StarterPlayer",
-    "StarterPack",
-    "Workspace",
-    "Players",
-    "CoreGui",
-}
+if CONFIG.HookRequire then
+    local ok, realRequire = pcall(function() return require end)
+    if ok and type(realRequire) == "function" then
+        local wrapper
+        wrapper = function(target)
+            pcall(function()
+                if typeof(target) == "Instance" and target:IsA("ModuleScript") then
+                    local ok2, src = pcall(function() return target.Source end)
+                    if ok2 and type(src) == "string" then
+                        addEntry(target:GetFullName(), src, "ModuleScript")
+                    end
+                end
+            end)
+            return realRequire(target)
+        end
+        pcall(function() require = wrapper end)
+        hooked.require = true
+    end
+end
 
-local function scanOnce()
-    for _, sname in ipairs(CONTAINERS) do
-        local ok, svc = pcall(function() return game:GetService(sname) end)
-        if ok and svc then
-            local ok2, list = pcall(function() return svc:GetDescendants() end)
-            if ok2 and list then
-                for _, obj in ipairs(list) do
-                    if CLASS_TAGS[obj.ClassName] then
-                        local src = tryReadSource(obj)
-                        if src then addScript(obj, src) end
+------------------------------------------------------------
+-- 3. 扫描器：遍历游戏内所有 Script / LocalScript / ModuleScript
+------------------------------------------------------------
+local function scanScripts()
+    local roots = { game }
+    for _, svc in ipairs(game:GetChildren()) do
+        table.insert(roots, svc)
+    end
+    local seen = {}
+    for _, root in ipairs(roots) do
+        pcall(function()
+            for _, obj in ipairs(root:GetDescendants()) do
+                if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+                    if not seen[obj] then
+                        seen[obj] = true
+                        local ok, src = pcall(function() return obj.Source end)
+                        if ok and type(src) == "string" and #src > 0 then
+                            addEntry(obj:GetFullName(), src, obj.ClassName)
+                        end
                     end
                 end
             end
-        end
-    end
-    -- 玩家自己的 PlayerGui（执行器注入的面板 guban 在这里）
-    local ok, pg = pcall(function() return lp:FindFirstChild("PlayerGui") end)
-    if ok and pg then
-        for _, obj in ipairs(pg:GetDescendants()) do
-            if CLASS_TAGS[obj.ClassName] then
-                local src = tryReadSource(obj)
-                if src then addScript(obj, src) end
-            end
-        end
+        end)
     end
 end
 
-local function buildUI()
-    if ui then ui:Destroy() end
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "LiAelMonitor"
-    sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-    sg.Parent = CoreGui
+------------------------------------------------------------
+-- 4. UI 构建
+------------------------------------------------------------
+local existing = CoreGui:FindFirstChild("LielMonitorGui")
+if existing then existing:Destroy() end
 
-    local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 400, 0, 480)
-    main.Position = UDim2.new(0, 40, 0, 80)
-    main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-    main.BorderSizePixel = 0
-    main.Active = true
-    main.Draggable = true
-    main.Parent = sg
-    ui = sg
+local gui = Instance.new("ScreenGui")
+gui.Name = "LielMonitorGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999
+gui.Parent = (RunService:IsStudio() and player:WaitForChild("PlayerGui")) or CoreGui
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = main
+-- 主悬浮窗
+local frame = Instance.new("Frame")
+frame.Name = "Panel"
+frame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
+frame.Position = UDim2.new(0, 40, 0, 40)
+frame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -60, 0, 34)
-    title.Position = UDim2.new(0, 12, 0, 6)
-    title.BackgroundTransparency = 1
-    title.Text = "Script Monitor — LiAel (Delta)"
-    title.TextColor3 = Color3.fromRGB(220, 230, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 15
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = main
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
 
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.new(0, 28, 0, 28)
-    close.Position = UDim2.new(1, -36, 0, 8)
-    close.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-    close.Text = "×"
-    close.TextColor3 = Color3.fromRGB(255,255,255)
-    close.Font = Enum.Font.GothamBold
-    close.TextSize = 16
-    close.BorderSizePixel = 0
-    close.Parent = main
-    close.MouseButton1Click:Connect(function()
-        if scanConn then scanConn:Disconnect() end
-        sg:Destroy(); ui = nil
-    end)
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(70, 70, 80)
+stroke.Thickness = 1
+stroke.Parent = frame
 
-    local startBtn = Instance.new("TextButton")
-    startBtn.Size = UDim2.new(0, 140, 0, 32)
-    startBtn.Position = UDim2.new(0, 12, 0, 44)
-    startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
-    startBtn.Text = "开始监控"
-    startBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    startBtn.Font = Enum.Font.GothamBold
-    startBtn.TextSize = 14
-    startBtn.BorderSizePixel = 0
-    startBtn.Parent = main
-    local c1 = Instance.new("UICorner"); c1.CornerRadius = UDim.new(0,6); c1.Parent = startBtn
+-- 标题栏
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -100, 0, 32)
+title.Position = UDim2.new(0, 12, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Liel Monitor  ·  脚本监控"
+title.TextColor3 = Color3.fromRGB(235, 235, 240)
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = frame
 
-    local scanBtn = Instance.new("TextButton")
-    scanBtn.Size = UDim2.new(0, 100, 0, 32)
-    scanBtn.Position = UDim2.new(0, 160, 0, 44)
-    scanBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 160)
-    scanBtn.Text = "扫描一次"
-    scanBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    scanBtn.Font = Enum.Font.GothamBold
-    scanBtn.TextSize = 14
-    scanBtn.BorderSizePixel = 0
-    scanBtn.Parent = main
-    local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,6); c2.Parent = scanBtn
+-- 开始 / 停止 按钮
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "Toggle"
+toggleBtn.Size = UDim2.new(0, 72, 0, 24)
+toggleBtn.Position = UDim2.new(1, -160, 0, 4)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 13
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Text = "开始监控"
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Parent = frame
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 4)
 
-    local copyBtn = Instance.new("TextButton")
-    copyBtn.Size = UDim2.new(0, 100, 0, 32)
-    copyBtn.Position = UDim2.new(0, 268, 0, 44)
-    copyBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 40)
-    copyBtn.Text = "复制全部"
-    copyBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    copyBtn.Font = Enum.Font.GothamBold
-    copyBtn.TextSize = 14
-    copyBtn.BorderSizePixel = 0
-    copyBtn.Parent = main
-    local c3 = Instance.new("UICorner"); c3.CornerRadius = UDim.new(0,6); c3.Parent = copyBtn
+-- 全部复制 按钮
+local copyAllBtn = Instance.new("TextButton")
+copyAllBtn.Name = "CopyAll"
+copyAllBtn.Size = UDim2.new(0, 72, 0, 24)
+copyAllBtn.Position = UDim2.new(1, -84, 0, 4)
+copyAllBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 180)
+copyAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyAllBtn.TextSize = 13
+copyAllBtn.Font = Enum.Font.GothamBold
+copyAllBtn.Text = "全部复制"
+copyAllBtn.BorderSizePixel = 0
+copyAllBtn.Parent = frame
+Instance.new("UICorner", copyAllBtn).CornerRadius = UDim.new(0, 4)
 
-    statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, -24, 0, 20)
-    statusLabel.Position = UDim2.new(0, 12, 0, 82)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "状态：未启动"
-    statusLabel.TextColor3 = Color3.fromRGB(180, 190, 210)
-    statusLabel.Font = Enum.Font.Code
-    statusLabel.TextSize = 12
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.Parent = main
+-- 左右两栏：左=条目列表，右=源码查看
+local list = Instance.new("ScrollingFrame")
+list.Name = "List"
+list.Size = UDim2.new(0, 220, 1, -76)
+list.Position = UDim2.new(0, 12, 0, 44)
+list.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 6
+list.CanvasSize = UDim2.new(0, 0, 0, 0)
+list.Parent = frame
+Instance.new("UICorner", list).CornerRadius = UDim.new(0, 4)
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 2)
+listLayout.Parent = list
 
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, -16, 1, -120)
-    scroll.Position = UDim2.new(0, 8, 0, 112)
-    scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
-    scroll.BorderSizePixel = 0
-    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scroll.ScrollBarThickness = 6
-    scroll.Parent = main
-    local c4 = Instance.new("UICorner"); c4.CornerRadius = UDim.new(0,6); c4.Parent = scroll
-    listFrame = scroll
+local viewer = Instance.new("TextBox")
+viewer.Name = "Viewer"
+viewer.Size = UDim2.new(1, -244, 1, -76)
+viewer.Position = UDim2.new(0, 232, 0, 44)
+viewer.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+viewer.BorderSizePixel = 0
+viewer.TextColor3 = Color3.fromRGB(200, 230, 200)
+viewer.PlaceholderText = "选中左侧条目查看源码"
+viewer.PlaceholderColor3 = Color3.fromRGB(110, 110, 120)
+viewer.Font = CONFIG.Font
+viewer.TextSize = CONFIG.FontSize
+viewer.TextWrapped = false
+viewer.TextXAlignment = Enum.TextXAlignment.Left
+viewer.TextYAlignment = Enum.TextYAlignment.Top
+viewer.ClearTextOnFocus = false
+viewer.MultiLine = true
+viewer.TextEditable = true
+viewer.Text = ""
+viewer.Parent = frame
+Instance.new("UICorner", viewer).CornerRadius = UDim.new(0, 4)
 
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 3)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = scroll
+-- 状态条
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -24, 0, 20)
+status.Position = UDim2.new(0, 12, 1, -26)
+status.BackgroundTransparency = 1
+status.Text = string.format("就绪 · loadstring hook=%s · require hook=%s",
+    tostring(hooked.loadstring), tostring(hooked.require))
+status.TextColor3 = Color3.fromRGB(160, 160, 170)
+status.TextSize = 12
+status.Font = Enum.Font.Gotham
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = frame
 
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft = UDim.new(0, 4)
-    pad.PaddingRight = UDim.new(0, 4)
-    pad.PaddingTop = UDim.new(0, 4)
-    pad.Parent = scroll
-
-    startBtn.MouseButton1Click:Connect(function()
-        capturing = not capturing
-        if capturing then
-            startBtn.Text = "停止监控"
-            startBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 60)
-            if not scanConn then
-                scanConn = task.spawn(function()
-                    while true do
-                        if not capturing then break end
-                        scanOnce()
-                        task.wait(0.25)
-                    end
-                end)
-            end
-            statusLabel.Text = "状态：监控中 | 已捕获 " .. #captured .. " 个脚本"
-        else
-            startBtn.Text = "开始监控"
-            startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
-            statusLabel.Text = "状态：已停止 | 已捕获 " .. #captured .. " 个脚本"
+------------------------------------------------------------
+-- 5. 列表刷新
+------------------------------------------------------------
+local function refreshList()
+    for _, child in ipairs(list:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
         end
-    end)
-
-    scanBtn.MouseButton1Click:Connect(function()
-        scanOnce()
-        statusLabel.Text = "状态：扫描完成 | 已捕获 " .. #captured .. " 个脚本"
-    end)
-
-    copyBtn.MouseButton1Click:Connect(function()
-        local parts = {}
-        for i, e in ipairs(captured) do
-            parts[#parts+1] = ("-- ========== #%d  %s  [%s]  %s ==========\n%s\n"):format(
-                i, e.name, e.class, e.time, e.source)
-        end
-        local full = table.concat(parts, "\n")
-        if setclipboard then
-            setclipboard(full)
-            statusLabel.Text = ("状态：已复制 %d 个脚本（%d 字节）"):format(#captured, #full)
-        end
-    end)
+    end
+    local shown = 0
+    for i = #store.entries, 1, -1 do
+        local e = store.entries[i]
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -8, 0, 22)
+        btn.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
+        btn.BorderSizePixel = 0
+        btn.TextColor3 = Color3.fromRGB(220, 220, 230)
+        btn.TextSize = 12
+        btn.Font = Enum.Font.Code
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Text = string.format("[%s] %s", e.kind:sub(1, 4), e.name:sub(-60))
+        btn.TextTruncate = Enum.TextTruncate.AtEnd
+        btn.Parent = list
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
+        btn.MouseButton1Click:Connect(function()
+            viewer.Text = string.format("-- %s (%s, %d chars)\n\n%s", e.name, e.kind, #e.source, e.source)
+            status.Text = string.format("已载入：%s（%d 字符）", e.name, #e.source)
+        end)
+        shown = shown + 1
+        if shown >= CONFIG.MaxEntries then break end
+    end
+    list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 4)
+    status.Text = string.format("条目 %d · loadstring=%s · require=%s · 扫描=%.1fs",
+        #store.entries, tostring(hooked.loadstring), tostring(hooked.require), CONFIG.PollInterval)
 end
 
-buildUI()
-scanOnce()
-statusLabel.Text = "状态：就绪 | 初始捕获 " .. #captured .. " 个脚本"
+------------------------------------------------------------
+-- 6. 全部复制（含右侧当前内容）
+------------------------------------------------------------
+local function buildAllText()
+    local lines = {}
+    table.insert(lines, string.format("-- Liel Monitor 导出\n-- 共 %d 条\n\n", #store.entries))
+    for i = #store.entries, 1, -1 do
+        local e = store.entries[i]
+        table.insert(lines, string.format("-- ===== [%s] %s (%d chars) =====\n%s\n\n",
+            e.kind, e.name, #e.source, e.source))
+    end
+    return table.concat(lines)
+end
+
+local function copyText(text)
+    if not text or #text == 0 then return false end
+    local ok = false
+    -- 优先 setclipboard（执行器环境）
+    local fn = rawget(getfenv(), "setclipboard") or select(2, pcall(function() return setclipboard end))
+    if type(fn) == "function" then
+        local ok2 = pcall(fn, text)
+        if ok2 then ok = true end
+    end
+    -- 退路：TextBox Focus + 系统快捷键
+    if not ok then
+        local tmp = Instance.new("TextBox")
+        tmp.Size = UDim2.new(0, 1, 0, 1)
+        tmp.Text = text
+        tmp.Visible = true
+        tmp.TextEditable = true
+        tmp.Parent = gui
+        tmp:CaptureFocus()
+        tmp.SelectionStart = 0
+        tmp.CursorPosition = #text
+        task.wait(0.05)
+        -- Roblox 客户端无原生剪贴板 API，靠平台快捷键，这里把内容塞给 viewer 兜底
+        viewer.Text = text
+        status.Text = "已载入到右侧，Ctrl+A / Ctrl+C 复制"
+        tmp:Destroy()
+        ok = true
+    end
+    return ok
+end
+
+copyAllBtn.MouseButton1Click:Connect(function()
+    local all = buildAllText()
+    if copyText(all) then
+        status.Text = string.format("已复制 %d 条 · 共 %d 字符", #store.entries, #all)
+    else
+        status.Text = "复制失败：内容已放在右侧文本框"
+    end
+end)
+
+------------------------------------------------------------
+-- 7. 监控循环
+------------------------------------------------------------
+local monitoring = false
+local lastScan = 0
+
+toggleBtn.MouseButton1Click:Connect(function()
+    monitoring = not monitoring
+    if monitoring then
+        toggleBtn.Text = "停止监控"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        status.Text = "监控中…"
+        lastScan = 0
+    else
+        toggleBtn.Text = "开始监控"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+        status.Text = "已停止"
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not monitoring then return end
+    local now = tick()
+    if now - lastScan < CONFIG.PollInterval then return end
+    lastScan = now
+    scanScripts()
+    refreshList()
+end)
+
+refreshList()
+status.Text = string.format("就绪 · loadstring hook=%s · require hook=%s",
+    tostring(hooked.loadstring), tostring(hooked.require))
