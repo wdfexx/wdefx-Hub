@@ -1,50 +1,58 @@
--- LiAel Script Monitor v1.0
--- 悬浮窗 + 启动监控 + 全量源码捕获 + 一键复制
+-- LiAel Script Monitor v2.0 (Delta 适配版)
+local Players         = game:GetService("Players")
+local CoreGui         = game:GetService("CoreGui")
+local UserInputService= game:GetService("UserInputService")
+local RunService      = game:GetService("RunService")
+local lp              = Players.LocalPlayer
 
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local lp = Players.LocalPlayer
-
--- ===== 环境适配 =====
-local genv = getgenv and getgenv() or _G
-local hook = hookfunction or (type(getgenv) == "function" and getgenv().hookfunction) or function(a,b) return a end
-local getname = getnamecallmethod or (debug and debug.getnamecallmethod)
-
--- ===== 状态 =====
 local capturing = false
-local captured = {}        -- { name=string, source=string, time=os.time() }
-local seen = {}            -- 去重 key
-local ui, listFrame, statusLabel, copyAllBtn
+local captured  = {}
+local seen      = {}
+local ui, listFrame, statusLabel
+local scanConn
 
--- ===== 去重 =====
+local CLASS_TAGS = {
+    ModuleScript = true,
+    LocalScript  = true,
+    Script       = true,
+}
+
 local function keyOf(name, src)
-    return (name or "?") .. "::" .. #src .. "::" .. (src:sub(1, 64))
+    return (name or "?") .. "::" .. #src .. "::" .. (src:sub(1,128))
 end
 
-local function addScript(name, src, origin)
-    if type(src) ~= "string" or #src == 0 then return end
+local function tryReadSource(obj)
+    local ok, src = pcall(function() return obj.Source end)
+    if ok and type(src) == "string" and #src > 0 then
+        return src
+    end
+    return nil
+end
+
+local function addScript(obj, src)
+    local name
+    local ok, full = pcall(function() return obj:GetFullName() end)
+    name = ok and full or obj.ClassName
     local k = keyOf(name, src)
     if seen[k] then return end
     seen[k] = true
     captured[#captured+1] = {
-        name = name or "unknown",
+        name = name,
         source = src,
-        origin = origin or "runtime",
-        time = os.date("%H:%M:%S")
+        class = obj.ClassName,
+        time = os.date("%H:%M:%S"),
     }
-    if ui and listFrame then
-        local txt = (name or "unknown") .. "  [" .. (origin or "runtime") .. "]  " .. #src .. "B"
+    -- 列表刷新
+    if listFrame then
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -8, 0, 28)
-        btn.Position = UDim2.new(0, 4, 0, #listFrame:GetChildren() * 30)
+        btn.Size = UDim2.new(1, 0, 0, 26)
         btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
         btn.TextColor3 = Color3.fromRGB(200, 220, 255)
         btn.Font = Enum.Font.Code
-        btn.TextSize = 13
-        btn.Text = txt
+        btn.TextSize = 12
         btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Text = ("%s  [%s]  %dB"):format(name, obj.ClassName, #src)
+        btn.LayoutOrder = #captured
         btn.Parent = listFrame
         btn.MouseButton1Click:Connect(function()
             if setclipboard then
@@ -52,53 +60,60 @@ local function addScript(name, src, origin)
             end
         end)
     end
+    if statusLabel then
+        statusLabel.Text = "状态：监控中 | 已捕获 " .. #captured .. " 个脚本"
+    end
 end
 
--- ===== 捕获方式 1：遍历常见容器 =====
-local function scanContainer(root, depth)
-    if depth > 6 or not root then return end
-    for _, v in ipairs(root:GetDescendants()) do
-        local ok, src = pcall(function() return v.Source end)
-        if ok and type(src) == "string" and #src > 0 then
-            addScript(v:GetFullName(), src, v.ClassName)
+-- 深度扫描（Delta 里不要扫 game 全树，太慢，扫常见容器）
+local CONTAINERS = {
+    "ReplicatedStorage",
+    "ReplicatedFirst",
+    "StarterGui",
+    "StarterPlayer",
+    "StarterPack",
+    "Workspace",
+    "Players",
+    "CoreGui",
+}
+
+local function scanOnce()
+    for _, sname in ipairs(CONTAINERS) do
+        local ok, svc = pcall(function() return game:GetService(sname) end)
+        if ok and svc then
+            local ok2, list = pcall(function() return svc:GetDescendants() end)
+            if ok2 and list then
+                for _, obj in ipairs(list) do
+                    if CLASS_TAGS[obj.ClassName] then
+                        local src = tryReadSource(obj)
+                        if src then addScript(obj, src) end
+                    end
+                end
+            end
+        end
+    end
+    -- 玩家自己的 PlayerGui（执行器注入的面板 guban 在这里）
+    local ok, pg = pcall(function() return lp:FindFirstChild("PlayerGui") end)
+    if ok and pg then
+        for _, obj in ipairs(pg:GetDescendants()) do
+            if CLASS_TAGS[obj.ClassName] then
+                local src = tryReadSource(obj)
+                if src then addScript(obj, src) end
+            end
         end
     end
 end
 
--- ===== 捕获方式 2：Hook loadstring =====
-local origLS = loadstring
-local function hookedLS(code, chunkname)
-    addScript(chunkname or "loadstring", tostring(code), "loadstring")
-    return origLS(code, chunkname)
-end
-
--- ===== 捕获方式 3：Hook require =====
-local origReq = require
-local function hookedReq(target)
-    if type(target) == "string" then
-        addScript("require:"..target, target, "require-path")
-    elseif typeof(target) == "Instance" and target:IsA("ModuleScript") then
-        local ok, src = pcall(function() return target.Source end)
-        if ok and src and #src > 0 then
-            addScript(target:GetFullName(), src, "require-instance")
-        end
-    end
-    return origReq(target)
-end
-
--- ===== 悬浮窗 UI =====
 local function buildUI()
     if ui then ui:Destroy() end
-
     local sg = Instance.new("ScreenGui")
     sg.Name = "LiAelMonitor"
     sg.ResetOnSpawn = false
     sg.IgnoreGuiInset = true
-    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     sg.Parent = CoreGui
 
     local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 380, 0, 460)
+    main.Size = UDim2.new(0, 400, 0, 480)
     main.Position = UDim2.new(0, 40, 0, 80)
     main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     main.BorderSizePixel = 0
@@ -115,7 +130,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -60, 0, 34)
     title.Position = UDim2.new(0, 12, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = "Script Monitor — LiAel"
+    title.Text = "Script Monitor — LiAel (Delta)"
     title.TextColor3 = Color3.fromRGB(220, 230, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 15
@@ -132,11 +147,14 @@ local function buildUI()
     close.TextSize = 16
     close.BorderSizePixel = 0
     close.Parent = main
-    close.MouseButton1Click:Connect(function() sg:Destroy(); ui = nil end)
+    close.MouseButton1Click:Connect(function()
+        if scanConn then scanConn:Disconnect() end
+        sg:Destroy(); ui = nil
+    end)
 
     local startBtn = Instance.new("TextButton")
     startBtn.Size = UDim2.new(0, 140, 0, 32)
-    startBtn.Position = UDim2.new(0, 12, 0, 48)
+    startBtn.Position = UDim2.new(0, 12, 0, 44)
     startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
     startBtn.Text = "开始监控"
     startBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -144,14 +162,11 @@ local function buildUI()
     startBtn.TextSize = 14
     startBtn.BorderSizePixel = 0
     startBtn.Parent = main
-
-    local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(0, 6)
-    cCorner.Parent = startBtn
+    local c1 = Instance.new("UICorner"); c1.CornerRadius = UDim.new(0,6); c1.Parent = startBtn
 
     local scanBtn = Instance.new("TextButton")
     scanBtn.Size = UDim2.new(0, 100, 0, 32)
-    scanBtn.Position = UDim2.new(0, 160, 0, 48)
+    scanBtn.Position = UDim2.new(0, 160, 0, 44)
     scanBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 160)
     scanBtn.Text = "扫描一次"
     scanBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -159,27 +174,23 @@ local function buildUI()
     scanBtn.TextSize = 14
     scanBtn.BorderSizePixel = 0
     scanBtn.Parent = main
-    local sCorner = Instance.new("UICorner")
-    sCorner.CornerRadius = UDim.new(0, 6)
-    sCorner.Parent = scanBtn
+    local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,6); c2.Parent = scanBtn
 
-    copyAllBtn = Instance.new("TextButton")
-    copyAllBtn.Size = UDim2.new(0, 100, 0, 32)
-    copyAllBtn.Position = UDim2.new(0, 268, 0, 48)
-    copyAllBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 40)
-    copyAllBtn.Text = "复制全部"
-    copyAllBtn.TextColor3 = Color3.fromRGB(255,255,255)
-    copyAllBtn.Font = Enum.Font.GothamBold
-    copyAllBtn.TextSize = 14
-    copyAllBtn.BorderSizePixel = 0
-    copyAllBtn.Parent = main
-    local cc = Instance.new("UICorner")
-    cc.CornerRadius = UDim.new(0, 6)
-    cc.Parent = copyAllBtn
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(0, 100, 0, 32)
+    copyBtn.Position = UDim2.new(0, 268, 0, 44)
+    copyBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 40)
+    copyBtn.Text = "复制全部"
+    copyBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    copyBtn.Font = Enum.Font.GothamBold
+    copyBtn.TextSize = 14
+    copyBtn.BorderSizePixel = 0
+    copyBtn.Parent = main
+    local c3 = Instance.new("UICorner"); c3.CornerRadius = UDim.new(0,6); c3.Parent = copyBtn
 
     statusLabel = Instance.new("TextLabel")
     statusLabel.Size = UDim2.new(1, -24, 0, 20)
-    statusLabel.Position = UDim2.new(0, 12, 0, 86)
+    statusLabel.Position = UDim2.new(0, 12, 0, 82)
     statusLabel.BackgroundTransparency = 1
     statusLabel.Text = "状态：未启动"
     statusLabel.TextColor3 = Color3.fromRGB(180, 190, 210)
@@ -193,86 +204,64 @@ local function buildUI()
     scroll.Position = UDim2.new(0, 8, 0, 112)
     scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
     scroll.BorderSizePixel = 0
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     scroll.ScrollBarThickness = 6
     scroll.Parent = main
-    local sCc = Instance.new("UICorner")
-    sCc.CornerRadius = UDim.new(0, 6)
-    sCc.Parent = scroll
+    local c4 = Instance.new("UICorner"); c4.CornerRadius = UDim.new(0,6); c4.Parent = scroll
     listFrame = scroll
 
-    local pad = Instance.new("UIPadding")
-    pad.PaddingTop = UDim.new(0, 6)
-    pad.PaddingBottom = UDim.new(0, 6)
-    pad.PaddingLeft = UDim.new(0, 4)
-    pad.PaddingRight = UDim.new(0, 4)
-    pad.Parent = scroll
-
     local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 4)
+    layout.Padding = UDim.new(0, 3)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = scroll
 
-    -- 开始/停止
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0, 4)
+    pad.PaddingRight = UDim.new(0, 4)
+    pad.PaddingTop = UDim.new(0, 4)
+    pad.Parent = scroll
+
     startBtn.MouseButton1Click:Connect(function()
         capturing = not capturing
         if capturing then
             startBtn.Text = "停止监控"
             startBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 60)
+            if not scanConn then
+                scanConn = task.spawn(function()
+                    while true do
+                        if not capturing then break end
+                        scanOnce()
+                        task.wait(0.25)
+                    end
+                end)
+            end
             statusLabel.Text = "状态：监控中 | 已捕获 " .. #captured .. " 个脚本"
         else
             startBtn.Text = "开始监控"
             startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
-            statusLabel.Text = "状态：已暂停 | 已捕获 " .. #captured .. " 个脚本"
+            statusLabel.Text = "状态：已停止 | 已捕获 " .. #captured .. " 个脚本"
         end
     end)
 
-    -- 手动扫描
     scanBtn.MouseButton1Click:Connect(function()
-        scanContainer(game, 0)
+        scanOnce()
         statusLabel.Text = "状态：扫描完成 | 已捕获 " .. #captured .. " 个脚本"
     end)
 
-    -- 复制全部
-    copyAllBtn.MouseButton1Click:Connect(function()
+    copyBtn.MouseButton1Click:Connect(function()
         local parts = {}
         for i, e in ipairs(captured) do
-            parts[#parts+1] = string.format(
-                "-- ========== #%d  %s  [%s]  %s ==========\n%s\n",
-                i, e.name, e.origin, e.time, e.source
-            )
+            parts[#parts+1] = ("-- ========== #%d  %s  [%s]  %s ==========\n%s\n"):format(
+                i, e.name, e.class, e.time, e.source)
         end
         local full = table.concat(parts, "\n")
         if setclipboard then
             setclipboard(full)
-            statusLabel.Text = "状态：已复制 " .. #captured .. " 个脚本（" .. #full .. " 字节）"
-        else
-            statusLabel.Text = "状态：当前环境无 setclipboard"
-        end
-    end)
-
-    return startBtn, scanBtn
-end
-
--- ===== 安装 Hook（只装一次） =====
-local function installHooks()
-    pcall(function()
-        if hookfunction and loadstring then
-            hookfunction(loadstring, hookedLS)
-        end
-    end)
-    pcall(function()
-        if hookfunction and require then
-            hookfunction(require, hookedReq)
+            statusLabel.Text = ("状态：已复制 %d 个脚本（%d 字节）"):format(#captured, #full)
         end
     end)
 end
 
--- ===== 启动 =====
 buildUI()
-installHooks()
-
--- 首次扫描一次基础容器
-scanContainer(game, 0)
+scanOnce()
 statusLabel.Text = "状态：就绪 | 初始捕获 " .. #captured .. " 个脚本"
