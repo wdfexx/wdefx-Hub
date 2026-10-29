@@ -1,4 +1,3 @@
--- 基础服务与全局变量
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -8,7 +7,6 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local isDestroyed = false
 
--- ================= 自动保存配置系统 =================
 local ConfigFile = "wdfex_simple_config.json"
 
 local Settings = { 
@@ -16,8 +14,6 @@ local Settings = {
     ESP_ENABLED = false, ESP_SHOW_NAME = true, ESP_SHOW_TEAM = true, ESP_SHOW_HEALTH = true, ESP_SHOW_DIST = true, ESP_SHOW_SELF = false, ESP_SHOW_PEERS = true,
     quickInteract = false, interactDistanceEnabled = false,
     range_active = false, range_size = 10, range_transparency = 0.7, range_teamCheck = false, range_combatCheck = false, range_color = "红色", range_material = "Neon", range_rainbow = false, range_checkCorpses = false, range_outline = false, range_collision = false, range_glow = false, range_pulse = false, range_affectNPC = false,
-    
-    -- 新增：记录上次选中的食物
     selectedFoodName = "小蛋糕" 
 }
 
@@ -38,9 +34,7 @@ local function LoadConfig()
     end
 end
 LoadConfig()
--- =================================================
 
--- 极简伤害拦截
 local namecall
 pcall(function()
     local mt = getrawmetatable(game)
@@ -57,12 +51,11 @@ pcall(function()
     setreadonly(mt, true)
 end)
 
--- 加载 WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title = "<font color='#00FF00'>wdfex-Hub简洁版</font>", 
-    Icon = "crown", IconThemed = true, Author = "v1.6 (食物下拉版)", Folder = "CloudHub", 
+    Icon = "crown", IconThemed = true, Author = "v1.6", Folder = "CloudHub", 
     Size = UDim2.fromOffset(580, 440), Transparent = true, Theme = "Dark", HideSearchBar = true, 
     ScrollBarEnabled = true, Resizable = true, User = { Enabled = true, Callback = function() end, Anonymous = false }, SideBarWidth = 200
 })
@@ -70,7 +63,6 @@ local Window = WindUI:CreateWindow({
 local MainSection = Window:Section({ Title = "主功能", Opened = true })
 local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
 
--- =================== 1. 玩家功能 ===================
 local A = AddTab(MainSection, "玩家修改", "user")
 
 local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
@@ -139,7 +131,7 @@ local function CreateWindowQuickToggle()
 end
 
 A:Divider({ Text = "悬浮窗设置" })
-A:Toggle({ Title = "悬浮窗快捷开关（给电脑端用的）", Value = false, Callback = function(value) 
+A:Toggle({ Title = "悬浮窗快捷开关", Value = false, Callback = function(value) 
     windowQuickToggle = value
     if value then CreateWindowQuickToggle() else DestroyWindowQuickToggle() end 
 end })
@@ -193,8 +185,6 @@ end
 local noclipConn = nil
 A:Toggle({ Title = "穿墙", Default = Settings.noclip, Callback = function(state) applyNoclip(state) end })
 
-
--- =================== 2. 透视功能 ===================
 local E = AddTab(MainSection, "透视", "eye")
 local ESP_LIST, ESP_REFRESH_COUNT = {}, 0
 
@@ -288,8 +278,6 @@ task.spawn(function() while not isDestroyed do task.wait(0.3); if Settings.ESP_E
 Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(0.3); if Settings.ESP_ENABLED then RefreshESP() end end) end)
 Players.PlayerRemoving:Connect(function(p) RemoveESP(p.UserId) end)
 
-
--- =================== 3. 范围功能 (Hitbox) ===================
 local RangeTab = AddTab(MainSection, "范围", "bullseye")
 local tbl27 = {}
 local tbl21 = {
@@ -382,8 +370,6 @@ RangeTab:Toggle({ Title = "启用/禁用碰撞", Value = Settings.range_collisio
 RangeTab:Toggle({ Title = "发光效果", Value = Settings.range_glow, Callback = function(v) Settings.range_glow = v; SaveConfig() end })
 RangeTab:Toggle({ Title = "脉动效果", Value = Settings.range_pulse, Callback = function(v) Settings.range_pulse = v; SaveConfig() end })
 
-
--- =================== 4. 互动功能 ===================
 local InteractTab = AddTab(MainSection, "互动功能", "hand")
 
 local function initQuickInteract()
@@ -432,7 +418,6 @@ local function applyInteractDist(state)
 end
 InteractTab:Toggle({ Title = "增加互动距离", Value = Settings.interactDistanceEnabled, Callback = function(value) applyInteractDist(value) end })
 
--- 自动黑客
 local tbl24 = {}
 local function fn50(autoHack)
     Settings.autoHack = autoHack
@@ -457,8 +442,6 @@ end
 
 InteractTab:Toggle({ Title = "自动黑客", Value = Settings.autoHack, Callback = function(value) fn50(value) end })
 
-
--- =================== 5. 枪械功能 ===================
 local B = AddTab(MainSection, "枪械功能", "target")
 B:Toggle({ Title = "无限子弹", Value = Settings.infAmmo, Callback = function(value) Settings.infAmmo = value; SaveConfig() end })
 
@@ -482,8 +465,6 @@ task.spawn(function()
     end
 end)
 
-
--- =================== 6. 远程购买 ===================
 local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
 
 local function BuyItem(arg, arg2, arg3, arg4)
@@ -554,21 +535,15 @@ RemoteBuyTab:Button({ Title = "购买", Callback = function()
     else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
 end })
 
-
--- =================== 修改后的食物下拉菜单 ===================
-RemoteBuyTab:Divider({ Text = "食品补给 (下拉选择)" })
-
+RemoteBuyTab:Divider({ Text = "食品补给" })
 local foods = {
     {name = "小蛋糕", code = "Cupcake"}, {name = "三明治", code = "Sandwich"}, {name = "汽水", code = "Soda Can"},
     {name = "沙拉", code = "Salad"}, {name = "饼干", code = "Cookie"}, {name = "冰茶", code = "Iced Tea"},
     {name = "松饼卷", code = "Croissant"}, {name = "苹果", code = "Apple"}, {name = "苹果汁", code = "Apple Juice"},
     {name = "牛奶", code = "Box Of Milk"}
 }
-
 local foodNames = {}
 for _, f in ipairs(foods) do table.insert(foodNames, f.name) end
-
--- 使用下拉菜单，并联动保存的变量
 RemoteBuyTab:Dropdown({
     Title = "选择食物", 
     Values = foodNames, 
@@ -578,13 +553,10 @@ RemoteBuyTab:Dropdown({
         SaveConfig() 
     end
 })
-
--- 单独的一个购买按钮
 RemoteBuyTab:Button({ 
     Title = "购买选中的食物", 
     Callback = function()
         local targetFood = nil
-        -- 根据下拉菜单选中的名字查找对应的 code
         for _, f in ipairs(foods) do
             if f.name == Settings.selectedFoodName then
                 targetFood = f
@@ -607,10 +579,7 @@ RemoteBuyTab:Button({
         end
     end
 })
--- =====================================================
 
-
--- =================== 7. 自动保存配置后：强制初始化生效 ===================
 task.spawn(function()
     task.wait(1.5)
     if Settings.noclip then applyNoclip(true) end
@@ -619,4 +588,4 @@ task.spawn(function()
     if Settings.autoHack then fn50(true) end
 end)
 
-WindUI:Notify({ Title = "wdfex-Hub简洁版", Content = "加载成功 (v1.6 食物下拉版)", Duration = 3 })
+WindUI:Notify({ Title = "wdfex-Hub", Content = "脚本加载成功", Duration = 3 })
