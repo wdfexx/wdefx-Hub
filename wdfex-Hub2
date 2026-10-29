@@ -349,7 +349,7 @@ function createUI()
 
     UpdateSection:Paragraph({
         Title = "5.5更新公告",
-        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型是DeepSeek\n增加远程控制车辆",
+        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n修复生成车辆生成太慢的问题\n车辆功能增加可召唤车撞人或撞车无需上车增加入车懂得都懂🤓\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型是DeepSeek\n可能会增加用户聊天使用wdfex-Hub的用户可以在里面和其他的wdefx-Hub用户进行聊天",
         ThumbnailSize = 150,
     })
 
@@ -453,6 +453,100 @@ function createUI()
             end
         end
     end)
+
+    A:Divider({ Text = "体力与饥饿" })
+    do
+        local StaminaPlayers = game:GetService("Players")
+        local StaminaRunService = game:GetService("RunService")
+        local StaminaLocalPlayer = StaminaPlayers.LocalPlayer
+
+        local StaminaState = {
+            stamina = false,
+            core = nil,
+        }
+
+        local function loadStaminaFramework()
+            if StaminaState.core then return true end
+            local ok = pcall(function()
+                local fw = StaminaLocalPlayer:WaitForChild("PlayerScripts", 15):WaitForChild("Framework", 15)
+                StaminaState.core = require(fw:WaitForChild("Core", 15))
+            end)
+            return ok and StaminaState.core ~= nil
+        end
+
+        task.spawn(function()
+            for _ = 1, 30 do
+                if loadStaminaFramework() then return end
+                task.wait(2)
+            end
+        end)
+
+        StaminaRunService.Heartbeat:Connect(function()
+            if not StaminaState.stamina then return end
+            if not StaminaState.core then
+                loadStaminaFramework()
+                return
+            end
+            pcall(function()
+                StaminaState.core.stamina = 100
+            end)
+        end)
+
+        A:Toggle({
+            Title = "无限体力",
+            Value = false,
+            Callback = function(value)
+                StaminaState.stamina = value
+            end
+        })
+    end
+
+    do
+        local FoodPlayers = game:GetService("Players")
+        local FoodRunService = game:GetService("RunService")
+        local FoodLocalPlayer = FoodPlayers.LocalPlayer
+
+        local FoodState = {
+            food = false,
+            core = nil,
+        }
+
+        local function loadFoodFramework()
+            if FoodState.core then return true end
+            local ok = pcall(function()
+                local fw = FoodLocalPlayer:WaitForChild("PlayerScripts", 15):WaitForChild("Framework", 15)
+                FoodState.core = require(fw:WaitForChild("Core", 15))
+            end)
+            return ok and FoodState.core ~= nil
+        end
+
+        task.spawn(function()
+            for _ = 1, 30 do
+                if loadFoodFramework() then return end
+                task.wait(2)
+            end
+        end)
+
+        FoodRunService.Heartbeat:Connect(function()
+            if not FoodState.food then return end
+            if not FoodState.core then
+                loadFoodFramework()
+                return
+            end
+            pcall(function()
+                FoodState.core.food = 100
+            end)
+        end)
+
+        A:Toggle({
+            Title = "无限饥饿",
+            Value = false,
+            Callback = function(value)
+                FoodState.food = value
+            end
+        })
+    end
+
     A:Divider({ Text = "人物旋转" })
     local spinEnabled = false
     local spinConn = nil
@@ -2131,15 +2225,16 @@ function createUI()
     end })
     RemoteBuyTab:Divider({ Text = "食物" })
     local foodItems = {
-        { name = "培根和鸡蛋", itemName = "Bacon And Eggs" },
-        { name = "面条", itemName = "Spaghetti" },
-        { name = "鸡肉和薯条", itemName = "Chicken And Fries" },
+        { name = "小蛋糕", itemName = "Cupcake" },
+        { name = "三明治", itemName = "Sandwich" },
+        { name = "汽水", itemName = "Soda Can" },
         { name = "沙拉", itemName = "Salad" },
-        { name = "豆汁", itemName = "Bean Soup" },
-        { name = "松饼卷", itemName = "Croissant" },
-        { name = "煎饼", itemName = "Pancake" },
+        { name = "饼干", itemName = "Cookie" },
         { name = "冰茶", itemName = "Iced Tea" },
-        { name = "一盒牛奶", itemName = "Box Of Milk" }
+        { name = "松饼卷", itemName = "Croissant" },
+        { name = "苹果", itemName = "Apple" },
+        { name = "苹果汁", itemName = "Apple Juice" },
+        { name = "牛奶", itemName = "Box Of Milk" }
     }
     local foodNames = {}
     for _, v in ipairs(foodItems) do table.insert(foodNames, v.name) end
@@ -2190,6 +2285,83 @@ function createUI()
         end)
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
+
+    -- ==== 新增：自动捡钱 ====
+    local AutoCollect = {
+        Enabled = false,
+        HeartbeatConn = nil
+    }
+    
+    local function processAutoCollect(action, target)
+        if not target or not target.Parent then return end
+        local eventFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
+        local eventEvt = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
+        
+        if eventFunc then
+            pcall(function()
+                if action == "cashDrop" then
+                    eventFunc:InvokeServer("cashDrop", target)
+                elseif action == "talkToMission" then
+                    if eventEvt then eventEvt:FireServer("interacted") end
+                    eventFunc:InvokeServer("talkToMission", target)
+                end
+            end)
+        end
+    end
+
+    InteractTab:Toggle({
+        Title = "自动捡钱",
+        Value = false,
+        Callback = function(value)
+            AutoCollect.Enabled = value
+            if value then
+                if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
+                AutoCollect.HeartbeatConn = RunService.Heartbeat:Connect(function()
+                    if not AutoCollect.Enabled then return end
+                    local gameplay = workspace:FindFirstChild("Gameplay")
+                    if not gameplay then return end
+                    
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    local myPos = hrp and hrp.Position or nil
+                    
+                    -- 1. 硬币和纸币（限制 30 格范围内，无冷却秒捡）
+                    local entities = gameplay:FindFirstChild("Entities")
+                    if entities then
+                        for _, entity in ipairs(entities:GetChildren()) do
+                            if entity.Name == "_Coin" or entity.Name == "_Cash" then
+                                local cashDrop = entity:FindFirstChild("CashDrop", true)
+                                if cashDrop then
+                                    local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
+                                    if part and myPos then
+                                        if (part.Position - myPos).Magnitude <= 30 then
+                                            processAutoCollect("cashDrop", cashDrop)
+                                        end
+                                    else
+                                        processAutoCollect("cashDrop", cashDrop)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- 2. 指定的互动物品（银行/游艇等，全图无延迟秒捡）
+                    for _, obj in ipairs(gameplay:GetDescendants()) do
+                        if obj.Name == "_Interaction" then
+                            local targetParent = obj.Parent
+                            local pName = targetParent.Name:lower()
+                            if pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward") or pName:find("usb") or pName:find("sack") or pName:find("envelope") or pName:find("trace") then
+                                processAutoCollect("talkToMission", obj)
+                            end
+                        end
+                    end
+                end)
+            else
+                if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect(); AutoCollect.HeartbeatConn = nil end
+            end
+        end
+    })
+    -- ==== 自动捡钱结束 ====
 
     do
         local tbl2 = tbl2 or {}
