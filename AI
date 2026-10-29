@@ -1,428 +1,278 @@
--- ============================================================
--- ESP 独立悬浮窗（从 wdfex-Hub 抽取，去 WindUI 依赖）
--- 执行器：Krnl / Fluxus / Synapse 等
--- ============================================================
+-- LiAel Script Monitor v1.0
+-- 悬浮窗 + 启动监控 + 全量源码捕获 + 一键复制
 
 local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local lp = Players.LocalPlayer
 
--- ============================================================
--- 1. ESP 状态（与原脚本同名同义）
--- ============================================================
-local ESP_ENABLED       = false
-local ESP_SHOW_NAME     = true
-local ESP_SHOW_TEAM     = true
-local ESP_SHOW_HEALTH   = true
-local ESP_SHOW_DIST     = true
-local ESP_SHOW_SELF     = false
-local ESP_SHOW_PEERS    = true
-local ESP_LIST          = {}
-local ESP_REFRESH_COUNT = 0
+-- ===== 环境适配 =====
+local genv = getgenv and getgenv() or _G
+local hook = hookfunction or (type(getgenv) == "function" and getgenv().hookfunction) or function(a,b) return a end
+local getname = getnamecallmethod or (debug and debug.getnamecallmethod)
 
--- ============================================================
--- 2. 数据获取（原样搬过来）
--- ============================================================
-local function GetTeam(p)
-    if p.Team then
-        local teamName = p.Team.Name
-        local teamMap = {
-            ["Police"]="警察",["Fire"]="火焰",["Medical"]="医疗",["Road"]="道路",
-            ["Civilian"]="平民",["Citizen"]="平民",["Criminal"]="匪徒",["Gang"]="黑帮",
-            ["Military"]="军人",["Delivery"]="送货",["Farmer"]="农民",["Banker"]="银行家",
-            ["Mayor"]="市长",["Journalist"]="记者",["Lawyer"]="律师",["Prisoner"]="囚犯",
-            ["Guard"]="狱警",["Driver"]="司机",["Chef"]="厨师",["Builder"]="建筑工",
-            ["Miner"]="矿工",["Fisherman"]="渔夫",["Merchant"]="商人",["Student"]="学生",
-            ["Teacher"]="老师",["Engineer"]="工程师",["Scientist"]="科学家",["Pilot"]="飞行员",
-            ["Courier"]="快递员",["BusDriver"]="公交车司机"
-        }
-        return teamMap[teamName] or teamName
-    end
-    return "平民"
+-- ===== 状态 =====
+local capturing = false
+local captured = {}        -- { name=string, source=string, time=os.time() }
+local seen = {}            -- 去重 key
+local ui, listFrame, statusLabel, copyAllBtn
+
+-- ===== 去重 =====
+local function keyOf(name, src)
+    return (name or "?") .. "::" .. #src .. "::" .. (src:sub(1, 64))
 end
 
-local function GetTeamColor(p)
-    if p.Team then return p.Team.TeamColor.Color end
-    return Color3.fromRGB(200, 200, 200)
-end
-
-local function GetHealth(p)
-    local c = p.Character
-    if not c then return 0 end
-    local h = c:FindFirstChildOfClass("Humanoid")
-    if not h then return 0 end
-    return math.floor(h.Health)
-end
-
-local function GetDist(p)
-    local mc = LocalPlayer.Character
-    if not mc then return 0 end
-    local mr = mc:FindFirstChild("HumanoidRootPart")
-    if not mr then return 0 end
-    local tc = p.Character
-    if not tc then return 0 end
-    local tr = tc:FindFirstChild("HumanoidRootPart")
-    if not tr then return 0 end
-    return math.floor((mr.Position - tr.Position).Magnitude)
-end
-
--- ============================================================
--- 3. ESP 对象管理（原样搬过来）
--- ============================================================
-local function RemoveESP(id)
-    local d = ESP_LIST[id]
-    if d then
-        if d.Billboard then d.Billboard:Destroy() end
-        ESP_LIST[id] = nil
-    end
-end
-
-local function BuildESP(p)
-    if not p.Character then return end
-    if not ESP_SHOW_SELF and p == LocalPlayer then return end
-    local head = p.Character:FindFirstChild("Head")
-    if not head then return end
-    if ESP_LIST[p.UserId] then
-        if ESP_LIST[p.UserId].Billboard then ESP_LIST[p.UserId].Billboard.Enabled = true end
-        return
-    end
-    local bb = Instance.new("BillboardGui")
-    bb.Size = UDim2.new(0, 200, 0, 100)
-    bb.StudsOffset = Vector3.new(0, 3, 0)
-    bb.AlwaysOnTop = true
-    bb.MaxDistance = 764
-    bb.Parent = head
-
-    local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 1, 0)
-    f.BackgroundTransparency = 1
-    f.Parent = bb
-
-    ESP_LIST[p.UserId] = { Billboard = bb, Frame = f }
-end
-
-local function RefreshESP()
-    if not ESP_ENABLED then
-        for _, d in pairs(ESP_LIST) do
-            if d.Billboard then d.Billboard.Enabled = false end
-        end
-        return
-    end
-    ESP_REFRESH_COUNT = ESP_REFRESH_COUNT + 1
-    if ESP_REFRESH_COUNT % 3 ~= 0 then return end
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if not ESP_SHOW_SELF and p == LocalPlayer then RemoveESP(p.UserId) continue end
-        if not p.Character then RemoveESP(p.UserId) continue end
-        if ESP_REFRESH_COUNT % 30 == 0 and ESP_LIST[p.UserId] then RemoveESP(p.UserId) end
-        if not ESP_LIST[p.UserId] then BuildESP(p) end
-        local d = ESP_LIST[p.UserId]
-        if not d then continue end
-        if not d.Billboard or not d.Billboard.Parent then
-            ESP_LIST[p.UserId] = nil
-            BuildESP(p)
-            d = ESP_LIST[p.UserId]
-            if not d then continue end
-        end
-        d.Billboard.Enabled = true
-
-        local f = d.Frame
-        for _, c in ipairs(f:GetChildren()) do c:Destroy() end
-
-        local y, lines = 0, 0
-        local team, color, hp, dist = GetTeam(p), GetTeamColor(p), GetHealth(p), GetDist(p)
-
-        if ESP_SHOW_NAME then
-            local l = Instance.new("TextLabel")
-            l.Size = UDim2.new(1, 0, 0, 20)
-            l.Position = UDim2.new(0, 0, 0, y)
-            l.BackgroundTransparency = 1
-            if p == LocalPlayer then
-                if ESP_SHOW_PEERS then l.Text = "wdfex-Hub"; l.TextColor3 = Color3.fromRGB(0, 255, 255)
-                else l.Text = p.Name .. " (你)"; l.TextColor3 = Color3.fromRGB(0, 255, 255) end
-            else
-                l.Text = p.Name
-                l.TextColor3 = color
+local function addScript(name, src, origin)
+    if type(src) ~= "string" or #src == 0 then return end
+    local k = keyOf(name, src)
+    if seen[k] then return end
+    seen[k] = true
+    captured[#captured+1] = {
+        name = name or "unknown",
+        source = src,
+        origin = origin or "runtime",
+        time = os.date("%H:%M:%S")
+    }
+    if ui and listFrame then
+        local txt = (name or "unknown") .. "  [" .. (origin or "runtime") .. "]  " .. #src .. "B"
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -8, 0, 28)
+        btn.Position = UDim2.new(0, 4, 0, #listFrame:GetChildren() * 30)
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        btn.TextColor3 = Color3.fromRGB(200, 220, 255)
+        btn.Font = Enum.Font.Code
+        btn.TextSize = 13
+        btn.Text = txt
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Parent = listFrame
+        btn.MouseButton1Click:Connect(function()
+            if setclipboard then
+                setclipboard(captured[#captured].source)
             end
-            l.TextSize = 15
-            l.Font = Enum.Font.GothamBold
-            l.TextStrokeTransparency = 0.3
-            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            l.TextXAlignment = Enum.TextXAlignment.Center
-            l.Parent = f
-            y = y + 22; lines = lines + 1
-        end
-
-        if ESP_SHOW_TEAM then
-            local isWanted = false
-            if p:GetAttribute("Wanted") then isWanted = p:GetAttribute("Wanted")
-            elseif p:GetAttribute("WantedLevel") and p:GetAttribute("WantedLevel") > 0 then isWanted = true
-            elseif p:GetAttribute("Bounty") and p:GetAttribute("Bounty") > 0 then isWanted = true
-            elseif p:GetAttribute("IsWanted") then isWanted = true end
-            if p.Character then
-                for _, child in pairs(p.Character:GetChildren()) do
-                    if child:IsA("ObjectValue") then
-                        if child.Name:lower():match("wanted") or child.Name:lower():match("bounty") then
-                            isWanted = true
-                        end
-                    end
-                end
-            end
-            local l = Instance.new("TextLabel")
-            l.Size = UDim2.new(1, 0, 0, 18)
-            l.Position = UDim2.new(0, 0, 0, y)
-            l.BackgroundTransparency = 1
-            l.TextSize = 13
-            l.Font = Enum.Font.GothamBold
-            l.TextStrokeTransparency = 0.3
-            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            l.TextXAlignment = Enum.TextXAlignment.Center
-            l.Parent = f
-            if isWanted then
-                l.Text = "[通缉]"
-                l.TextColor3 = Color3.fromRGB(255, 50, 50)
-            else
-                l.Text = "[" .. team .. "]"
-                l.TextColor3 = color
-            end
-            y = y + 20; lines = lines + 1
-        end
-
-        if ESP_SHOW_HEALTH then
-            local l = Instance.new("TextLabel")
-            l.Size = UDim2.new(1, 0, 0, 18)
-            l.Position = UDim2.new(0, 0, 0, y)
-            l.BackgroundTransparency = 1
-            local c = hp > 70 and Color3.fromRGB(0, 255, 100)
-                   or hp > 40 and Color3.fromRGB(255, 200, 0)
-                   or Color3.fromRGB(255, 50, 50)
-            l.Text = hp .. "HP"
-            l.TextColor3 = c
-            l.TextSize = 13
-            l.Font = Enum.Font.GothamBold
-            l.TextStrokeTransparency = 0.3
-            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            l.TextXAlignment = Enum.TextXAlignment.Center
-            l.Parent = f
-            y = y + 20; lines = lines + 1
-        end
-
-        if ESP_SHOW_DIST then
-            local l = Instance.new("TextLabel")
-            l.Size = UDim2.new(1, 0, 0, 18)
-            l.Position = UDim2.new(0, 0, 0, y)
-            l.BackgroundTransparency = 1
-            l.Text = dist .. "m"
-            l.TextColor3 = Color3.fromRGB(200, 200, 200)
-            l.TextSize = 13
-            l.Font = Enum.Font.Gotham
-            l.TextStrokeTransparency = 0.3
-            l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-            l.TextXAlignment = Enum.TextXAlignment.Center
-            l.Parent = f
-            y = y + 20; lines = lines + 1
-        end
-
-        d.Billboard.Size = UDim2.new(0, 200, 0, lines * 20 + 10)
+        end)
     end
 end
 
--- 原脚本的刷新循环 + 玩家进出绑定
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        if ESP_ENABLED then RefreshESP() end
+-- ===== 捕获方式 1：遍历常见容器 =====
+local function scanContainer(root, depth)
+    if depth > 6 or not root then return end
+    for _, v in ipairs(root:GetDescendants()) do
+        local ok, src = pcall(function() return v.Source end)
+        if ok and type(src) == "string" and #src > 0 then
+            addScript(v:GetFullName(), src, v.ClassName)
+        end
     end
-end)
-
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        task.wait(0.3)
-        if ESP_ENABLED then RefreshESP() end
-    end)
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    RemoveESP(p.UserId)
-end)
-
--- ============================================================
--- 4. 独立悬浮窗 UI（替代原 WindUI 的 E:Toggle）
--- ============================================================
-local parentGui = (gethui and gethui()) or game:GetService("CoreGui")
-if parentGui:FindFirstChild("ESPStandalone") then
-    parentGui.ESPStandalone:Destroy()
 end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "ESPStandalone"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = parentGui
+-- ===== 捕获方式 2：Hook loadstring =====
+local origLS = loadstring
+local function hookedLS(code, chunkname)
+    addScript(chunkname or "loadstring", tostring(code), "loadstring")
+    return origLS(code, chunkname)
+end
 
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.new(0, 220, 0, 320)
-Main.Position = UDim2.new(0.5, -110, 0.5, -160)
-Main.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-Main.BorderSizePixel = 0
-Main.Active = true
-Main.Draggable = true
-Main.Parent = ScreenGui
-
-local mc = Instance.new("UICorner")
-mc.CornerRadius = UDim.new(0, 8)
-mc.Parent = Main
-
-local ms = Instance.new("UIStroke")
-ms.Color = Color3.fromRGB(60, 60, 80)
-ms.Thickness = 1
-ms.Parent = Main
-
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 32)
-TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = Main
-
-local tc = Instance.new("UICorner")
-tc.CornerRadius = UDim.new(0, 8)
-tc.Parent = TitleBar
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -40, 1, 0)
-Title.Position = UDim2.new(0, 12, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "ESP 透视"
-Title.TextColor3 = Color3.fromRGB(220, 220, 235)
-Title.TextSize = 14
-Title.Font = Enum.Font.GothamBold
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TitleBar
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 24, 0, 24)
-CloseBtn.Position = UDim2.new(1, -28, 0, 4)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 40)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-CloseBtn.TextSize = 12
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Parent = TitleBar
-
-local cc = Instance.new("UICorner")
-cc.CornerRadius = UDim.new(0, 5)
-cc.Parent = CloseBtn
-
-CloseBtn.MouseButton1Click:Connect(function()
-    -- 关闭时清掉所有 ESP 对象，避免残影
-    ESP_ENABLED = false
-    for _, d in pairs(ESP_LIST) do
-        if d.Billboard then d.Billboard:Destroy() end
+-- ===== 捕获方式 3：Hook require =====
+local origReq = require
+local function hookedReq(target)
+    if type(target) == "string" then
+        addScript("require:"..target, target, "require-path")
+    elseif typeof(target) == "Instance" and target:IsA("ModuleScript") then
+        local ok, src = pcall(function() return target.Source end)
+        if ok and src and #src > 0 then
+            addScript(target:GetFullName(), src, "require-instance")
+        end
     end
-    ESP_LIST = {}
-    ScreenGui:Destroy()
-end)
+    return origReq(target)
+end
 
-local Content = Instance.new("ScrollingFrame")
-Content.Size = UDim2.new(1, -16, 1, -48)
-Content.Position = UDim2.new(0, 8, 0, 40)
-Content.BackgroundTransparency = 1
-Content.BorderSizePixel = 0
-Content.ScrollBarThickness = 4
-Content.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
-Content.CanvasSize = UDim2.new(0, 0, 0, 0)
-Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Content.Parent = Main
+-- ===== 悬浮窗 UI =====
+local function buildUI()
+    if ui then ui:Destroy() end
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 6)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = Content
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "LiAelMonitor"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.Parent = CoreGui
 
--- Toggle 工厂
-local function CreateToggle(text, initial, callback, order)
-    local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 32)
-    holder.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    holder.BorderSizePixel = 0
-    holder.LayoutOrder = order
-    holder.Parent = Content
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 380, 0, 460)
+    main.Position = UDim2.new(0, 40, 0, 80)
+    main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+    main.BorderSizePixel = 0
+    main.Active = true
+    main.Draggable = true
+    main.Parent = sg
+    ui = sg
 
-    local hc = Instance.new("UICorner")
-    hc.CornerRadius = UDim.new(0, 6)
-    hc.Parent = holder
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = main
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Position = UDim2.new(0, 10, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(210, 210, 225)
-    label.TextSize = 13
-    label.Font = Enum.Font.Gotham
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = holder
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -60, 0, 34)
+    title.Position = UDim2.new(0, 12, 0, 6)
+    title.BackgroundTransparency = 1
+    title.Text = "Script Monitor — LiAel"
+    title.TextColor3 = Color3.fromRGB(220, 230, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 15
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = main
 
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(0, 40, 0, 20)
-    bg.Position = UDim2.new(1, -50, 0.5, -10)
-    bg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    bg.BorderSizePixel = 0
-    bg.Parent = holder
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 28, 0, 28)
+    close.Position = UDim2.new(1, -36, 0, 8)
+    close.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    close.Text = "×"
+    close.TextColor3 = Color3.fromRGB(255,255,255)
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 16
+    close.BorderSizePixel = 0
+    close.Parent = main
+    close.MouseButton1Click:Connect(function() sg:Destroy(); ui = nil end)
 
-    local bgc = Instance.new("UICorner")
-    bgc.CornerRadius = UDim.new(1, 0)
-    bgc.Parent = bg
+    local startBtn = Instance.new("TextButton")
+    startBtn.Size = UDim2.new(0, 140, 0, 32)
+    startBtn.Position = UDim2.new(0, 12, 0, 48)
+    startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
+    startBtn.Text = "开始监控"
+    startBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    startBtn.Font = Enum.Font.GothamBold
+    startBtn.TextSize = 14
+    startBtn.BorderSizePixel = 0
+    startBtn.Parent = main
 
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 16, 0, 16)
-    knob.Position = UDim2.new(0, 2, 0.5, -8)
-    knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
-    knob.BorderSizePixel = 0
-    knob.Parent = bg
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 6)
+    cCorner.Parent = startBtn
 
-    local kc = Instance.new("UICorner")
-    kc.CornerRadius = UDim.new(1, 0)
-    kc.Parent = knob
+    local scanBtn = Instance.new("TextButton")
+    scanBtn.Size = UDim2.new(0, 100, 0, 32)
+    scanBtn.Position = UDim2.new(0, 160, 0, 48)
+    scanBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 160)
+    scanBtn.Text = "扫描一次"
+    scanBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    scanBtn.Font = Enum.Font.GothamBold
+    scanBtn.TextSize = 14
+    scanBtn.BorderSizePixel = 0
+    scanBtn.Parent = main
+    local sCorner = Instance.new("UICorner")
+    sCorner.CornerRadius = UDim.new(0, 6)
+    sCorner.Parent = scanBtn
 
-    local state = initial
-    local function setState(v)
-        state = v
-        if v then
-            bg.BackgroundColor3 = Color3.fromRGB(70, 140, 220)
-            knob.Position = UDim2.new(1, -18, 0.5, -8)
-            knob.BackgroundColor3 = Color3.fromRGB(240, 240, 255)
+    copyAllBtn = Instance.new("TextButton")
+    copyAllBtn.Size = UDim2.new(0, 100, 0, 32)
+    copyAllBtn.Position = UDim2.new(0, 268, 0, 48)
+    copyAllBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 40)
+    copyAllBtn.Text = "复制全部"
+    copyAllBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    copyAllBtn.Font = Enum.Font.GothamBold
+    copyAllBtn.TextSize = 14
+    copyAllBtn.BorderSizePixel = 0
+    copyAllBtn.Parent = main
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 6)
+    cc.Parent = copyAllBtn
+
+    statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -24, 0, 20)
+    statusLabel.Position = UDim2.new(0, 12, 0, 86)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "状态：未启动"
+    statusLabel.TextColor3 = Color3.fromRGB(180, 190, 210)
+    statusLabel.Font = Enum.Font.Code
+    statusLabel.TextSize = 12
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = main
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -16, 1, -120)
+    scroll.Position = UDim2.new(0, 8, 0, 112)
+    scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+    scroll.BorderSizePixel = 0
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.ScrollBarThickness = 6
+    scroll.Parent = main
+    local sCc = Instance.new("UICorner")
+    sCc.CornerRadius = UDim.new(0, 6)
+    sCc.Parent = scroll
+    listFrame = scroll
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 6)
+    pad.PaddingBottom = UDim.new(0, 6)
+    pad.PaddingLeft = UDim.new(0, 4)
+    pad.PaddingRight = UDim.new(0, 4)
+    pad.Parent = scroll
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 4)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scroll
+
+    -- 开始/停止
+    startBtn.MouseButton1Click:Connect(function()
+        capturing = not capturing
+        if capturing then
+            startBtn.Text = "停止监控"
+            startBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 60)
+            statusLabel.Text = "状态：监控中 | 已捕获 " .. #captured .. " 个脚本"
         else
-            bg.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-            knob.Position = UDim2.new(0, 2, 0.5, -8)
-            knob.BackgroundColor3 = Color3.fromRGB(180, 180, 190)
+            startBtn.Text = "开始监控"
+            startBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 90)
+            statusLabel.Text = "状态：已暂停 | 已捕获 " .. #captured .. " 个脚本"
         end
-        if callback then pcall(callback, v) end
-    end
-
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text = ""
-    btn.Parent = holder
-
-    btn.MouseButton1Click:Connect(function()
-        setState(not state)
     end)
 
-    setState(initial)
-    return setState
+    -- 手动扫描
+    scanBtn.MouseButton1Click:Connect(function()
+        scanContainer(game, 0)
+        statusLabel.Text = "状态：扫描完成 | 已捕获 " .. #captured .. " 个脚本"
+    end)
+
+    -- 复制全部
+    copyAllBtn.MouseButton1Click:Connect(function()
+        local parts = {}
+        for i, e in ipairs(captured) do
+            parts[#parts+1] = string.format(
+                "-- ========== #%d  %s  [%s]  %s ==========\n%s\n",
+                i, e.name, e.origin, e.time, e.source
+            )
+        end
+        local full = table.concat(parts, "\n")
+        if setclipboard then
+            setclipboard(full)
+            statusLabel.Text = "状态：已复制 " .. #captured .. " 个脚本（" .. #full .. " 字节）"
+        else
+            statusLabel.Text = "状态：当前环境无 setclipboard"
+        end
+    end)
+
+    return startBtn, scanBtn
 end
 
--- 挂控件（顺序、初值、回调全按原脚本的 E:Toggle）
-CreateToggle("透视总开关", false, function(v) ESP_ENABLED = v; if v then RefreshESP() end end, 1)
-CreateToggle("显示名字",  true,  function(v) ESP_SHOW_NAME = v;   if ESP_ENABLED then RefreshESP() end end, 2)
-CreateToggle("显示队伍",  true,  function(v) ESP_SHOW_TEAM = v;   if ESP_ENABLED then RefreshESP() end end, 3)
-CreateToggle("显示血量",  true,  function(v) ESP_SHOW_HEALTH = v; if ESP_ENABLED then RefreshESP() end end, 4)
-CreateToggle("显示距离",  true,  function(v) ESP_SHOW_DIST = v;   if ESP_ENABLED then RefreshESP() end end, 5)
-CreateToggle("透视自己",  false, function(v) ESP_SHOW_SELF = v;   if ESP_ENABLED then RefreshESP() end end, 6)
-CreateToggle("同行显示",  true,  function(v) ESP_SHOW_PEERS = v;  if ESP_ENABLED then RefreshESP() end end, 7)
+-- ===== 安装 Hook（只装一次） =====
+local function installHooks()
+    pcall(function()
+        if hookfunction and loadstring then
+            hookfunction(loadstring, hookedLS)
+        end
+    end)
+    pcall(function()
+        if hookfunction and require then
+            hookfunction(require, hookedReq)
+        end
+    end)
+end
 
-print("[ESP Standalone] 加载完成")
+-- ===== 启动 =====
+buildUI()
+installHooks()
+
+-- 首次扫描一次基础容器
+scanContainer(game, 0)
+statusLabel.Text = "状态：就绪 | 初始捕获 " .. #captured .. " 个脚本"
