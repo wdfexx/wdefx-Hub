@@ -4,12 +4,43 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local isDestroyed = false
 
-local Settings = { noFallDamage = false, antiFall = false, noclip = false, infAmmo = false }
+-- ================= 自动保存配置系统 =================
+local ConfigFile = "wdfex_simple_config.json"
 
--- 极简伤害拦截 (仅用于免疫部分伤害，已删除所有反作弊绕过代码)
+local Settings = { 
+    noFallDamage = false, antiFall = false, noclip = false, infAmmo = false, autoHack = false,
+    ESP_ENABLED = false, ESP_SHOW_NAME = true, ESP_SHOW_TEAM = true, ESP_SHOW_HEALTH = true, ESP_SHOW_DIST = true, ESP_SHOW_SELF = false, ESP_SHOW_PEERS = true,
+    quickInteract = false, interactDistanceEnabled = false,
+    range_active = false, range_size = 10, range_transparency = 0.7, range_teamCheck = false, range_combatCheck = false, range_color = "红色", range_material = "Neon", range_rainbow = false, range_checkCorpses = false, range_outline = false, range_collision = false, range_glow = false, range_pulse = false, range_affectNPC = false,
+    
+    -- 新增：记录上次选中的食物
+    selectedFoodName = "小蛋糕" 
+}
+
+local function SaveConfig()
+    if writefile then
+        pcall(function() writefile(ConfigFile, HttpService:JSONEncode(Settings)) end)
+    end
+end
+
+local function LoadConfig()
+    if readfile and isfile and isfile(ConfigFile) then
+        local success, data = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
+        if success and type(data) == "table" then
+            for k, v in pairs(data) do
+                if Settings[k] ~= nil then Settings[k] = v end
+            end
+        end
+    end
+end
+LoadConfig()
+-- =================================================
+
+-- 极简伤害拦截
 local namecall
 pcall(function()
     local mt = getrawmetatable(game)
@@ -29,31 +60,19 @@ end)
 -- 加载 WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
 
--- 创建最简 UI 窗口
 local Window = WindUI:CreateWindow({
     Title = "<font color='#00FF00'>wdfex-Hub简洁版</font>", 
-    Icon = "crown", 
-    IconThemed = true, 
-    Author = "v1.0", 
-    Folder = "CloudHub", 
-    Size = UDim2.fromOffset(580, 440), 
-    Transparent = true, 
-    Theme = "Dark", 
-    HideSearchBar = true, 
-    ScrollBarEnabled = true, 
-    Resizable = true,
-    User = { Enabled = true, Callback = function() end, Anonymous = false }, 
-    SideBarWidth = 200
+    Icon = "crown", IconThemed = true, Author = "v1.6 (食物下拉版)", Folder = "CloudHub", 
+    Size = UDim2.fromOffset(580, 440), Transparent = true, Theme = "Dark", HideSearchBar = true, 
+    ScrollBarEnabled = true, Resizable = true, User = { Enabled = true, Callback = function() end, Anonymous = false }, SideBarWidth = 200
 })
 
--- 保持原版分类结构
 local MainSection = Window:Section({ Title = "主功能", Opened = true })
 local function AddTab(section, title, icon) return section:Tab({ Title = title, Icon = icon }) end
 
 -- =================== 1. 玩家功能 ===================
 local A = AddTab(MainSection, "玩家修改", "user")
 
--- 悬浮窗快捷开关逻辑
 local windowQuickToggle, windowQuickScreenGui, windowQuickButton = false, nil, nil
 local windowDragging, windowDragStart, windowStartPos = false, nil, nil
 local lockWindowBtn = false
@@ -97,11 +116,7 @@ local function CreateWindowQuickToggle()
     
     button.InputBegan:Connect(function(input) 
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
-            if not lockWindowBtn then 
-                windowDragging = true
-                windowDragStart = input.Position
-                windowStartPos = button.Position 
-            end 
+            if not lockWindowBtn then windowDragging = true; windowDragStart = input.Position; windowStartPos = button.Position end 
         end 
     end)
     
@@ -113,32 +128,26 @@ local function CreateWindowQuickToggle()
     end)
     
     button.InputEnded:Connect(function(input) 
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
-            windowDragging = false 
-        end 
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then windowDragging = false end 
     end)
     
     button.MouseButton1Click:Connect(function() 
-        pcall(function() 
-            if Window.Open then Window:Open() 
-            elseif Window.Toggle then Window:Toggle() end 
-        end)
+        pcall(function() if Window.Open then Window:Open() elseif Window.Toggle then Window:Toggle() end end)
         local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
         if mainGui then mainGui.Enabled = true end 
     end)
 end
 
 A:Divider({ Text = "悬浮窗设置" })
-A:Toggle({ Title = "悬浮窗快捷开关", Value = false, Callback = function(value) 
+A:Toggle({ Title = "悬浮窗快捷开关（给电脑端用的）", Value = false, Callback = function(value) 
     windowQuickToggle = value
     if value then CreateWindowQuickToggle() else DestroyWindowQuickToggle() end 
 end })
 A:Toggle({ Title = "锁定悬浮窗快捷开关", Value = false, Callback = function(value) lockWindowBtn = value end })
 
 A:Divider({ Text = "基础功能" })
-A:Toggle({ Title = "防摔", Value = false, Callback = function(value) Settings.antiFall = value end })
+A:Toggle({ Title = "防摔", Value = Settings.antiFall, Callback = function(value) Settings.antiFall = value; SaveConfig() end })
 
--- 防摔循环
 task.spawn(function() 
     while not isDestroyed do 
         task.wait(0.1)
@@ -154,12 +163,12 @@ task.spawn(function()
     end 
 end)
 
-A:Toggle({ Title = "免疫部分伤害", Desc = "可免疫：激光\\火焰", Value = false, Callback = function(value) Settings.noFallDamage = value end })
+A:Toggle({ Title = "免疫部分伤害", Desc = "可免疫：激光\\火焰", Value = Settings.noFallDamage, Callback = function(value) Settings.noFallDamage = value; SaveConfig() end })
 
-local noclipConn = nil
-A:Toggle({ Title = "穿墙", Default = false, Callback = function(noclip) 
-    Settings.noclip = noclip
-    if noclip then 
+local function applyNoclip(state)
+    Settings.noclip = state
+    SaveConfig()
+    if state then 
         if noclipConn then noclipConn:Disconnect() end
         noclipConn = RunService.Stepped:Connect(function()
             if not Settings.noclip then return end
@@ -179,33 +188,55 @@ A:Toggle({ Title = "穿墙", Default = false, Callback = function(noclip)
             end
         end
     end
-end })
+end
+
+local noclipConn = nil
+A:Toggle({ Title = "穿墙", Default = Settings.noclip, Callback = function(state) applyNoclip(state) end })
+
 
 -- =================== 2. 透视功能 ===================
 local E = AddTab(MainSection, "透视", "eye")
-local ESP_ENABLED, ESP_SHOW_NAME, ESP_SHOW_TEAM, ESP_SHOW_HEALTH, ESP_SHOW_DIST, ESP_LIST, ESP_REFRESH_COUNT = false, true, true, true, true, {}, 0
+local ESP_LIST, ESP_REFRESH_COUNT = {}, 0
 
-local function GetTeam(p) if p.Team then return p.Team.Name end return "平民" end
+local function GetTeam(p) 
+    if p.Team then 
+        local teamName = p.Team.Name
+        local teamMap = { 
+            ["Police"] = "警察", ["Fire"] = "火焰", ["Medical"] = "医疗", ["Road"] = "道路", 
+            ["Civilian"] = "平民", ["Citizen"] = "平民", ["Criminal"] = "匪徒", ["Gang"] = "黑帮", 
+            ["Military"] = "军人", ["Delivery"] = "送货", ["Farmer"] = "农民", ["Banker"] = "银行家", 
+            ["Mayor"] = "市长", ["Journalist"] = "记者", ["Lawyer"] = "律师", ["Prisoner"] = "囚犯", 
+            ["Guard"] = "狱警", ["Driver"] = "司机", ["Chef"] = "厨师", ["Builder"] = "建筑工", 
+            ["Miner"] = "矿工", ["Fisherman"] = "渔夫", ["Merchant"] = "商人", ["Student"] = "学生", 
+            ["Teacher"] = "老师", ["Engineer"] = "工程师", ["Scientist"] = "科学家", ["Pilot"] = "飞行员", 
+            ["Courier"] = "快递员", ["BusDriver"] = "公交车司机", ["Transit"] = "转运", ["Delivery"] = "配送",
+            ["Fire Department"] = "消防局", ["Police Department"] = "警察局", ["Hospital"] = "医院"
+        } 
+        return teamMap[teamName] or teamName 
+    end 
+    return "平民" 
+end
+
 local function GetTeamColor(p) if p.Team then return p.Team.TeamColor.Color end return Color3.fromRGB(200, 200, 200) end
 local function GetHealth(p) local c = p.Character; if not c then return 0 end; local h = c:FindFirstChildOfClass("Humanoid"); if not h then return 0 end; return math.floor(h.Health) end
 local function GetDist(p) local mc = player.Character; if not mc then return 0 end; local mr = mc:FindFirstChild("HumanoidRootPart"); if not mr then return 0 end; local tc = p.Character; if not tc then return 0 end; local tr = tc:FindFirstChild("HumanoidRootPart"); if not tr then return 0 end; return math.floor((mr.Position - tr.Position).Magnitude) end
 local function RemoveESP(id) local d = ESP_LIST[id]; if d then if d.Billboard then d.Billboard:Destroy() end; ESP_LIST[id] = nil end end
 
 local function BuildESP(p)
-    if not p.Character or p == player then return end
-    local head = p.Character:FindFirstChild("Head")
-    if not head then return end
+    if not p.Character then return end
+    if not Settings.ESP_SHOW_SELF and p == player then return end
+    local head = p.Character:FindFirstChild("Head"); if not head then return end
     if ESP_LIST[p.UserId] then if ESP_LIST[p.UserId].Billboard then ESP_LIST[p.UserId].Billboard.Enabled = true end return end
-    local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 200, 0, 100); bb.StudsOffset = Vector3.new(0, 3, 0); bb.AlwaysOnTop = true; bb.MaxDistance = 1000; bb.Parent = head
+    local bb = Instance.new("BillboardGui"); bb.Size = UDim2.new(0, 200, 0, 100); bb.StudsOffset = Vector3.new(0, 3, 0); bb.AlwaysOnTop = true; bb.MaxDistance = 720; bb.Parent = head
     local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 1, 0); f.BackgroundTransparency = 1; f.Parent = bb
     ESP_LIST[p.UserId] = { Billboard = bb, Frame = f }
 end
 
 local function RefreshESP()
-    if not ESP_ENABLED then for _, d in pairs(ESP_LIST) do if d.Billboard then d.Billboard.Enabled = false end end return end
+    if not Settings.ESP_ENABLED then for _, d in pairs(ESP_LIST) do if d.Billboard then d.Billboard.Enabled = false end end return end
     ESP_REFRESH_COUNT = ESP_REFRESH_COUNT + 1; if ESP_REFRESH_COUNT % 3 ~= 0 then return end
     for _, p in ipairs(Players:GetPlayers()) do
-        if p == player then RemoveESP(p.UserId); continue end
+        if not Settings.ESP_SHOW_SELF and p == player then RemoveESP(p.UserId); continue end
         if not p.Character then RemoveESP(p.UserId); continue end
         if ESP_REFRESH_COUNT % 30 == 0 and ESP_LIST[p.UserId] then RemoveESP(p.UserId) end
         if not ESP_LIST[p.UserId] then BuildESP(p) end
@@ -213,29 +244,223 @@ local function RefreshESP()
         if not d.Billboard or not d.Billboard.Parent then ESP_LIST[p.UserId] = nil; BuildESP(p); d = ESP_LIST[p.UserId]; if not d then continue end end
         d.Billboard.Enabled = true; local f = d.Frame; for _, c in ipairs(f:GetChildren()) do c:Destroy() end
         local y, lines = 0, 0; local team, color, hp, dist = GetTeam(p), GetTeamColor(p), GetHealth(p), GetDist(p)
-        if ESP_SHOW_NAME then local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 20); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; l.Text = p.Name; l.TextColor3 = color; l.TextSize = 15; l.Font = Enum.Font.GothamBold; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 22; lines = lines + 1 end
-        if ESP_SHOW_TEAM then local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; l.TextSize = 13; l.Font = Enum.Font.GothamBold; l.Text = "[" .. team .. "]"; l.TextColor3 = color; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 20; lines = lines + 1 end
-        if ESP_SHOW_HEALTH then local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; local c = hp > 70 and Color3.fromRGB(0, 255, 100) or hp > 40 and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 50, 50); l.Text = hp .. "HP"; l.TextColor3 = c; l.TextSize = 13; l.Font = Enum.Font.GothamBold; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 20; lines = lines + 1 end
-        if ESP_SHOW_DIST then local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; l.Text = dist .. "m"; l.TextColor3 = Color3.fromRGB(200, 200, 200); l.TextSize = 13; l.Font = Enum.Font.Gotham; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 20; lines = lines + 1 end
+        
+        if Settings.ESP_SHOW_NAME then 
+            local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 20); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1
+            if p == player then 
+                if Settings.ESP_SHOW_PEERS then l.Text = "wdfex-Hub"; l.TextColor3 = Color3.fromRGB(0, 255, 255) else l.Text = p.Name .. " (你)"; l.TextColor3 = Color3.fromRGB(0, 255, 255) end 
+            else l.Text = p.Name; l.TextColor3 = color end
+            l.TextSize = 15; l.Font = Enum.Font.GothamBold; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 22; lines = lines + 1 
+        end
+        
+        if Settings.ESP_SHOW_TEAM then 
+            local isWanted = false
+            if p:GetAttribute("Wanted") then isWanted = p:GetAttribute("Wanted") elseif p:GetAttribute("WantedLevel") and p:GetAttribute("WantedLevel") > 0 then isWanted = true elseif p:GetAttribute("Bounty") and p:GetAttribute("Bounty") > 0 then isWanted = true elseif p:GetAttribute("IsWanted") then isWanted = true end
+            if p.Character then for _, child in pairs(p.Character:GetChildren()) do if child:IsA("ObjectValue") then if child.Name:lower():match("wanted") or child.Name:lower():match("bounty") then isWanted = true end end end end
+            local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; l.TextSize = 13; l.Font = Enum.Font.GothamBold; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f
+            if isWanted then l.Text = "[通缉]"; l.TextColor3 = Color3.fromRGB(255, 50, 50) else l.Text = "[" .. team .. "]"; l.TextColor3 = color end
+            y = y + 20; lines = lines + 1 
+        end
+        
+        if Settings.ESP_SHOW_HEALTH then 
+            local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; local c = hp > 70 and Color3.fromRGB(0, 255, 100) or hp > 40 and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(255, 50, 50); l.Text = hp .. "HP"; l.TextColor3 = c; l.TextSize = 13; l.Font = Enum.Font.GothamBold; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 20; lines = lines + 1 
+        end
+        
+        if Settings.ESP_SHOW_DIST then 
+            local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, 18); l.Position = UDim2.new(0, 0, 0, y); l.BackgroundTransparency = 1; l.Text = dist .. "m"; l.TextColor3 = Color3.fromRGB(200, 200, 200); l.TextSize = 13; l.Font = Enum.Font.Gotham; l.TextStrokeTransparency = 0.3; l.TextStrokeColor3 = Color3.fromRGB(0, 0, 0); l.TextXAlignment = Enum.TextXAlignment.Center; l.Parent = f; y = y + 20; lines = lines + 1 
+        end
+        
         d.Billboard.Size = UDim2.new(0, 200, 0, lines * 20 + 10)
     end
 end
 
-E:Toggle({ Title = "透视总开关", Value = false, Callback = function(value) ESP_ENABLED = value; if value then RefreshESP() end end })
+E:Toggle({ Title = "透视总开关", Value = Settings.ESP_ENABLED, Callback = function(value) Settings.ESP_ENABLED = value; SaveConfig(); if value then RefreshESP() end end })
 E:Divider()
-E:Toggle({ Title = "显示名字", Value = true, Callback = function(value) ESP_SHOW_NAME = value; if ESP_ENABLED then RefreshESP() end end })
-E:Toggle({ Title = "显示队伍", Value = true, Callback = function(value) ESP_SHOW_TEAM = value; if ESP_ENABLED then RefreshESP() end end })
-E:Toggle({ Title = "显示血量", Value = true, Callback = function(value) ESP_SHOW_HEALTH = value; if ESP_ENABLED then RefreshESP() end end })
-E:Toggle({ Title = "显示距离", Value = true, Callback = function(value) ESP_SHOW_DIST = value; if ESP_ENABLED then RefreshESP() end end })
+E:Toggle({ Title = "显示名字", Value = Settings.ESP_SHOW_NAME, Callback = function(value) Settings.ESP_SHOW_NAME = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
+E:Toggle({ Title = "显示队伍", Value = Settings.ESP_SHOW_TEAM, Callback = function(value) Settings.ESP_SHOW_TEAM = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
+E:Toggle({ Title = "显示血量", Value = Settings.ESP_SHOW_HEALTH, Callback = function(value) Settings.ESP_SHOW_HEALTH = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
+E:Toggle({ Title = "显示距离", Value = Settings.ESP_SHOW_DIST, Callback = function(value) Settings.ESP_SHOW_DIST = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
+E:Divider()
+E:Toggle({ Title = "透视自己", Value = Settings.ESP_SHOW_SELF, Callback = function(value) Settings.ESP_SHOW_SELF = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
+E:Toggle({ Title = "同行显示", Value = Settings.ESP_SHOW_PEERS, Callback = function(value) Settings.ESP_SHOW_PEERS = value; SaveConfig(); if Settings.ESP_ENABLED then RefreshESP() end end })
 
-task.spawn(function() while not isDestroyed do task.wait(0.3); if ESP_ENABLED then RefreshESP() end end end)
-Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(0.3); if ESP_ENABLED then RefreshESP() end end) end)
+task.spawn(function() while not isDestroyed do task.wait(0.3); if Settings.ESP_ENABLED then RefreshESP() end end end)
+Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function() task.wait(0.3); if Settings.ESP_ENABLED then RefreshESP() end end) end)
 Players.PlayerRemoving:Connect(function(p) RemoveESP(p.UserId) end)
 
--- =================== 3. 枪械功能 (无限子弹 + 子弹追踪) ===================
-local B = AddTab(MainSection, "枪械功能", "target")
 
-B:Toggle({ Title = "无限子弹", Value = false, Callback = function(value) Settings.infAmmo = value end })
+-- =================== 3. 范围功能 (Hitbox) ===================
+local RangeTab = AddTab(MainSection, "范围", "bullseye")
+local tbl27 = {}
+local tbl21 = {
+    ["红色"] = Color3.fromRGB(255, 0, 0), ["蓝色"] = Color3.fromRGB(0, 0, 255), ["黄色"] = Color3.fromRGB(255, 255, 0),
+    ["绿色"] = Color3.fromRGB(0, 255, 0), ["青色"] = Color3.fromRGB(0, 255, 255), ["橙色"] = Color3.fromRGB(255, 165, 0),
+    ["紫色"] = Color3.fromRGB(128, 0, 128), ["白色"] = Color3.fromRGB(255, 255, 255), ["黑色"] = Color3.fromRGB(0, 0, 0)
+}
+
+local function fn38(n11) n11 = n11 or 5 return Color3.fromHSV(tick() % n11 / n11, 1, 1) end
+local function fn39(colorName) if colorName == "彩虹色" then return fn38(5) end return tbl21[colorName] or Color3.fromRGB(255, 0, 0) end
+
+local function fn91(character)
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    if not tbl27[humanoidRootPart] then
+        tbl27[humanoidRootPart] = { Size = humanoidRootPart.Size, Transparency = humanoidRootPart.Transparency, Material = humanoidRootPart.Material, CanCollide = humanoidRootPart.CanCollide, Color = humanoidRootPart.Color }
+    end
+    if not Settings.range_active then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if Settings.range_checkCorpses and humanoid and humanoid.Health <= 0 then return end
+    local size = Settings.range_size
+    if Settings.range_pulse then size *= math.sin(tick() * 2) * 0.2 + 1 end
+    humanoidRootPart.Size = Vector3.new(size, size, size)
+    humanoidRootPart.Transparency = Settings.range_transparency
+    humanoidRootPart.Material = Enum.Material[Settings.range_material] or Enum.Material.Neon
+    humanoidRootPart.CanCollide = Settings.range_collision
+    humanoidRootPart.Color = Settings.range_rainbow and fn38(5) or fn39(Settings.range_color)
+    if Settings.range_outline then
+        local hl = humanoidRootPart:FindFirstChild("PY_HitboxHighlight") or Instance.new("Highlight")
+        hl.Name = "PY_HitboxHighlight"; hl.FillTransparency = 1; hl.OutlineColor = humanoidRootPart.Color; hl.OutlineTransparency = Settings.range_transparency; hl.Parent = humanoidRootPart
+    else
+        local hl = humanoidRootPart:FindFirstChild("PY_HitboxHighlight"); if hl then hl:Destroy() end
+    end
+    if Settings.range_glow then
+        local light = humanoidRootPart:FindFirstChild("PY_HitboxLight") or Instance.new("PointLight")
+        light.Name = "PY_HitboxLight"; light.Brightness = 5; light.Range = 15; light.Color = humanoidRootPart.Color; light.Parent = humanoidRootPart
+    else
+        local light = humanoidRootPart:FindFirstChild("PY_HitboxLight"); if light then light:Destroy() end
+    end
+end
+
+local function fn92(character)
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    local original = tbl27[humanoidRootPart]
+    if original then
+        humanoidRootPart.Size = original.Size; humanoidRootPart.Transparency = original.Transparency
+        humanoidRootPart.Material = original.Material; humanoidRootPart.CanCollide = original.CanCollide
+        humanoidRootPart.Color = original.Color; tbl27[humanoidRootPart] = nil
+        local hl = humanoidRootPart:FindFirstChild("PY_HitboxHighlight"); if hl then hl:Destroy() end
+        local light = humanoidRootPart:FindFirstChild("PY_HitboxLight"); if light then light:Destroy() end
+    end
+end
+
+RunService.Heartbeat:Connect(function()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local shouldAffect = Settings.range_active
+            if shouldAffect and Settings.range_teamCheck and player.Team and plr.Team == player.Team then shouldAffect = false end
+            if shouldAffect and Settings.range_combatCheck then local isCombat = (plr:GetAttribute("CombatMode") == true or plr:GetAttribute("Pursuit") == true); if not isCombat then shouldAffect = false end end
+            if shouldAffect then fn91(plr.Character) else fn92(plr.Character) end
+        end
+    end
+    if Settings.range_affectNPC then
+        for _, model in ipairs(Workspace:GetDescendants()) do
+            if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") and not Players:GetPlayerFromCharacter(model) then
+                local shouldAffect = Settings.range_active
+                if shouldAffect and Settings.range_combatCheck then local isCombat = (model:GetAttribute("CombatMode") == true or model:GetAttribute("Pursuit") == true); if not isCombat then shouldAffect = false end end
+                if shouldAffect then fn91(model) else fn92(model) end
+            end
+        end
+    end
+end)
+
+RangeTab:Toggle({ Title = "开启/关闭范围", Value = Settings.range_active, Callback = function(active) 
+    Settings.range_active = active
+    SaveConfig()
+    if not active then for _, plr in ipairs(Players:GetPlayers()) do if plr ~= player and plr.Character then fn92(plr.Character) end end end 
+end })
+RangeTab:Input({ Title = "范围大小设置", Value = tostring(Settings.range_size), Callback = function(val) local size = tonumber(val); if size and size > 0 then Settings.range_size = size; SaveConfig() end end })
+RangeTab:Input({ Title = "范围透明度 (0-1)", Value = tostring(Settings.range_transparency), Callback = function(val) local trans = tonumber(val); if trans and trans >= 0 and trans <= 1 then Settings.range_transparency = trans; SaveConfig() end end })
+RangeTab:Dropdown({ Title = "选择颜色", Values = { "红色", "蓝色", "黄色", "绿色", "青色", "橙色", "紫色", "白色", "黑色", "彩虹色" }, Value = Settings.range_color, Callback = function(color) Settings.range_color = color; Settings.range_rainbow = color == "彩虹色"; SaveConfig() end })
+RangeTab:Dropdown({ Title = "选择材质", Values = { "Neon", "Plastic", "Wood", "Slate", "Concrete", "Metal", "SmoothPlastic" }, Value = Settings.range_material, Callback = function(mat) Settings.range_material = mat; SaveConfig() end })
+RangeTab:Toggle({ Title = "NPC范围", Value = Settings.range_affectNPC, Callback = function(v) Settings.range_affectNPC = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "队伍检测", Value = Settings.range_teamCheck, Callback = function(v) Settings.range_teamCheck = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "战斗状态检测", Value = Settings.range_combatCheck, Callback = function(v) Settings.range_combatCheck = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "活体检测", Value = Settings.range_checkCorpses, Callback = function(v) Settings.range_checkCorpses = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "显示轮廓", Value = Settings.range_outline, Callback = function(v) Settings.range_outline = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "启用/禁用碰撞", Value = Settings.range_collision, Callback = function(v) Settings.range_collision = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "发光效果", Value = Settings.range_glow, Callback = function(v) Settings.range_glow = v; SaveConfig() end })
+RangeTab:Toggle({ Title = "脉动效果", Value = Settings.range_pulse, Callback = function(v) Settings.range_pulse = v; SaveConfig() end })
+
+
+-- =================== 4. 互动功能 ===================
+local InteractTab = AddTab(MainSection, "互动功能", "hand")
+
+local function initQuickInteract()
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if descendant:IsA("ProximityPrompt") then descendant.HoldDuration = 0 end
+    end
+end
+
+local quickInteractConn = nil
+local function applyQuickInteract(state)
+    Settings.quickInteract = state
+    SaveConfig()
+    if state then
+        initQuickInteract()
+        if quickInteractConn then quickInteractConn:Disconnect() end
+        quickInteractConn = Workspace.DescendantAdded:Connect(function(descendant) 
+            if descendant:IsA("ProximityPrompt") then descendant.HoldDuration = 0 end 
+        end)
+    else 
+        if quickInteractConn then quickInteractConn:Disconnect(); quickInteractConn = nil end 
+    end
+end
+InteractTab:Toggle({ Title = "快速互动", Value = Settings.quickInteract, Callback = function(value) applyQuickInteract(value) end })
+
+local interactConn = nil
+local function ApplyInteractDistance(value) 
+    for _, obj in ipairs(Workspace:GetDescendants()) do 
+        if obj:IsA("ProximityPrompt") then obj.MaxActivationDistance = value end 
+    end 
+end
+
+local function applyInteractDist(state)
+    Settings.interactDistanceEnabled = state
+    SaveConfig()
+    if state then 
+        ApplyInteractDistance(30)
+        if interactConn then interactConn:Disconnect() end
+        interactConn = Workspace.DescendantAdded:Connect(function(obj) 
+            task.wait(0.1)
+            if obj:IsA("ProximityPrompt") then obj.MaxActivationDistance = 30 end 
+        end)
+    else 
+        if interactConn then interactConn:Disconnect(); interactConn = nil end
+        ApplyInteractDistance(10) 
+    end 
+end
+InteractTab:Toggle({ Title = "增加互动距离", Value = Settings.interactDistanceEnabled, Callback = function(value) applyInteractDist(value) end })
+
+-- 自动黑客
+local tbl24 = {}
+local function fn50(autoHack)
+    Settings.autoHack = autoHack
+    SaveConfig()
+    pcall(function()
+        local framework = player.PlayerScripts:FindFirstChild("Framework"); framework = framework and require(framework:FindFirstChild("Character"))
+        local GameRules = require(ReplicatedStorage.Modules.GameRules)
+        if GameRules then GameRules.disableHacking = autoHack; GameRules.disableMinigames = autoHack end
+        if framework then
+            if not tbl24.hackingMinigame then tbl24.hackingMinigame = framework.hackingMinigame end
+            if not tbl24.startMinigame then tbl24.startMinigame = framework.startMinigame end
+            if autoHack then 
+                framework.hackingMinigame = function() return true end
+                framework.startMinigame = function() return true end
+            else 
+                if tbl24.hackingMinigame then framework.hackingMinigame = tbl24.hackingMinigame end
+                if tbl24.startMinigame then framework.startMinigame = tbl24.startMinigame end 
+            end
+        end
+    end)
+end
+
+InteractTab:Toggle({ Title = "自动黑客", Value = Settings.autoHack, Callback = function(value) fn50(value) end })
+
+
+-- =================== 5. 枪械功能 ===================
+local B = AddTab(MainSection, "枪械功能", "target")
+B:Toggle({ Title = "无限子弹", Value = Settings.infAmmo, Callback = function(value) Settings.infAmmo = value; SaveConfig() end })
 
 task.spawn(function()
     while not isDestroyed do
@@ -257,261 +482,25 @@ task.spawn(function()
     end
 end)
 
--- 提取核心伤害模块
-local FL_DMG = {
-    Enabled = true, RayMode = "near", LeadStuds = 1.5, FallbackDamage = 5, SendBullet = true, LastErr = nil, LastDist = nil
-}
-local FL_TRACK = {
-    Enabled = false, Full360 = true, FOV = 200, MaxDist = 99999, Mode = "all", CombatOnly = true, ForceHit = true, ForceRate = 0.12, ShowCircle = true, ShowLine = true, Color = Color3.fromRGB(255, 90, 90), Target = nil, _acc = 0, _conn = nil
-}
 
-local function getPlayerEvent()
-    local r = ReplicatedStorage:FindFirstChild("Remote")
-    local ev = r and r:FindFirstChild("PlayerEvent")
-    if ev and ev:IsA("RemoteEvent") then return ev end
-    return nil
-end
-
-local function getEquippedWeapon()
-    local char = player.Character
-    if not char then return nil end
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then return tool end
-    for _, d in ipairs(char:GetDescendants()) do
-        if d:IsA("ModuleScript") and d.Name == "Config" then return d.Parent end
-    end
-    return nil
-end
-
-function FL_DMG.Hit(target, opts)
-    if not FL_DMG.Enabled or not target then return false end
-    opts = opts or {}
-    local rem = getPlayerEvent()
-    if not rem then FL_DMG.LastErr = "没有 PlayerEvent" return false end
-
-    local char = typeof(target) == "Instance" and target:IsA("Player") and target.Character or target
-    if not char or not char.Parent then FL_DMG.LastErr = "目标没有角色" return false end
-
-    local part = char:FindFirstChild("Head") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("HumanoidRootPart")
-    if not part then FL_DMG.LastErr = "找不到可打部位" return false end
-
-    local pos = opts.pos or part.Position
-    local cam = workspace.CurrentCamera
-    local origin = cam and cam.CFrame.Position or (player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character.HumanoidRootPart.Position) or Vector3.new(0,0,0)
-    local dir = (pos - origin)
-    if dir.Magnitude > 0.01 then dir = dir.Unit else dir = Vector3.new(0,0,-1) end
-
-    if FL_DMG.RayMode == "near" then
-        origin = pos - dir * FL_DMG.LeadStuds
-    end
-
-    local w = getEquippedWeapon()
-    if FL_DMG.SendBullet and w then
-        pcall(function() rem:FireServer("bullet", { pos = pos, posDestroyX = pos.X, weaponName = w.Name }) end)
-    end
-
-    local payload = {
-        bodyParts = { { "Head", 1 } },
-        shotCode = { origin, dir },
-        pos = pos,
-        target = (typeof(target) == "Instance" and target:IsA("Player")) and target or nil,
-        damageFactor = 1.5
-    }
-    if not payload.target then payload.target = target end
-
-    local ok = pcall(function() rem:FireServer("damage", payload) end)
-    if not ok then FL_DMG.LastErr = "FireServer 失败" return false end
-    FL_DMG.LastErr = nil
-    return true
-end
-
--- 子弹追踪 UI
-B:Divider({ Text = "子弹追踪" })
-local trackGui = nil
-local circle, stroke, line = nil, nil, nil
-
-local function buildTrackGui()
-    if trackGui and trackGui.Parent then return end
-    trackGui = Instance.new("ScreenGui")
-    trackGui.Name = "FL_Track"
-    trackGui.IgnoreGuiInset = true
-    trackGui.ResetOnSpawn = false
-    trackGui.DisplayOrder = 2
-    trackGui.Parent = player:WaitForChild("PlayerGui")
-
-    circle = Instance.new("Frame")
-    circle.AnchorPoint = Vector2.new(0.5, 0.5)
-    circle.Position = UDim2.fromScale(0.5, 0.5)
-    circle.BackgroundTransparency = 1
-    circle.Visible = false
-    circle.Parent = trackGui
-    Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
-    stroke = Instance.new("UIStroke", circle); stroke.Thickness = 1; stroke.Transparency = 0.35
-
-    line = Instance.new("Frame")
-    line.AnchorPoint = Vector2.new(0, 0.5)
-    line.BorderSizePixel = 0
-    line.Visible = false
-    line.ZIndex = 3
-    line.Parent = trackGui
-end
-
-local function getFOVPx()
-    local cam = workspace.CurrentCamera
-    local h = cam and cam.ViewportSize.Y or 1080
-    return FL_TRACK.FOV * (h / 1080)
-end
-
-local function findTarget()
-    local cam = workspace.CurrentCamera
-    if not cam then return nil end
-    local vp = cam.ViewportSize
-    local center = Vector2.new(vp.X / 2, vp.Y / 2)
-    local camPos = cam.CFrame.Position
-    local r = getFOVPx()
-    local best, bestD = nil, math.huge
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local c = plr.Character
-            local hum = c and c:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local pass = true
-                if FL_TRACK.CombatOnly and plr:GetAttribute("CombatMode") ~= true then pass = false end
-                local f = plr.Team and plr.Team.Name or "?"
-                if FL_TRACK.Mode == "police" and f ~= "Police" then pass = false end
-                if FL_TRACK.Mode == "civilian" and f ~= "Civilian" then pass = false end
-
-                if pass then
-                    local part = c:FindFirstChild("Head") or c:FindFirstChild("UpperTorso") or c:FindFirstChild("HumanoidRootPart")
-                    if part then
-                        local dist = (part.Position - camPos).Magnitude
-                        if dist <= FL_TRACK.MaxDist then
-                            local sp = cam:WorldToViewportPoint(part.Position)
-                            local metric
-                            if FL_TRACK.Full360 then
-                                metric = dist
-                            elseif sp.Z > 0 then
-                                local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                                if d <= r then metric = d end
-                            end
-                            if metric and metric < bestD then
-                                bestD = metric
-                                best = { plr = plr, part = part, world = part.Position, screen = Vector2.new(sp.X, sp.Y), dist = dist }
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return best
-end
-
-local function drawTrack(target)
-    buildTrackGui()
-    if not trackGui then return end
-    local cam = workspace.CurrentCamera
-    local vp = cam and cam.ViewportSize or Vector2.new(0, 0)
-    local center = Vector2.new(vp.X / 2, vp.Y / 2)
-
-    if circle then
-        circle.Visible = FL_TRACK.Enabled and FL_TRACK.ShowCircle and not FL_TRACK.Full360 and target ~= nil
-        if circle.Visible then
-            local rr = getFOVPx()
-            circle.Size = UDim2.fromOffset(rr * 2, rr * 2)
-            stroke.Color = FL_TRACK.Color
-        end
-    end
-    if line then
-        line.Visible = false
-        if FL_TRACK.Enabled and FL_TRACK.ShowLine and target and target.screen then
-            local d = target.screen - center
-            local len = d.Magnitude
-            if len >= 1 then
-                line.Position = UDim2.fromOffset(center.X, center.Y)
-                line.Size = UDim2.fromOffset(len, 1)
-                line.Rotation = math.deg(math.atan2(d.Y, d.X))
-                line.BackgroundColor3 = FL_TRACK.Color
-                line.Visible = true
-            end
-        end
-    end
-end
-
-local function stepTrack(dt)
-    if not FL_TRACK.Enabled then
-        FL_TRACK.Target = nil
-        drawTrack(nil)
-        return
-    end
-    local t = findTarget()
-    FL_TRACK.Target = t
-    drawTrack(t)
-
-    if t and FL_TRACK.ForceHit and FL_DMG then
-        FL_TRACK._acc = FL_TRACK._acc + dt
-        local rate = tonumber(FL_TRACK.ForceRate) or 0.12
-        if rate < 0.05 then rate = 0.05 end
-        if FL_TRACK._acc >= rate then
-            FL_TRACK._acc = 0
-            pcall(FL_DMG.Hit, t.plr)
-        end
-    end
-end
-
-B:Toggle({ Title = "启用子弹追踪（强制命中）", Value = false, Callback = function(v)
-    FL_TRACK.Enabled = v
-    if FL_TRACK.Enabled then
-        buildTrackGui()
-        if not FL_TRACK._conn then
-            FL_TRACK._conn = RunService.RenderStepped:Connect(function(dt) pcall(stepTrack, dt) end)
-        end
-    else
-        FL_TRACK.Target = nil
-        drawTrack(nil)
-        if FL_TRACK._conn then FL_TRACK._conn:Disconnect(); FL_TRACK._conn = nil end
-    end
-end })
-
-B:Toggle({ Title = "360° 全向锁定（不看屏幕位置）", Value = true, Callback = function(v) FL_TRACK.Full360 = v end })
-B:Dropdown({ Title = "目标阵营", Values = { "全部", "只锁警察", "只锁平民" }, Value = "全部", Callback = function(v)
-    if v == "只锁警察" then FL_TRACK.Mode = "police"
-    elseif v == "只锁平民" then FL_TRACK.Mode = "civilian"
-    else FL_TRACK.Mode = "all" end
-end })
-B:Toggle({ Title = "只锁进入战斗模式的人", Value = true, Callback = function(v) FL_TRACK.CombatOnly = v end })
-B:Toggle({ Title = "强制命中（不管多远/是否隔墙）", Value = true, Callback = function(v) FL_TRACK.ForceHit = v end })
-B:Slider({ Title = "强制命中间隔 (×100 秒)", Value = { Min = 5, Max = 100, Default = 12 }, Callback = function(v) if type(v) == "number" then FL_TRACK.ForceRate = v / 100 end end })
-B:Slider({ Title = "FOV 半径 (1080p 基准)", Value = { Min = 20, Max = 800, Default = 200 }, Callback = function(v) if type(v) == "number" then FL_TRACK.FOV = v end end })
-B:Slider({ Title = "锁定最大距离 (99999=不限)", Value = { Min = 500, Max = 99999, Default = 99999 }, Callback = function(v) if type(v) == "number" then FL_TRACK.MaxDist = v end end })
-B:Toggle({ Title = "显示 FOV 圈", Value = true, Callback = function(v) FL_TRACK.ShowCircle = v end })
-B:Toggle({ Title = "显示追踪线", Value = true, Callback = function(v) FL_TRACK.ShowLine = v end })
-
--- =================== 4. 远程购买 ===================
+-- =================== 6. 远程购买 ===================
 local RemoteBuyTab = AddTab(MainSection, "远程购买", "shopping-cart")
 
--- 你提供的新购买函数
 local function BuyItem(arg, arg2, arg3, arg4)
     local stuff = ReplicatedStorage:FindFirstChild("Stuff")
     if not stuff then return false, "未找到 Stuff" end
-
     for _, part in ipairs(string.split(arg, "/")) do
         stuff = stuff:FindFirstChild(part)
         if not stuff then return false, "路径缺失: " .. part end
     end
-
     local v2 = stuff:FindFirstChild(arg2)
     if not v2 then return false, "物品不存在" end
-    
     local playerFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
     if not playerFunc then return false, "找不到 PlayerFunc" end
-
     local response = playerFunc:InvokeServer("purchase", { isRestaurant = arg4, item = v2, quantity = arg3, color = nil })
     return response == true, tostring(response)
 end
 
--- 保留之前代码里的成功提示
 local function showBuySuccess(itemName)
     local sg = Instance.new("ScreenGui"); sg.Name = "BuySuccessGui"; sg.ResetOnSpawn = false; sg.DisplayOrder = 999; sg.Parent = player:WaitForChild("PlayerGui")
     local frame = Instance.new("Frame"); frame.Size = UDim2.new(0, 220, 0, 50); frame.Position = UDim2.new(1, 0, 1, -80); frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35); frame.BorderSizePixel = 0; frame.Parent = sg
@@ -565,38 +554,69 @@ RemoteBuyTab:Button({ Title = "购买", Callback = function()
     else WindUI:Notify({ Title = "购买失败", Content = "没找到购买事件或物品路径", Duration = 3 }) end
 end })
 
--- 替换为你要的独立食物按钮
-RemoteBuyTab:Divider({ Text = "食品补给" })
+
+-- =================== 修改后的食物下拉菜单 ===================
+RemoteBuyTab:Divider({ Text = "食品补给 (下拉选择)" })
 
 local foods = {
-    {name = "小蛋糕", code = "Cupcake"},
-    {name = "三明治", code = "Sandwich"},
-    {name = "汽水", code = "Soda Can"},
-    {name = "沙拉", code = "Salad"},
-    {name = "饼干", code = "Cookie"},
-    {name = "冰茶", code = "Iced Tea"},
-    {name = "松饼卷", code = "Croissant"},
-    {name = "苹果", code = "Apple"},
-    {name = "苹果汁", code = "Apple Juice"},
+    {name = "小蛋糕", code = "Cupcake"}, {name = "三明治", code = "Sandwich"}, {name = "汽水", code = "Soda Can"},
+    {name = "沙拉", code = "Salad"}, {name = "饼干", code = "Cookie"}, {name = "冰茶", code = "Iced Tea"},
+    {name = "松饼卷", code = "Croissant"}, {name = "苹果", code = "Apple"}, {name = "苹果汁", code = "Apple Juice"},
     {name = "牛奶", code = "Box Of Milk"}
 }
 
-for _, food in ipairs(foods) do
-    RemoteBuyTab:Button({
-        Title = food.name,
-        Callback = function()
+local foodNames = {}
+for _, f in ipairs(foods) do table.insert(foodNames, f.name) end
+
+-- 使用下拉菜单，并联动保存的变量
+RemoteBuyTab:Dropdown({
+    Title = "选择食物", 
+    Values = foodNames, 
+    Value = Settings.selectedFoodName, 
+    Callback = function(val) 
+        Settings.selectedFoodName = val
+        SaveConfig() 
+    end
+})
+
+-- 单独的一个购买按钮
+RemoteBuyTab:Button({ 
+    Title = "购买选中的食物", 
+    Callback = function()
+        local targetFood = nil
+        -- 根据下拉菜单选中的名字查找对应的 code
+        for _, f in ipairs(foods) do
+            if f.name == Settings.selectedFoodName then
+                targetFood = f
+                break
+            end
+        end
+        
+        if targetFood then
             local ok, result = pcall(function()
-                local success, msg = BuyItem("Food", food.code, 1, false)
-                if success then
-                    showBuySuccess(food.name)
-                else
-                    WindUI:Notify({ Title = "购买失败", Content = tostring(msg), Duration = 3 })
+                local success, msg = BuyItem("Food", targetFood.code, 1, false)
+                if success then 
+                    showBuySuccess(targetFood.name)
+                else 
+                    WindUI:Notify({ Title = "购买失败", Content = tostring(msg), Duration = 3 }) 
                 end
             end)
             if not ok then WindUI:Notify({ Title = "执行错误", Content = tostring(result), Duration = 3 }) end
+        else
+            WindUI:Notify({ Title = "购买失败", Content = "未找到选中的食物数据", Duration = 3 })
         end
-    })
-end
+    end
+})
+-- =====================================================
 
--- 启动完毕
-WindUI:Notify({ Title = "wdfex-Hub简洁版", Content = "脚本加载成功 (v1.0)", Duration = 3 })
+
+-- =================== 7. 自动保存配置后：强制初始化生效 ===================
+task.spawn(function()
+    task.wait(1.5)
+    if Settings.noclip then applyNoclip(true) end
+    if Settings.quickInteract then applyQuickInteract(true) end
+    if Settings.interactDistanceEnabled then applyInteractDist(true) end
+    if Settings.autoHack then fn50(true) end
+end)
+
+WindUI:Notify({ Title = "wdfex-Hub简洁版", Content = "加载成功 (v1.6 食物下拉版)", Duration = 3 })
