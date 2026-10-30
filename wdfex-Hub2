@@ -2286,27 +2286,32 @@ function createUI()
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
 
-    -- ==== 新增：自动捡钱 ====
+    -- ==== 自动捡钱（零延迟修复版）====
     local AutoCollect = {
         Enabled = false,
-        HeartbeatConn = nil
+        HeartbeatConn = nil,
+        Pending = setmetatable({}, {__mode = "k"}),
     }
-    
+
     local function processAutoCollect(action, target)
         if not target or not target.Parent then return end
-        local eventFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-        local eventEvt = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
-        
-        if eventFunc then
-            pcall(function()
-                if action == "cashDrop" then
-                    eventFunc:InvokeServer("cashDrop", target)
-                elseif action == "talkToMission" then
-                    if eventEvt then eventEvt:FireServer("interacted") end
-                    eventFunc:InvokeServer("talkToMission", target)
-                end
-            end)
-        end
+        if AutoCollect.Pending[target] then return end
+        AutoCollect.Pending[target] = true
+        task.spawn(function()
+            local eventFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
+            local eventEvt = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
+            if eventFunc then
+                pcall(function()
+                    if action == "cashDrop" then
+                        eventFunc:InvokeServer("cashDrop", target)
+                    elseif action == "talkToMission" then
+                        if eventEvt then eventEvt:FireServer("interacted") end
+                        eventFunc:InvokeServer("talkToMission", target)
+                    end
+                end)
+            end
+            AutoCollect.Pending[target] = nil
+        end)
     end
 
     InteractTab:Toggle({
@@ -2320,12 +2325,11 @@ function createUI()
                     if not AutoCollect.Enabled then return end
                     local gameplay = workspace:FindFirstChild("Gameplay")
                     if not gameplay then return end
-                    
+
                     local char = player.Character
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
                     local myPos = hrp and hrp.Position or nil
-                    
-                    -- 1. 硬币和纸币（限制 30 格范围内，无冷却秒捡）
+
                     local entities = gameplay:FindFirstChild("Entities")
                     if entities then
                         for _, entity in ipairs(entities:GetChildren()) do
@@ -2344,8 +2348,7 @@ function createUI()
                             end
                         end
                     end
-                    
-                    -- 2. 指定的互动物品（银行/游艇等，全图无延迟秒捡）
+
                     for _, obj in ipairs(gameplay:GetDescendants()) do
                         if obj.Name == "_Interaction" then
                             local targetParent = obj.Parent
@@ -2358,6 +2361,7 @@ function createUI()
                 end)
             else
                 if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect(); AutoCollect.HeartbeatConn = nil end
+                AutoCollect.Pending = setmetatable({}, {__mode = "k"})
             end
         end
     })
