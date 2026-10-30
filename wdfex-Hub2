@@ -738,7 +738,7 @@ function createUI()
     TeamChangeTab:Divider({ Text = "更换队伍" })
     local selectedTeamChange = "警察"
     TeamChangeTab:Dropdown({
-        Title = "选择要更换的队伍",
+        Title = "选择要更换的队伍（没有更换成功就一直点）",
         Values = {"警察", "医生", "火焰", "转运", "配送", "道路服务"},
         Value = selectedTeamChange,
         Callback = function(value) selectedTeamChange = value end
