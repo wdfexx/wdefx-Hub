@@ -2286,7 +2286,7 @@ function createUI()
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
 
-    -- ==== 自动捡钱（零延迟修复版 + 屏蔽指定目标）====
+    -- ==== 自动捡钱（零延迟修复版 + 屏蔽指定目标 + House Robbery.Reward 全互动）====
     local AutoCollect = {
         Enabled = false,
         HeartbeatConn = nil,
@@ -2330,7 +2330,7 @@ function createUI()
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
                     local myPos = hrp and hrp.Position or nil
 
-                    -- 正常捡地上的钱
+                    -- 正常捡地上的钱（保持原逻辑：30 距离内）
                     local entities = gameplay:FindFirstChild("Entities")
                     if entities then
                         for _, entity in ipairs(entities:GetChildren()) do
@@ -2350,18 +2350,28 @@ function createUI()
                         end
                     end
 
-                    -- 扫描互动点（已屏蔽 Reward.Content.Cash._Interaction）
+                    -- 扫描互动点
                     for _, obj in ipairs(gameplay:GetDescendants()) do
                         if obj.Name == "_Interaction" then
-                            -- 屏蔽指定目标
                             local fullName = obj:GetFullName()
+
+                            -- 屏蔽指定目标：保持原样，不要动
                             if fullName:find("Entities.Reward.Content.Cash._Interaction", 1, true) then
-                                continue  -- 跳过这个目标
+                                continue
                             end
 
                             local targetParent = obj.Parent
                             local pName = targetParent and targetParent.Name:lower() or ""
-                            if pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward") 
+
+                            -- 新增：House Robbery.Reward 下所有 _Interaction
+                            -- 包含 Laundry Basket、Stereo Speaker、TV、Toaster、Bush Pot、Laptop、
+                            -- Alarm Clock Old、Lamp、Painting、Radio、Vase、Flashlight、TV Remote、
+                            -- Storage、Storage.Vase、Storage.Money Sack、Storage.Cash 等
+                            -- 不做距离判断，只要存在就秒触发
+                            local isHouseRobberyReward = fullName:find("House Robbery.Reward.", 1, true) ~= nil
+
+                            if isHouseRobberyReward
+                                or pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward")
                                 or pName:find("usb") or pName:find("sack") or pName:find("envelope") or pName:find("trace") then
                                 processAutoCollect("talkToMission", obj)
                             end
@@ -2369,7 +2379,10 @@ function createUI()
                     end
                 end)
             else
-                if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect(); AutoCollect.HeartbeatConn = nil end
+                if AutoCollect.HeartbeatConn then
+                    AutoCollect.HeartbeatConn:Disconnect()
+                    AutoCollect.HeartbeatConn = nil
+                end
                 AutoCollect.Pending = setmetatable({}, {__mode = "k"})
             end
         end
