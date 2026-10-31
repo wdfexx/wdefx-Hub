@@ -2293,6 +2293,8 @@ function createUI()
             HeartbeatConn = nil,
             DescConn = nil,
             Pending = setmetatable({}, {__mode = "k"}),
+            Tracked = {},
+            RANGE = 30,
         }
 
         local rewardTargetKeywords = {
@@ -2339,18 +2341,51 @@ function createUI()
 
             local pName = interaction.Parent.Name:lower()
 
-            -- 新增物品：任何地点出现就触发
             for _, kw in ipairs(rewardTargetKeywords) do
                 if pName:find(kw, 1, true) then return true end
             end
 
-            -- 原有通用匹配：钱袋、现金等，任何地点都触发
             if pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward")
                 or pName:find("usb") or pName:find("sack") or pName:find("envelope") or pName:find("trace") then
                 return true
             end
 
             return false
+        end
+
+        local function getPlayerPosition()
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            return hrp and hrp.Position or nil
+        end
+
+        local function getInteractionPosition(obj)
+            if not obj or not obj.Parent then return nil end
+            if obj:IsA("BasePart") then return obj.Position end
+            if obj:IsA("Attachment") then return obj.WorldPosition end
+
+            local parent = obj.Parent
+            if parent:IsA("BasePart") then return parent.Position end
+
+            if parent:IsA("Model") then
+                local primary = parent.PrimaryPart
+                if primary then return primary.Position end
+                local part = parent:FindFirstChildWhichIsA("BasePart", true)
+                if part then return part.Position end
+                local ok, pivot = pcall(function() return parent:GetPivot().Position end)
+                if ok then return pivot end
+            end
+
+            local model = obj:FindFirstAncestorWhichIsA("Model")
+            if model then
+                local ok, pivot = pcall(function() return model:GetPivot().Position end)
+                if ok then return pivot end
+            end
+
+            local part = obj:FindFirstAncestorWhichIsA("BasePart")
+            if part then return part.Position end
+
+            return nil
         end
 
         local function processAutoCollect(action, target)
@@ -2375,12 +2410,31 @@ function createUI()
             end)
         end
 
+        local function tryTriggerOrTrack(interaction, myPos)
+            if not interaction or not interaction.Parent then return end
+            if AutoCollect.Pending[interaction] then return end
+
+            local pos = getInteractionPosition(interaction)
+
+            -- 拿不到位置也先追踪，Heartbeat 会重试
+            if not pos then
+                AutoCollect.Tracked[interaction] = true
+                return
+            end
+
+            if myPos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
+                AutoCollect.Tracked[interaction] = nil
+                processAutoCollect("talkToMission", interaction)
+            else
+                AutoCollect.Tracked[interaction] = true
+            end
+        end
+
         local function onAutoCollectDescendantAdded(desc)
             if not AutoCollect.Enabled then return end
             if desc.Name ~= "_Interaction" then return end
-            if matchAutoCollectTarget(desc) then
-                processAutoCollect("talkToMission", desc)
-            end
+            if not matchAutoCollectTarget(desc) then return end
+            tryTriggerOrTrack(desc, getPlayerPosition())
         end
 
         InteractTab:Toggle({
@@ -2392,42 +2446,63 @@ function createUI()
                     if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
                     if AutoCollect.DescConn then AutoCollect.DescConn:Disconnect() end
 
+                    -- 普通表，不会被 GC 清掉
+                    AutoCollect.Tracked = {}
+                    AutoCollect.Pending = setmetatable({}, {__mode = "k"})
+
                     AutoCollect.DescConn = workspace.DescendantAdded:Connect(onAutoCollectDescendantAdded)
+
+                    -- 开启时一次性扫描已有目标
+                    task.spawn(function()
+                        local gameplay = workspace:FindFirstChild("Gameplay")
+                        if not gameplay then return end
+                        local myPos = getPlayerPosition()
+                        for _, obj in ipairs(gameplay:GetDescendants()) do
+                            if obj.Name == "_Interaction" and matchAutoCollectTarget(obj) then
+                                tryTriggerOrTrack(obj, myPos)
+                            end
+                        end
+                    end)
 
                     AutoCollect.HeartbeatConn = RunService.Heartbeat:Connect(function()
                         if not AutoCollect.Enabled then return end
+                        local myPos = getPlayerPosition()
+                        if not myPos then return end
+
+                        -- 地上钱：保持原逻辑，30 米内
                         local gameplay = workspace:FindFirstChild("Gameplay")
-                        if not gameplay then return end
-
-                        local char = player.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        local myPos = hrp and hrp.Position or nil
-
-                        -- 地上钱保持原逻辑：30 距离内
-                        local entities = gameplay:FindFirstChild("Entities")
-                        if entities then
-                            for _, entity in ipairs(entities:GetChildren()) do
-                                if entity.Name == "_Coin" or entity.Name == "_Cash" then
-                                    local cashDrop = entity:FindFirstChild("CashDrop", true)
-                                    if cashDrop then
-                                        local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
-                                        if part and myPos then
-                                            if (part.Position - myPos).Magnitude <= 30 then
+                        if gameplay then
+                            local entities = gameplay:FindFirstChild("Entities")
+                            if entities then
+                                for _, entity in ipairs(entities:GetChildren()) do
+                                    if entity.Name == "_Coin" or entity.Name == "_Cash" then
+                                        local cashDrop = entity:FindFirstChild("CashDrop", true)
+                                        if cashDrop then
+                                            local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
+                                            if not part or (part.Position - myPos).Magnitude <= AutoCollect.RANGE then
                                                 processAutoCollect("cashDrop", cashDrop)
                                             end
-                                        else
-                                            processAutoCollect("cashDrop", cashDrop)
                                         end
                                     end
                                 end
                             end
                         end
 
-                        -- 任意地点扫描所有互动目标
-                        for _, obj in ipairs(gameplay:GetDescendants()) do
-                            if obj.Name == "_Interaction" and matchAutoCollectTarget(obj) then
-                                processAutoCollect("talkToMission", obj)
+                        -- 只遍历 Tracked，先收集再删除，避免边遍历边删
+                        local toRemove = {}
+                        for target in pairs(AutoCollect.Tracked) do
+                            if not target or not target.Parent then
+                                table.insert(toRemove, target)
+                            else
+                                local pos = getInteractionPosition(target)
+                                if pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
+                                    table.insert(toRemove, target)
+                                    processAutoCollect("talkToMission", target)
+                                end
                             end
+                        end
+                        for _, t in ipairs(toRemove) do
+                            AutoCollect.Tracked[t] = nil
                         end
                     end)
                 else
@@ -2439,6 +2514,7 @@ function createUI()
                         AutoCollect.DescConn:Disconnect()
                         AutoCollect.DescConn = nil
                     end
+                    AutoCollect.Tracked = {}
                     AutoCollect.Pending = setmetatable({}, {__mode = "k"})
                 end
             end
