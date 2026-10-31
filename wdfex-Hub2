@@ -2292,8 +2292,10 @@ function createUI()
             Enabled = false,
             HeartbeatConn = nil,
             DescConn = nil,
+            RescanThread = nil,
             Pending = setmetatable({}, {__mode = "k"}),
-            Tracked = {},
+            Tracked = setmetatable({}, {__mode = "k"}),
+            Done = setmetatable({}, {__mode = "k"}),
             RANGE = 30,
         }
 
@@ -2363,35 +2365,24 @@ function createUI()
             if not obj or not obj.Parent then return nil end
             if obj:IsA("BasePart") then return obj.Position end
             if obj:IsA("Attachment") then return obj.WorldPosition end
-
             local parent = obj.Parent
             if parent:IsA("BasePart") then return parent.Position end
-
-            if parent:IsA("Model") then
-                local primary = parent.PrimaryPart
-                if primary then return primary.Position end
-                local part = parent:FindFirstChildWhichIsA("BasePart", true)
-                if part then return part.Position end
-                local ok, pivot = pcall(function() return parent:GetPivot().Position end)
-                if ok then return pivot end
-            end
-
             local model = obj:FindFirstAncestorWhichIsA("Model")
             if model then
                 local ok, pivot = pcall(function() return model:GetPivot().Position end)
                 if ok then return pivot end
             end
-
             local part = obj:FindFirstAncestorWhichIsA("BasePart")
             if part then return part.Position end
-
             return nil
         end
 
         local function processAutoCollect(action, target)
             if not target or not target.Parent then return end
             if AutoCollect.Pending[target] then return end
+            if AutoCollect.Done[target] then return end
             AutoCollect.Pending[target] = true
+            AutoCollect.Done[target] = true
             task.spawn(function()
                 local remote = ReplicatedStorage:FindFirstChild("Remote")
                 local eventFunc = remote and remote:FindFirstChild("PlayerFunc")
@@ -2413,16 +2404,10 @@ function createUI()
         local function tryTriggerOrTrack(interaction, myPos)
             if not interaction or not interaction.Parent then return end
             if AutoCollect.Pending[interaction] then return end
+            if AutoCollect.Done[interaction] then return end
 
             local pos = getInteractionPosition(interaction)
-
-            -- 拿不到位置也先追踪，Heartbeat 会重试
-            if not pos then
-                AutoCollect.Tracked[interaction] = true
-                return
-            end
-
-            if myPos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
+            if myPos and pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
                 AutoCollect.Tracked[interaction] = nil
                 processAutoCollect("talkToMission", interaction)
             else
@@ -2437,6 +2422,29 @@ function createUI()
             tryTriggerOrTrack(desc, getPlayerPosition())
         end
 
+        local function scanGameplay()
+            local gameplay = workspace:FindFirstChild("Gameplay")
+            if not gameplay then return end
+            local myPos = getPlayerPosition()
+            for _, obj in ipairs(gameplay:GetDescendants()) do
+                if AutoCollect.Enabled then
+                    if obj.Name == "_Interaction"
+                        and matchAutoCollectTarget(obj)
+                        and not AutoCollect.Pending[obj]
+                        and not AutoCollect.Done[obj] then
+                        local pos = getInteractionPosition(obj)
+                        if myPos and pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
+                            processAutoCollect("talkToMission", obj)
+                        else
+                            AutoCollect.Tracked[obj] = true
+                        end
+                    end
+                else
+                    break
+                end
+            end
+        end
+
         InteractTab:Toggle({
             Title = "自动捡钱",
             Value = false,
@@ -2445,22 +2453,26 @@ function createUI()
                 if value then
                     if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
                     if AutoCollect.DescConn then AutoCollect.DescConn:Disconnect() end
+                    if AutoCollect.RescanThread then
+                        pcall(function() task.cancel(AutoCollect.RescanThread) end)
+                        AutoCollect.RescanThread = nil
+                    end
 
-                    -- 普通表，不会被 GC 清掉
-                    AutoCollect.Tracked = {}
+                    AutoCollect.Tracked = setmetatable({}, {__mode = "k"})
                     AutoCollect.Pending = setmetatable({}, {__mode = "k"})
+                    AutoCollect.Done = setmetatable({}, {__mode = "k"})
 
                     AutoCollect.DescConn = workspace.DescendantAdded:Connect(onAutoCollectDescendantAdded)
 
                     -- 开启时一次性扫描已有目标
-                    task.spawn(function()
-                        local gameplay = workspace:FindFirstChild("Gameplay")
-                        if not gameplay then return end
-                        local myPos = getPlayerPosition()
-                        for _, obj in ipairs(gameplay:GetDescendants()) do
-                            if obj.Name == "_Interaction" and matchAutoCollectTarget(obj) then
-                                tryTriggerOrTrack(obj, myPos)
-                            end
+                    task.spawn(scanGameplay)
+
+                    -- 低频兜底扫描：漏掉的目标不用重新开关也能补上
+                    AutoCollect.RescanThread = task.spawn(function()
+                        while AutoCollect.Enabled do
+                            task.wait(3)
+                            if not AutoCollect.Enabled then break end
+                            pcall(scanGameplay)
                         end
                     end)
 
@@ -2488,21 +2500,21 @@ function createUI()
                             end
                         end
 
-                        -- 只遍历 Tracked，先收集再删除，避免边遍历边删
-                        local toRemove = {}
+                        -- 安全遍历 Tracked：先收集再删除，避免跳过
+                        local removeList = {}
                         for target in pairs(AutoCollect.Tracked) do
                             if not target or not target.Parent then
-                                table.insert(toRemove, target)
+                                removeList[#removeList + 1] = target
                             else
                                 local pos = getInteractionPosition(target)
                                 if pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
-                                    table.insert(toRemove, target)
+                                    removeList[#removeList + 1] = target
                                     processAutoCollect("talkToMission", target)
                                 end
                             end
                         end
-                        for _, t in ipairs(toRemove) do
-                            AutoCollect.Tracked[t] = nil
+                        for _, target in ipairs(removeList) do
+                            AutoCollect.Tracked[target] = nil
                         end
                     end)
                 else
@@ -2514,8 +2526,13 @@ function createUI()
                         AutoCollect.DescConn:Disconnect()
                         AutoCollect.DescConn = nil
                     end
-                    AutoCollect.Tracked = {}
+                    if AutoCollect.RescanThread then
+                        pcall(function() task.cancel(AutoCollect.RescanThread) end)
+                        AutoCollect.RescanThread = nil
+                    end
+                    AutoCollect.Tracked = setmetatable({}, {__mode = "k"})
                     AutoCollect.Pending = setmetatable({}, {__mode = "k"})
+                    AutoCollect.Done = setmetatable({}, {__mode = "k"})
                 end
             end
         })
