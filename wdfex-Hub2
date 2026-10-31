@@ -2320,6 +2320,11 @@ function createUI()
             "globe",
             "blender",
             "coffee machine",
+            "trophy",
+            "clock",
+            "fan",
+            "camera",
+            "monitor",
         }
 
         local function matchAutoCollectTarget(interaction)
