@@ -2286,107 +2286,148 @@ function createUI()
     end
     InteractTab:Toggle({ Title = "自动黑客", Value = false, Callback = function(value) fn50(value) end })
 
-    -- ==== 自动捡钱（零延迟修复版 + 屏蔽指定目标 + House Robbery.Reward 全互动）====
-    local AutoCollect = {
-        Enabled = false,
-        HeartbeatConn = nil,
-        Pending = setmetatable({}, {__mode = "k"}),
-    }
+    -- ==== 自动捡钱开始 ====
+    pcall(function()
+        local AutoCollect = {
+            Enabled = false,
+            HeartbeatConn = nil,
+            DescConn = nil,
+            Pending = setmetatable({}, {__mode = "k"}),
+        }
 
-    local function processAutoCollect(action, target)
-        if not target or not target.Parent then return end
-        if AutoCollect.Pending[target] then return end
-        AutoCollect.Pending[target] = true
-        task.spawn(function()
-            local eventFunc = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerFunc")
-            local eventEvt = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("PlayerEvent")
-            if eventFunc then
-                pcall(function()
-                    if action == "cashDrop" then
-                        eventFunc:InvokeServer("cashDrop", target)
-                    elseif action == "talkToMission" then
-                        if eventEvt then eventEvt:FireServer("interacted") end
-                        eventFunc:InvokeServer("talkToMission", target)
-                    end
-                end)
+        local rewardTargetKeywords = {
+            "laundry basket",
+            "stereo speaker",
+            "tv",
+            "toaster",
+            "bush pot",
+            "laptop",
+            "alarm clock",
+            "lamp",
+            "painting",
+            "radio",
+            "vase",
+            "flashlight",
+            "tv remote",
+            "storage",
+        }
+
+        local function matchAutoCollectTarget(interaction)
+            if not interaction or not interaction.Parent then return false end
+            local fullName = interaction:GetFullName()
+
+            -- 屏蔽目标：保持原样，不要动
+            if fullName:find("Entities.Reward.Content.Cash._Interaction", 1, true) then
+                return false
             end
-            AutoCollect.Pending[target] = nil
-        end)
-    end
 
-    InteractTab:Toggle({
-        Title = "自动捡钱",
-        Value = false,
-        Callback = function(value)
-            AutoCollect.Enabled = value
-            if value then
-                if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
-                AutoCollect.HeartbeatConn = RunService.Heartbeat:Connect(function()
-                    if not AutoCollect.Enabled then return end
-                    local gameplay = workspace:FindFirstChild("Gameplay")
-                    if not gameplay then return end
+            local pName = interaction.Parent.Name:lower()
 
-                    local char = player.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    local myPos = hrp and hrp.Position or nil
+            -- 新增物品：任何地点出现就触发
+            for _, kw in ipairs(rewardTargetKeywords) do
+                if pName:find(kw, 1, true) then return true end
+            end
 
-                    -- 正常捡地上的钱（保持原逻辑：30 距离内）
-                    local entities = gameplay:FindFirstChild("Entities")
-                    if entities then
-                        for _, entity in ipairs(entities:GetChildren()) do
-                            if entity.Name == "_Coin" or entity.Name == "_Cash" then
-                                local cashDrop = entity:FindFirstChild("CashDrop", true)
-                                if cashDrop then
-                                    local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
-                                    if part and myPos then
-                                        if (part.Position - myPos).Magnitude <= 30 then
+            -- 原有通用匹配：钱袋、现金等，任何地点都触发
+            if pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward")
+                or pName:find("usb") or pName:find("sack") or pName:find("envelope") or pName:find("trace") then
+                return true
+            end
+
+            return false
+        end
+
+        local function processAutoCollect(action, target)
+            if not target or not target.Parent then return end
+            if AutoCollect.Pending[target] then return end
+            AutoCollect.Pending[target] = true
+            task.spawn(function()
+                local remote = ReplicatedStorage:FindFirstChild("Remote")
+                local eventFunc = remote and remote:FindFirstChild("PlayerFunc")
+                local eventEvt = remote and remote:FindFirstChild("PlayerEvent")
+                if eventFunc then
+                    pcall(function()
+                        if action == "cashDrop" then
+                            eventFunc:InvokeServer("cashDrop", target)
+                        elseif action == "talkToMission" then
+                            if eventEvt then eventEvt:FireServer("interacted") end
+                            eventFunc:InvokeServer("talkToMission", target)
+                        end
+                    end)
+                end
+                AutoCollect.Pending[target] = nil
+            end)
+        end
+
+        local function onAutoCollectDescendantAdded(desc)
+            if not AutoCollect.Enabled then return end
+            if desc.Name ~= "_Interaction" then return end
+            if matchAutoCollectTarget(desc) then
+                processAutoCollect("talkToMission", desc)
+            end
+        end
+
+        InteractTab:Toggle({
+            Title = "自动捡钱",
+            Value = false,
+            Callback = function(value)
+                AutoCollect.Enabled = value
+                if value then
+                    if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
+                    if AutoCollect.DescConn then AutoCollect.DescConn:Disconnect() end
+
+                    AutoCollect.DescConn = workspace.DescendantAdded:Connect(onAutoCollectDescendantAdded)
+
+                    AutoCollect.HeartbeatConn = RunService.Heartbeat:Connect(function()
+                        if not AutoCollect.Enabled then return end
+                        local gameplay = workspace:FindFirstChild("Gameplay")
+                        if not gameplay then return end
+
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        local myPos = hrp and hrp.Position or nil
+
+                        -- 地上钱保持原逻辑：30 距离内
+                        local entities = gameplay:FindFirstChild("Entities")
+                        if entities then
+                            for _, entity in ipairs(entities:GetChildren()) do
+                                if entity.Name == "_Coin" or entity.Name == "_Cash" then
+                                    local cashDrop = entity:FindFirstChild("CashDrop", true)
+                                    if cashDrop then
+                                        local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
+                                        if part and myPos then
+                                            if (part.Position - myPos).Magnitude <= 30 then
+                                                processAutoCollect("cashDrop", cashDrop)
+                                            end
+                                        else
                                             processAutoCollect("cashDrop", cashDrop)
                                         end
-                                    else
-                                        processAutoCollect("cashDrop", cashDrop)
                                     end
                                 end
                             end
                         end
-                    end
 
-                    -- 扫描互动点
-                    for _, obj in ipairs(gameplay:GetDescendants()) do
-                        if obj.Name == "_Interaction" then
-                            local fullName = obj:GetFullName()
-
-                            -- 屏蔽指定目标：保持原样，不要动
-                            if fullName:find("Entities.Reward.Content.Cash._Interaction", 1, true) then
-                                continue
-                            end
-
-                            local targetParent = obj.Parent
-                            local pName = targetParent and targetParent.Name:lower() or ""
-
-                            -- 新增：House Robbery.Reward 下所有 _Interaction
-                            -- 包含 Laundry Basket、Stereo Speaker、TV、Toaster、Bush Pot、Laptop、
-                            -- Alarm Clock Old、Lamp、Painting、Radio、Vase、Flashlight、TV Remote、
-                            -- Storage、Storage.Vase、Storage.Money Sack、Storage.Cash 等
-                            -- 不做距离判断，只要存在就秒触发
-                            local isHouseRobberyReward = fullName:find("House Robbery.Reward.", 1, true) ~= nil
-
-                            if isHouseRobberyReward
-                                or pName:find("money") or pName:find("gold") or pName:find("cash") or pName:find("reward")
-                                or pName:find("usb") or pName:find("sack") or pName:find("envelope") or pName:find("trace") then
+                        -- 任意地点扫描所有互动目标
+                        for _, obj in ipairs(gameplay:GetDescendants()) do
+                            if obj.Name == "_Interaction" and matchAutoCollectTarget(obj) then
                                 processAutoCollect("talkToMission", obj)
                             end
                         end
+                    end)
+                else
+                    if AutoCollect.HeartbeatConn then
+                        AutoCollect.HeartbeatConn:Disconnect()
+                        AutoCollect.HeartbeatConn = nil
                     end
-                end)
-            else
-                if AutoCollect.HeartbeatConn then
-                    AutoCollect.HeartbeatConn:Disconnect()
-                    AutoCollect.HeartbeatConn = nil
+                    if AutoCollect.DescConn then
+                        AutoCollect.DescConn:Disconnect()
+                        AutoCollect.DescConn = nil
+                    end
+                    AutoCollect.Pending = setmetatable({}, {__mode = "k"})
                 end
-                AutoCollect.Pending = setmetatable({}, {__mode = "k"})
             end
-        end
-    })
+        })
+    end)
     -- ==== 自动捡钱结束 ====
 
     do
