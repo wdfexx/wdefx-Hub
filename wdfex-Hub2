@@ -2310,6 +2310,7 @@ function createUI()
             "flashlight",
             "tv remote",
             "storage",
+            "fire extinguisher",
         }
 
         local function matchAutoCollectTarget(interaction)
