@@ -2316,6 +2316,10 @@ function createUI()
             "shirt",
             "piggy bank",
             "car key",
+            "gramophone",
+            "globe",
+            "blender",
+            "coffee machine",
         }
 
         local function matchAutoCollectTarget(interaction)
