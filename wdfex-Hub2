@@ -2325,6 +2325,7 @@ function createUI()
             "fan",
             "camera",
             "monitor",
+            "telephone",
         }
 
         local function matchAutoCollectTarget(interaction)
