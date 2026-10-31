@@ -2330,6 +2330,7 @@ function createUI()
             "camera",
             "monitor",
             "telephone",
+            "pants",
         }
 
         local function matchAutoCollectTarget(interaction)
