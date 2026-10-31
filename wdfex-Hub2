@@ -2331,6 +2331,7 @@ function createUI()
             "monitor",
             "telephone",
             "pants",
+            "ts4",
         }
 
         local function matchAutoCollectTarget(interaction)
