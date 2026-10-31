@@ -2311,6 +2311,10 @@ function createUI()
             "tv remote",
             "storage",
             "fire extinguisher",
+            "flower pot",
+            "drink machine",
+            "shirt",
+            "piggy bank",
         }
 
         local function matchAutoCollectTarget(interaction)
