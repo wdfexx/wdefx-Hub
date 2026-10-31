@@ -2288,15 +2288,15 @@ function createUI()
 
     -- ==== 自动捡钱开始 ====
     pcall(function()
+        local AUTO_COLLECT_RANGE = 30
+
         local AutoCollect = {
             Enabled = false,
             HeartbeatConn = nil,
-            DescConn = nil,
-            RescanThread = nil,
+            DescAddedConn = nil,
+            DescRemovedConn = nil,
             Pending = setmetatable({}, {__mode = "k"}),
-            Tracked = setmetatable({}, {__mode = "k"}),
-            Done = setmetatable({}, {__mode = "k"}),
-            RANGE = 30,
+            Cache = {},
         }
 
         local rewardTargetKeywords = {
@@ -2355,34 +2355,32 @@ function createUI()
             return false
         end
 
-        local function getPlayerPosition()
-            local char = player.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            return hrp and hrp.Position or nil
-        end
-
-        local function getInteractionPosition(obj)
-            if not obj or not obj.Parent then return nil end
-            if obj:IsA("BasePart") then return obj.Position end
-            if obj:IsA("Attachment") then return obj.WorldPosition end
-            local parent = obj.Parent
-            if parent:IsA("BasePart") then return parent.Position end
-            local model = obj:FindFirstAncestorWhichIsA("Model")
-            if model then
-                local ok, pivot = pcall(function() return model:GetPivot().Position end)
-                if ok then return pivot end
+        local function getTargetPosition(interaction)
+            local obj = interaction
+            for _ = 1, 6 do
+                if not obj then break end
+                if obj:IsA("BasePart") then return obj.Position end
+                if obj:IsA("Model") then
+                    local ok, pivot = pcall(function() return obj:GetPivot().Position end)
+                    if ok and pivot then return pivot end
+                    local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                    if part then return part.Position end
+                end
+                if obj:IsA("Attachment") and obj.Parent and obj.Parent:IsA("BasePart") then
+                    return obj.Parent.Position
+                end
+                if obj:IsA("ProximityPrompt") and obj.Parent and obj.Parent:IsA("BasePart") then
+                    return obj.Parent.Position
+                end
+                obj = obj.Parent
             end
-            local part = obj:FindFirstAncestorWhichIsA("BasePart")
-            if part then return part.Position end
             return nil
         end
 
         local function processAutoCollect(action, target)
             if not target or not target.Parent then return end
             if AutoCollect.Pending[target] then return end
-            if AutoCollect.Done[target] then return end
             AutoCollect.Pending[target] = true
-            AutoCollect.Done[target] = true
             task.spawn(function()
                 local remote = ReplicatedStorage:FindFirstChild("Remote")
                 local eventFunc = remote and remote:FindFirstChild("PlayerFunc")
@@ -2401,46 +2399,46 @@ function createUI()
             end)
         end
 
-        local function tryTriggerOrTrack(interaction, myPos)
-            if not interaction or not interaction.Parent then return end
-            if AutoCollect.Pending[interaction] then return end
-            if AutoCollect.Done[interaction] then return end
-
-            local pos = getInteractionPosition(interaction)
-            if myPos and pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
-                AutoCollect.Tracked[interaction] = nil
-                processAutoCollect("talkToMission", interaction)
-            else
-                AutoCollect.Tracked[interaction] = true
+        local function tryCollectInteraction(interaction)
+            if not AutoCollect.Enabled then return end
+            if not interaction or not interaction.Parent then
+                AutoCollect.Cache[interaction] = nil
+                return
             end
+            if not matchAutoCollectTarget(interaction) then return end
+
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local targetPos = getTargetPosition(interaction)
+            if not targetPos then return end
+            if (targetPos - hrp.Position).Magnitude > AUTO_COLLECT_RANGE then return end
+
+            processAutoCollect("talkToMission", interaction)
         end
 
         local function onAutoCollectDescendantAdded(desc)
-            if not AutoCollect.Enabled then return end
             if desc.Name ~= "_Interaction" then return end
-            if not matchAutoCollectTarget(desc) then return end
-            tryTriggerOrTrack(desc, getPlayerPosition())
+            AutoCollect.Cache[desc] = true
+            if AutoCollect.Enabled then
+                tryCollectInteraction(desc)
+            end
         end
 
-        local function scanGameplay()
+        local function onAutoCollectDescendantRemoved(desc)
+            if desc.Name == "_Interaction" then
+                AutoCollect.Cache[desc] = nil
+            end
+        end
+
+        local function rebuildCache()
+            AutoCollect.Cache = {}
             local gameplay = workspace:FindFirstChild("Gameplay")
             if not gameplay then return end
-            local myPos = getPlayerPosition()
             for _, obj in ipairs(gameplay:GetDescendants()) do
-                if AutoCollect.Enabled then
-                    if obj.Name == "_Interaction"
-                        and matchAutoCollectTarget(obj)
-                        and not AutoCollect.Pending[obj]
-                        and not AutoCollect.Done[obj] then
-                        local pos = getInteractionPosition(obj)
-                        if myPos and pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
-                            processAutoCollect("talkToMission", obj)
-                        else
-                            AutoCollect.Tracked[obj] = true
-                        end
-                    end
-                else
-                    break
+                if obj.Name == "_Interaction" then
+                    AutoCollect.Cache[obj] = true
                 end
             end
         end
@@ -2452,69 +2450,53 @@ function createUI()
                 AutoCollect.Enabled = value
                 if value then
                     if AutoCollect.HeartbeatConn then AutoCollect.HeartbeatConn:Disconnect() end
-                    if AutoCollect.DescConn then AutoCollect.DescConn:Disconnect() end
-                    if AutoCollect.RescanThread then
-                        pcall(function() task.cancel(AutoCollect.RescanThread) end)
-                        AutoCollect.RescanThread = nil
-                    end
+                    if AutoCollect.DescAddedConn then AutoCollect.DescAddedConn:Disconnect() end
+                    if AutoCollect.DescRemovedConn then AutoCollect.DescRemovedConn:Disconnect() end
 
-                    AutoCollect.Tracked = setmetatable({}, {__mode = "k"})
-                    AutoCollect.Pending = setmetatable({}, {__mode = "k"})
-                    AutoCollect.Done = setmetatable({}, {__mode = "k"})
+                    rebuildCache()
 
-                    AutoCollect.DescConn = workspace.DescendantAdded:Connect(onAutoCollectDescendantAdded)
-
-                    -- 开启时一次性扫描已有目标
-                    task.spawn(scanGameplay)
-
-                    -- 低频兜底扫描：漏掉的目标不用重新开关也能补上
-                    AutoCollect.RescanThread = task.spawn(function()
-                        while AutoCollect.Enabled do
-                            task.wait(3)
-                            if not AutoCollect.Enabled then break end
-                            pcall(scanGameplay)
-                        end
-                    end)
+                    AutoCollect.DescAddedConn = workspace.DescendantAdded:Connect(onAutoCollectDescendantAdded)
+                    AutoCollect.DescRemovedConn = workspace.DescendantRemoving:Connect(onAutoCollectDescendantRemoved)
 
                     AutoCollect.HeartbeatConn = RunService.Heartbeat:Connect(function()
                         if not AutoCollect.Enabled then return end
-                        local myPos = getPlayerPosition()
-                        if not myPos then return end
 
-                        -- 地上钱：保持原逻辑，30 米内
+                        local char = player.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        if not hrp then return end
+                        local myPos = hrp.Position
+
+                        -- 30 米内的互动目标秒捡
+                        for interaction in pairs(AutoCollect.Cache) do
+                            if not interaction.Parent then
+                                AutoCollect.Cache[interaction] = nil
+                            else
+                                local targetPos = getTargetPosition(interaction)
+                                if targetPos and (targetPos - myPos).Magnitude <= AUTO_COLLECT_RANGE then
+                                    tryCollectInteraction(interaction)
+                                end
+                            end
+                        end
+
+                        -- 地上钱保持 30 米内秒捡
                         local gameplay = workspace:FindFirstChild("Gameplay")
-                        if gameplay then
-                            local entities = gameplay:FindFirstChild("Entities")
-                            if entities then
-                                for _, entity in ipairs(entities:GetChildren()) do
-                                    if entity.Name == "_Coin" or entity.Name == "_Cash" then
-                                        local cashDrop = entity:FindFirstChild("CashDrop", true)
-                                        if cashDrop then
-                                            local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
-                                            if not part or (part.Position - myPos).Magnitude <= AutoCollect.RANGE then
+                        local entities = gameplay and gameplay:FindFirstChild("Entities")
+                        if entities then
+                            for _, entity in ipairs(entities:GetChildren()) do
+                                if entity.Name == "_Coin" or entity.Name == "_Cash" then
+                                    local cashDrop = entity:FindFirstChild("CashDrop", true)
+                                    if cashDrop then
+                                        local part = entity.PrimaryPart or entity:FindFirstChildWhichIsA("BasePart")
+                                        if part then
+                                            if (part.Position - myPos).Magnitude <= AUTO_COLLECT_RANGE then
                                                 processAutoCollect("cashDrop", cashDrop)
                                             end
+                                        else
+                                            processAutoCollect("cashDrop", cashDrop)
                                         end
                                     end
                                 end
                             end
-                        end
-
-                        -- 安全遍历 Tracked：先收集再删除，避免跳过
-                        local removeList = {}
-                        for target in pairs(AutoCollect.Tracked) do
-                            if not target or not target.Parent then
-                                removeList[#removeList + 1] = target
-                            else
-                                local pos = getInteractionPosition(target)
-                                if pos and (pos - myPos).Magnitude <= AutoCollect.RANGE then
-                                    removeList[#removeList + 1] = target
-                                    processAutoCollect("talkToMission", target)
-                                end
-                            end
-                        end
-                        for _, target in ipairs(removeList) do
-                            AutoCollect.Tracked[target] = nil
                         end
                     end)
                 else
@@ -2522,17 +2504,16 @@ function createUI()
                         AutoCollect.HeartbeatConn:Disconnect()
                         AutoCollect.HeartbeatConn = nil
                     end
-                    if AutoCollect.DescConn then
-                        AutoCollect.DescConn:Disconnect()
-                        AutoCollect.DescConn = nil
+                    if AutoCollect.DescAddedConn then
+                        AutoCollect.DescAddedConn:Disconnect()
+                        AutoCollect.DescAddedConn = nil
                     end
-                    if AutoCollect.RescanThread then
-                        pcall(function() task.cancel(AutoCollect.RescanThread) end)
-                        AutoCollect.RescanThread = nil
+                    if AutoCollect.DescRemovedConn then
+                        AutoCollect.DescRemovedConn:Disconnect()
+                        AutoCollect.DescRemovedConn = nil
                     end
-                    AutoCollect.Tracked = setmetatable({}, {__mode = "k"})
                     AutoCollect.Pending = setmetatable({}, {__mode = "k"})
-                    AutoCollect.Done = setmetatable({}, {__mode = "k"})
+                    AutoCollect.Cache = {}
                 end
             end
         })
