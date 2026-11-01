@@ -1,361 +1,995 @@
--- MonitorGui.lua
--- 环境要求：Roblox 客户端 / Studio，需要能创建 ScreenGui（LocalScript 或执行器环境）
--- 依赖：无。纯 CoreGui 之外自建 ScreenGui，不需要插件权限。
+local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/tfcygvunbind/557/main/😭😭😭😭'))()
+WindUI.TransparencyValue = 0.1
+WindUI:SetTheme("MonokaiPro")
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
+local rainbowBorderAnimation
+local currentBorderColorScheme = "彩虹颜色"
+local currentFontColorScheme = "彩虹颜色"
+local borderInitialized = false
+local animationSpeed = 2
+local borderEnabled = true
+local fontColorEnabled = false
+local uiScale = 1
+local blurEnabled = false
+local soundEnabled = true
 
-local player = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() and Players.LocalPlayer
-
--- ============ 可调参数 ============
-local CONFIG = {
-    MaxCharsPerEntry   = 2_000_000,  -- 单条源码最大字符数，防爆内存
-    MaxEntries         = 200,        -- 最多保留多少条
-    PollInterval       = 0.5,        -- 扫描间隔（秒）
-    FontSize           = 13,
-    Font               = Enum.Font.Code,
-    PanelWidth         = 620,
-    PanelHeight        = 420,
-    HookLoadstring     = true,       -- 是否 hook 本进程 loadstring
-    HookRequire        = true,       -- 是否 hook require 记录模块源码
-}
--- ===================================
-
-------------------------------------------------------------
--- 1. 数据存储
-------------------------------------------------------------
-local store = {
-    entries = {},   -- {name=string, source=string, time=number, kind=string}
-    index   = {},   -- name -> entry（去重）
+local FONT_STYLES = {
+    "SourceSansBold","SourceSansItalic","SourceSansLight","SourceSans",
+    "GothamSSm","GothamSSm-Bold","GothamSSm-Medium","GothamSSm-Light",
+    "GothamSSm-Black","GothamSSm-Book","GothamSSm-XLight","GothamSSm-Thin",
+    "GothamSSm-Ultra","GothamSSm-SemiBold","GothamSSm-ExtraLight","GothamSSm-Heavy",
+    "GothamSSm-ExtraBold","GothamSSm-Regular","Gotham","GothamBold",
+    "GothamMedium","GothamBlack","GothamLight","Arial","ArialBold",
+    "Code","CodeLight","CodeBold","Highway","HighwayBold","HighwayLight",
+    "SciFi","SciFiBold","SciFiItalic","Cartoon","CartoonBold","Handwritten"
 }
 
-local function addEntry(name, source, kind)
-    if type(source) ~= "string" or #source == 0 then return end
-    if #source > CONFIG.MaxCharsPerEntry then
-        source = source:sub(1, CONFIG.MaxCharsPerEntry) .. "\n-- [截断：超出 " .. CONFIG.MaxCharsPerEntry .. " 字符]"
-    end
-    local key = kind .. "|" .. tostring(name) .. "|" .. tostring(#source)
-    if store.index[key] then return end
-    store.index[key] = true
-    table.insert(store.entries, {
-        name = tostring(name),
-        source = source,
-        kind = kind,
-        time = os.time(),
-    })
-    while #store.entries > CONFIG.MaxEntries do
-        table.remove(store.entries, 1)
-    end
-end
+local FONT_DESCRIPTIONS = {
+    ["SourceSansBold"] = "标准粗体",["SourceSansItalic"] = "斜体",["SourceSansLight"] = "细体",
+    ["SourceSans"] = "标准体",["GothamSSm"] = "哥特标准",["GothamSSm-Bold"] = "哥特粗体",
+    ["GothamSSm-Medium"] = "哥特中等",["GothamSSm-Light"] = "哥特细体",["GothamSSm-Black"] = "哥特黑体",
+    ["GothamSSm-Book"] = "哥特书本体",["GothamSSm-XLight"] = "哥特超细体",["GothamSSm-Thin"] = "哥特极细体",
+    ["GothamSSm-Ultra"] = "哥特超黑体",["GothamSSm-SemiBold"] = "哥特半粗体",["GothamSSm-ExtraLight"] = "哥特特细体",
+    ["GothamSSm-Heavy"] = "哥特粗重体",["GothamSSm-ExtraBold"] = "哥特特粗体",["GothamSSm-Regular"] = "哥特常规体",
+    ["Gotham"] = "经典哥特体",["GothamBold"] = "经典哥特粗体",["GothamMedium"] = "经典哥特中等",
+    ["GothamBlack"] = "经典哥特黑体",["GothamLight"] = "经典哥特细体",["Arial"] = "标准Arial体",
+    ["ArialBold"] = "Arial粗体",["Code"] = "代码字体",["CodeLight"] = "代码细体",
+    ["CodeBold"] = "代码粗体",["Highway"] = "高速公路体",["HighwayBold"] = "高速公路粗体",
+    ["HighwayLight"] = "高速公路细体",["SciFi"] = "科幻字体",["SciFiBold"] = "科幻粗体",
+    ["SciFiItalic"] = "科幻斜体",["Cartoon"] = "卡通字体",["CartoonBold"] = "卡通粗体",
+    ["Handwritten"] = "手写体"
+}
 
-------------------------------------------------------------
--- 2. Hook：loadstring / require
-------------------------------------------------------------
-local hooked = { loadstring = false, require = false }
+local currentFontStyle = "SourceSansBold"
 
-if CONFIG.HookLoadstring then
-    local ok, realLoadstring = pcall(function() return loadstring end)
-    if ok and type(realLoadstring) == "function" then
-        local wrapper
-        wrapper = function(src, chunkname)
-            if type(src) == "string" then
-                addEntry(chunkname or "loadstring", src, "loadstring")
-            end
-            return realLoadstring(src, chunkname)
+local COLOR_SCHEMES = {
+    ["彩虹颜色"] = {ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromHex("FF0000")),ColorSequenceKeypoint.new(0.16, Color3.fromHex("FFA500")),ColorSequenceKeypoint.new(0.33, Color3.fromHex("FFFF00")),ColorSequenceKeypoint.new(0.5, Color3.fromHex("00FF00")),ColorSequenceKeypoint.new(0.66, Color3.fromHex("0000FF")),ColorSequenceKeypoint.new(0.83, Color3.fromHex("4B0082")),ColorSequenceKeypoint.new(1, Color3.fromHex("EE82EE"))}),"palette"},
+}
+
+local fontColorAnimations = {}
+
+local function applyFontColorGradient(textElement, colorScheme)
+    if not textElement or not textElement:IsA("TextLabel") and not textElement:IsA("TextButton") and not textElement:IsA("TextBox") then
+        return
+    end
+    
+    local existingGradient = textElement:FindFirstChild("FontColorGradient")
+    if existingGradient then
+        existingGradient:Destroy()
+    end
+    
+    if fontColorAnimations[textElement] then
+        fontColorAnimations[textElement]:Disconnect()
+        fontColorAnimations[textElement] = nil
+    end
+    
+    if not fontColorEnabled then
+        textElement.TextColor3 = Color3.new(1, 1, 1)
+        return
+    end
+    
+    local schemeData = COLOR_SCHEMES[colorScheme or currentFontColorScheme]
+    if not schemeData then return end
+    
+    local fontGradient = Instance.new("UIGradient")
+    fontGradient.Name = "FontColorGradient"
+    fontGradient.Color = schemeData[1]
+    fontGradient.Rotation = 0
+    fontGradient.Parent = textElement
+    
+    textElement.TextColor3 = Color3.new(1, 1, 1)
+    
+    local animation
+    animation = game:GetService("RunService").Heartbeat:Connect(function()
+        if not textElement or textElement.Parent == nil then
+            animation:Disconnect()
+            fontColorAnimations[textElement] = nil
+            return
         end
-        pcall(function() loadstring = wrapper end)
-        hooked.loadstring = true
+        
+        if not fontGradient or fontGradient.Parent == nil then
+            animation:Disconnect()
+            fontColorAnimations[textElement] = nil
+            return
+        end
+        
+        local time = tick()
+        fontGradient.Rotation = (time * animationSpeed * 30) % 360
+    end)
+    
+    fontColorAnimations[textElement] = animation
+end
+
+local function applyFontStyleToWindow(fontStyle)
+    if not Window or not Window.UIElements then 
+        wait(0.5)
+        if not Window or not Window.UIElements then
+            return false
+        end
+    end
+    
+    local successCount = 0
+    local totalCount = 0
+    
+    local function processElement(element)
+        for _, child in ipairs(element:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                totalCount = totalCount + 1
+                pcall(function()
+                    child.Font = Enum.Font[fontStyle]
+                    successCount = successCount + 1
+                end)
+            end
+        end
+    end
+    
+    processElement(Window.UIElements.Main)
+    
+    return successCount, totalCount
+end
+
+local function applyFontColorsToWindow(colorScheme)
+    if not Window or not Window.UIElements then return end
+    
+    local function processElement(element)
+        for _, child in ipairs(element:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                applyFontColorGradient(child, colorScheme)
+            end
+        end
+    end
+    
+    processElement(Window.UIElements.Main)
+end
+
+local function createRainbowBorder(window, colorScheme, speed)
+    if not window or not window.UIElements then
+        wait(1)
+        if not window or not window.UIElements then
+            return nil, nil
+        end
+    end
+    
+    local mainFrame = window.UIElements.Main
+    if not mainFrame then
+        return nil, nil
+    end
+    
+    local existingStroke = mainFrame:FindFirstChild("RainbowStroke")
+    if existingStroke then
+        local glowEffect = existingStroke:FindFirstChild("GlowEffect")
+        if glowEffect then
+            local schemeData = COLOR_SCHEMES[colorScheme or currentBorderColorScheme]
+            if schemeData then
+                glowEffect.Color = schemeData[1]
+            end
+        end
+        return existingStroke, rainbowBorderAnimation
+    end
+    
+    if not mainFrame:FindFirstChildOfClass("UICorner") then
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 16)
+        corner.Parent = mainFrame
+    end
+    
+    local rainbowStroke = Instance.new("UIStroke")
+    rainbowStroke.Name = "RainbowStroke"
+    rainbowStroke.Thickness = 1.5
+    rainbowStroke.Color = Color3.new(1, 1, 1)
+    rainbowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    rainbowStroke.LineJoinMode = Enum.LineJoinMode.Round
+    rainbowStroke.Enabled = borderEnabled
+    rainbowStroke.Parent = mainFrame
+    
+    local glowEffect = Instance.new("UIGradient")
+    glowEffect.Name = "GlowEffect"
+    
+    local schemeData = COLOR_SCHEMES[colorScheme or currentBorderColorScheme]
+    if schemeData then
+        glowEffect.Color = schemeData[1]
+    else
+        glowEffect.Color = COLOR_SCHEMES["彩虹颜色"][1]
+    end
+    
+    glowEffect.Rotation = 0
+    glowEffect.Parent = rainbowStroke
+    
+    return rainbowStroke, nil
+end
+
+local function startBorderAnimation(window, speed)
+    if not window or not window.UIElements then
+        return nil
+    end
+    
+    local mainFrame = window.UIElements.Main
+    if not mainFrame then
+        return nil
+    end
+    
+    local rainbowStroke = mainFrame:FindFirstChild("RainbowStroke")
+    if not rainbowStroke or not rainbowStroke.Enabled then
+        return nil
+    end
+    
+    local glowEffect = rainbowStroke:FindFirstChild("GlowEffect")
+    if not glowEffect then
+        return nil
+    end
+    
+    if rainbowBorderAnimation then
+        rainbowBorderAnimation:Disconnect()
+        rainbowBorderAnimation = nil
+    end
+    
+    local animation
+    animation = game:GetService("RunService").Heartbeat:Connect(function()
+        if not rainbowStroke or rainbowStroke.Parent == nil or not rainbowStroke.Enabled then
+            animation:Disconnect()
+            return
+        end
+        
+        local time = tick()
+        glowEffect.Rotation = (time * speed * 60) % 360
+    end)
+    
+    rainbowBorderAnimation = animation
+    return animation
+end
+
+local function initializeRainbowBorder(scheme, speed)
+    speed = speed or animationSpeed
+    
+    local rainbowStroke, _ = createRainbowBorder(Window, scheme, speed)
+    if rainbowStroke then
+        if borderEnabled then
+            startBorderAnimation(Window, speed)
+        end
+        borderInitialized = true
+        return true
+    end
+    return false
+end
+
+local function gradient(text, startColor, endColor)
+    local result = ""
+    for i = 1, #text do
+        local t = (i - 1) / (#text - 1)
+        local r = math.floor((startColor.R + (endColor.R - startColor.R) * t) * 255)
+        local g = math.floor((startColor.G + (endColor.G - startColor.G) * t) * 255)
+        local b = math.floor((startColor.B + (endColor.B - startColor.B) * t) * 255)
+        result = result .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', r, g, b, text:sub(i, i))
+    end
+    return result
+end
+
+local function playSound()
+    if soundEnabled then
+        pcall(function()
+            local sound = Instance.new("Sound")
+            sound.SoundId = "rbxassetid://9047002353"
+            sound.Volume = 0.3
+            sound.Parent = game:GetService("SoundService")
+            sound:Play()
+            game:GetService("Debris"):AddItem(sound, 2)
+        end)
     end
 end
 
-if CONFIG.HookRequire then
-    local ok, realRequire = pcall(function() return require end)
-    if ok and type(realRequire) == "function" then
-        local wrapper
-        wrapper = function(target)
-            pcall(function()
-                if typeof(target) == "Instance" and target:IsA("ModuleScript") then
-                    local ok2, src = pcall(function() return target.Source end)
-                    if ok2 and type(src) == "string" then
-                        addEntry(target:GetFullName(), src, "ModuleScript")
+local function applyBlurEffect(enabled)
+    if enabled then
+        pcall(function()
+            local blur = Instance.new("BlurEffect")
+            blur.Size = 8
+            blur.Name = "UISX HUBBlur"
+            blur.Parent = game:GetService("Lighting")
+        end)
+    else
+        pcall(function()
+            local existingBlur = game:GetService("Lighting"):FindFirstChild("UISX HUBBlur")
+            if existingBlur then
+                existingBlur:Destroy()
+            end
+        end)
+    end
+end
+
+local function applyUIScale(scale)
+    if Window and Window.UIElements and Window.UIElements.Main then
+        local mainFrame = Window.UIElements.Main
+        mainFrame.Size = UDim2.new(0, 600 * scale, 0, 400 * scale)
+    end
+end
+
+local Confirmed = false
+local gradientColors = {
+    "#4169E1", 
+    "#6A5ACD",  
+    "#9370DB",  
+    "#8A2BE2", 
+    "#4B0082"   
+}
+local goldColor = "#FFD700"
+local username = game:GetService("Players").LocalPlayer.Name
+local coloredUsername = ""
+
+for i = 1, #username do
+    local char = username:sub(i, i)
+    
+    if char:match("[A-Za-z0-9]") then
+        local colorIndex = (i - 1) % #gradientColors + 1
+        coloredUsername = coloredUsername .. '<font color="' .. gradientColors[colorIndex] .. '">' .. char .. '</font>'
+    else
+        coloredUsername = coloredUsername .. '<font color="' .. goldColor .. '">' .. char .. '</font>'
+    end
+end
+
+WindUI:Popup({
+    Title = '黑白脚本种植花园',
+    IconThemed = true,
+    Icon = "crown",
+    Content = "欢迎尊重的用户 " .. coloredUsername .. " 你的支持是我们更新的动力",
+    Buttons = {
+        {
+            Title = "取消",
+            Callback = function() end,
+            Variant = "Secondary",
+        },
+        {
+            Title = "执行",
+            Icon = "arrow-right",
+            Callback = function() 
+                Confirmed = true
+                createUI()
+            end,
+            Variant = "Primary",
+        }
+    }
+})
+
+function createUI()
+Window = WindUI:CreateWindow({
+    Title = "<font color='#00FF00'>黑白脚本种植花园</font>",
+    Icon = "crown",
+    IconThemed = true,
+    Author = "作者：未必量黑白",
+    Folder = "CloudHub",
+    Size = UDim2.fromOffset(300, 200),
+    Transparent = true,
+    Theme = "MonokaiPro",
+    HideSearchBar = false,
+    ScrollBarEnabled = true,
+    Resizable = true,
+    Background = "rbxassetid://98188886183397",
+    BackgroundImageTransparency = 0.5,
+
+    User = {
+        Enabled = true,
+        Callback = function()
+            WindUI:Notify({
+                Title = "点击了自己",
+                Content = "没什么",
+                Duration = 1,
+                Icon = "4483362748"
+            })
+        end,
+        Anonymous = false
+    },
+
+    SideBarWidth = 250
+})
+
+    Window:EditOpenButton({
+        Title = "打开黑白脚本种植花园",
+        Icon = "monitor",
+        CornerRadius = UDim.new(0,16),
+        StrokeThickness = 2,
+        Transparency = 0,
+        Color = ColorSequence.new(
+            Color3.fromHex("FFFFFF"),
+            Color3.fromHex("333333")
+        ),
+        Draggable = true,
+        StrokeColor = Color3.fromHex("FFFFFF"),
+        GlowColor = Color3.fromHex("FFFFFF"),
+        GlowSize = 3,
+        GlowTransparency = 0.4,
+        Size = UDim2.new(0, 180, 0, 50)
+    })
+
+    Window:CreateTopbarButton("theme-switcher", "moon", function()
+        WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "GoldenTheme" or "MonokaiPro")
+        WindUI:Notify({
+            Title = "主题已更改",
+            Content = "当前主题: "..WindUI:GetCurrentTheme(),
+            Duration = 2
+        })
+    end, 990)
+    
+    Window:Tag({
+        Title = "诞生于2025年暑假",
+        Icon = "calendar",
+        Color = Color3.fromHex("#4169E1")
+    })
+
+    local TimeTag = Window:Tag({
+        Title = "--:--",
+        Icon = "clock", 
+        Radius = 999,
+        Color = Color3.fromRGB("#4169E1"),
+    })
+
+    task.spawn(function()
+        while true do
+            local now = os.date("*t")
+            local hours = string.format("%02d", now.hour)
+            local minutes = string.format("%02d", now.min)
+            
+            TimeTag:SetTitle(hours .. ":" .. minutes)
+            task.wait(0.06)
+        end
+    end)
+
+    spawn(function()
+        while true do
+            for hue = 0, 1, 0.01 do  
+                local color = Color3.fromHSV(hue, 0.8, 1)  
+                Window:EditOpenButton({
+                    Color = ColorSequence.new(color)
+                })
+                wait(0.04)  
+            end
+        end
+    end)
+    
+    if not borderInitialized then
+        spawn(function()
+            wait(0.5)
+            initializeRainbowBorder("彩虹颜色", animationSpeed)
+            wait(1)
+            applyFontStyleToWindow(currentFontStyle)
+        end)
+    end
+
+    local windowOpen = true
+
+    Window:OnClose(function()
+        windowOpen = false
+        if rainbowBorderAnimation then
+            rainbowBorderAnimation:Disconnect()
+            rainbowBorderAnimation = nil
+        end
+    end)
+
+    local originalOpenFunction = Window.Open
+    Window.Open = function(...)
+        windowOpen = true
+        local result = originalOpenFunction(...)
+        
+        if borderInitialized and borderEnabled and not rainbowBorderAnimation then
+            wait(0.1)
+            startBorderAnimation(Window, animationSpeed)
+        end
+        
+        return result
+    end
+
+    local Tabs = {
+        Settings = Window:Section({ Title = "界面", Opened = false }),
+    }
+
+    local TabHandles = {
+        Appearance = Tabs.Settings:Tab({ Title = "颜色", Icon = "brush" }),
+    }
+
+    TabHandles.Appearance:Paragraph({
+        Title = "自定义界面",
+        Desc = "个性化您的体验",
+        Image = "palette",
+        ImageSize = 20,
+        Color = "White"
+    })
+
+    local themes = {}
+    for themeName, _ in pairs(WindUI:GetThemes()) do
+        table.insert(themes, themeName)
+    end
+    table.sort(themes)
+
+    local themeDropdown = TabHandles.Appearance:Dropdown({
+        Title = "颜色",
+        Values = themes,
+        Value = "MonokaiPro",
+        Callback = function(theme)
+            WindUI:SetTheme(theme)
+            WindUI:Notify({
+                Title = "主题已应用",
+                Content = theme,
+                Icon = "crown",
+                Duration = 2
+            })
+        end
+    })
+
+    local transparencySlider = TabHandles.Appearance:Slider({
+        Title = "透明度",
+        Value = { 
+            Min = 0,
+            Max = 1,
+            Default = 0.2,
+        },
+        Step = 0.1,
+        Callback = function(value)
+            Window:ToggleTransparency(tonumber(value) > 0)
+            WindUI.TransparencyValue = tonumber(value)
+        end
+    })
+
+    TabHandles.Appearance:Toggle({
+        Title = "启用深色模式",
+        Desc = "使用深色配色方案",
+        Value = true,
+        Callback = function(state)
+            WindUI:SetTheme(state and "GoldenTheme" or "Light")
+            themeDropdown:Select(state and "GoldenTheme" or "Light")
+        end
+    })
+
+    local Tab0 = Window:Tab({Title = "简介", Icon = "info"})
+task.wait(0.1)    
+    if Tab0 and Tab0.Select then
+        Tab0:Select()
+    end
+
+    Tab0:Paragraph({
+        Title = "欢迎尊贵的用户",
+        Desc = "此脚本会一直更新感谢你对我们的支持",
+        Image = "info",
+        ImageSize = 15
+    })
+
+    Tab0:Paragraph({
+        Title = "作者名单",
+        Desc = "未必量黑白",
+        Image = "user",
+        ImageSize = 12
+    })
+
+    Tab0:Divider()
+
+Tab0:Paragraph({
+    Title = "黑白脚本群",
+    Desc = "点击按钮获取黑白脚本群QQ号",
+    Image = "rbxassetid://98188886183397",
+    ImageSize = 42,
+    Thumbnail = "rbxassetid://90132615229704",
+    ThumbnailSize = 120,
+    Buttons = {
+        {
+            Title = "复制QQ群号",
+            Variant = "Primary",
+            Icon = "crown",
+            Callback = function()
+                local cardKey = "1062578052"
+                
+                local success, errorMsg = pcall(function()
+                    if not setclipboard then
+                        error("剪贴板功能不可用")
+                    end
+                    
+                    setclipboard(cardKey)
+                    
+                    game:GetService("StarterGui"):SetCore("SendNotification", {
+                        Title = "✅ 复制成功",
+                        Text = "QQ群号已复制到剪贴板: " .. cardKey,
+                        Icon = "rbxassetid://7040347038",
+                        Duration = 5,
+                        Button1 = "确定"
+                    })
+                    
+                    print("[系统] 已复制QQ号: " .. cardKey)
+                end)
+                
+                if not success then
+                    game:GetService("StarterGui"):SetCore("SendNotification", {
+                        Title = "❌ 复制失败",
+                        Text = "请手动复制QQ号: " .. cardKey,
+                        Icon = "rbxassetid://7040347038",
+                        Duration = 8,
+                        Button1 = "我知道了"
+                    })
+                    
+                    warn("复制失败:", errorMsg)
+                    print("请手动复制QQ号: " .. cardKey)
+                end
+            end
+        }
+    }
+})
+
+-- ================= 基础变量与远程事件 =================
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local replicatedStorage = ReplicatedStorage
+
+-- ================= 状态变量 =================
+local sbns = { c = false, s = false, p = false }
+local buySeed = false
+local buyGear = false
+local selectseed = ""
+local selectgear = ""
+
+-- ================= 种子/工具列表获取 =================
+local seeds = {}
+local gear = {}
+
+pcall(function()
+    local seedShop = player.PlayerGui:FindFirstChild("Seed_Shop")
+    if seedShop then
+        local frame = seedShop:FindFirstChild("Frame")
+        if frame then
+            local scroll = frame:FindFirstChild("ScrollingFrame")
+            if scroll then
+                for _, v in next, scroll:GetChildren() do
+                    if v.ClassName == "Frame" and not v.Name:find("Padding") then
+                        table.insert(seeds, v.Name)
                     end
                 end
-            end)
-            return realRequire(target)
+            end
         end
-        pcall(function() require = wrapper end)
-        hooked.require = true
+    end
+end)
+
+pcall(function()
+    local gearShop = player.PlayerGui:FindFirstChild("Gear_Shop")
+    if gearShop then
+        local frame = gearShop:FindFirstChild("Frame")
+        if frame then
+            local scroll = frame:FindFirstChild("ScrollingFrame")
+            if scroll then
+                for _, v in next, scroll:GetChildren() do
+                    if v.ClassName == "Frame" and not v.Name:find("_") then
+                        table.insert(gear, v.Name)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ================= 翻译功能 =================
+local translatedTexts = {}
+local function translate(name)
+    if translatedTexts[name] then return translatedTexts[name] end
+    local ok, result = pcall(function()
+        local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=" .. HttpService:UrlEncode(name)
+        local response = game:HttpGet(url)
+        local decoded = HttpService:JSONDecode(response)
+        if decoded and decoded[1] and decoded[1][1] and decoded[1][1][1] then
+            return decoded[1][1][1]
+        end
+        return nil
+    end)
+    if ok and result and result ~= name then
+        translatedTexts[name] = result
+        return result
+    end
+    translatedTexts[name] = name
+    return name
+end
+
+-- ================= 构建显示列表 =================
+local seedReverse = {}
+local gearReverse = {}
+for _, name in ipairs(seeds) do seedReverse[name] = name end
+for _, name in ipairs(gear) do gearReverse[name] = name end
+
+if #seeds == 0 then table.insert(seeds, "暂无种子") end
+if #gear == 0 then table.insert(gear, "暂无工具") end
+
+local seedDisp = {}
+for _, name in ipairs(seeds) do
+    if name == "暂无种子" then
+        table.insert(seedDisp, name)
+    else
+        local t = translate(name)
+        if t ~= name then seedReverse[t] = name end
+        table.insert(seedDisp, t)
     end
 end
 
-------------------------------------------------------------
--- 3. 扫描器：遍历游戏内所有 Script / LocalScript / ModuleScript
-------------------------------------------------------------
-local function scanScripts()
-    local roots = { game }
-    for _, svc in ipairs(game:GetChildren()) do
-        table.insert(roots, svc)
+local gearDisp = {}
+for _, name in ipairs(gear) do
+    if name == "暂无工具" then
+        table.insert(gearDisp, name)
+    else
+        local t = translate(name)
+        if t ~= name then gearReverse[t] = name end
+        table.insert(gearDisp, t)
     end
-    local seen = {}
-    for _, root in ipairs(roots) do
+end
+
+-- ================= 创建标签页 =================
+local Tabs = {
+    Main = Window:Tab({ Title = "主要", Icon = "sprout" }),
+    Teleport = Window:Tab({ Title = "传送", Icon = "map-pin" }),
+    Settings = Window:Tab({ Title = "设置", Icon = "settings" }),
+}
+
+local MainLeft = Tabs.Main:Section({ Title = "主要功能", Side = "Left" })
+
+-- 自动收集
+MainLeft:Toggle({
+    Title = "自动收集",
+    Desc = "自动收集已成熟的作物",
+    Default = false,
+    Callback = function(state)
+        sbns.c = state
+        task.spawn(function()
+            while sbns.c do
+                pcall(function()
+                    for _, farm in pairs(workspace.Farm:GetChildren()) do
+                        local important = farm:FindFirstChild("Important")
+                        if important then
+                            local data = important:FindFirstChild("Data")
+                            if data and data:FindFirstChild("Owner") and data.Owner.Value == player.Name then
+                                local plants = important:FindFirstChild("Plants_Physical")
+                                if plants then
+                                    for _, g in ipairs(plants:GetDescendants()) do
+                                        if g:IsA("ProximityPrompt") then
+                                            local parent = g.Parent
+                                            if parent then
+                                                character.Humanoid:MoveTo(parent.Position)
+                                                fireproximityprompt(g)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait()
+            end
+        end)
+    end
+})
+
+-- 自动售卖
+MainLeft:Toggle({
+    Title = "自动售卖",
+    Desc = "背包满时自动去商店售卖",
+    Default = false,
+    Callback = function(state)
+        sbns.s = state
+        task.spawn(function()
+            while sbns.s do
+                if #player.Backpack:GetChildren() > 20 then
+                    local hrp = character.HumanoidRootPart
+                    local originalCF = hrp.CFrame
+                    hrp.CFrame = workspace.NPCS["Sell Stands"]["Shop Stand"].CFrame * CFrame.new(0, 0, 3)
+                    task.wait(0.5)
+                    replicatedStorage.GameEvents.Sell_Item:FireServer()
+                    replicatedStorage.GameEvents.Sell_Inventory:FireServer()
+                    task.wait(1)
+                    hrp.CFrame = originalCF
+                end
+                task.wait()
+            end
+        end)
+    end
+})
+
+-- 自动种植
+MainLeft:Toggle({
+    Title = "自动种植",
+    Desc = "自动种植背包中的种子",
+    Default = false,
+    Callback = function(state)
+        sbns.p = state
+        task.spawn(function()
+            while sbns.p do
+                pcall(function()
+                    local seedType, tool
+                    local containers = { character, player.Backpack }
+                    for _, cont in ipairs(containers) do
+                        for _, item in ipairs(cont:GetChildren()) do
+                            if item:IsA("Tool") and item.Name:find("Seed") then
+                                seedType = item.Name:match("^(.-) Seed")
+                                tool = item
+                                break
+                            end
+                        end
+                        if tool then break end
+                    end
+                    if tool and seedType then
+                        if tool.Parent == player.Backpack then
+                            character.Humanoid:EquipTool(tool)
+                        end
+                        local pos = character.HumanoidRootPart.Position
+                        replicatedStorage.GameEvents.Plant_RE:FireServer(
+                            Vector3.new(math.floor(pos.X), 0.1, math.floor(pos.Z)),
+                            seedType
+                        )
+                    end
+                end)
+                task.wait()
+            end
+        end)
+    end
+})
+
+-- ================= 购买工具 - 右侧列 =================
+local GearGroup = Tabs.Main:Section({ Title = "购买工具", Side = "Right" })
+
+GearGroup:Toggle({
+    Title = "自动购买工具",
+    Desc = "开启后循环购买选中的工具",
+    Default = false,
+    Callback = function(state)
+        buyGear = state
+        task.spawn(function()
+            while buyGear do
+                if selectgear ~= "" then
+                    replicatedStorage.GameEvents.BuyGearStock:FireServer(selectgear)
+                end
+                task.wait()
+            end
+        end)
+    end
+})
+
+GearGroup:Dropdown({
+    Title = "选择工具",
+    Values = gearDisp,
+    Value = gearDisp[1] or "暂无工具",
+    Callback = function(value)
+        selectgear = gearReverse[value] or value
+    end
+})
+
+local GearInfoLabel = GearGroup:Paragraph({
+    Title = "工具信息",
+    Desc = "等待选择..."
+})
+
+-- ================= 购买种子 - 右侧列 =================
+local SeedGroup = Tabs.Main:Section({ Title = "购买种子", Side = "Right" })
+
+SeedGroup:Toggle({
+    Title = "自动购买种子",
+    Desc = "开启后循环购买选中的种子",
+    Default = false,
+    Callback = function(state)
+        buySeed = state
+        task.spawn(function()
+            while buySeed do
+                if selectseed ~= "" then
+                    replicatedStorage.GameEvents.BuySeedStock:FireServer("Tier 1", selectseed)
+                end
+                task.wait()
+            end
+        end)
+    end
+})
+
+SeedGroup:Dropdown({
+    Title = "选择种子",
+    Values = seedDisp,
+    Value = seedDisp[1] or "暂无种子",
+    Callback = function(value)
+        selectseed = seedReverse[value] or value
+    end
+})
+
+local SeedInfoLabel = SeedGroup:Paragraph({
+    Title = "种子信息",
+    Desc = "等待选择..."
+})
+
+-- ================= 信息更新循环 =================
+task.spawn(function()
+    while true do
+        task.wait(1)
         pcall(function()
-            for _, obj in ipairs(root:GetDescendants()) do
-                if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
-                    if not seen[obj] then
-                        seen[obj] = true
-                        local ok, src = pcall(function() return obj.Source end)
-                        if ok and type(src) == "string" and #src > 0 then
-                            addEntry(obj:GetFullName(), src, obj.ClassName)
+            -- 更新种子信息
+            if selectseed ~= "" and selectseed ~= "暂无种子" then
+                local seedShop = player.PlayerGui:FindFirstChild("Seed_Shop")
+                if seedShop then
+                    local frame = seedShop:FindFirstChild("Frame")
+                    if frame then
+                        local scroll = frame:FindFirstChild("ScrollingFrame")
+                        if scroll then
+                            local f = scroll:FindFirstChild(selectseed)
+                            if f then
+                                local main = f:FindFirstChild("Main_Frame")
+                                if main then
+                                    local cost = main:FindFirstChild("Cost_Text")
+                                    local stock = main:FindFirstChild("Stock_Text")
+                                    SeedInfoLabel:SetDesc("价格: " .. (cost and cost.Text or "?") .. " | 数量: " .. (stock and stock.Text or "?"))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            -- 更新工具信息
+            if selectgear ~= "" and selectgear ~= "暂无工具" then
+                local gearShop = player.PlayerGui:FindFirstChild("Gear_Shop")
+                if gearShop then
+                    local frame = gearShop:FindFirstChild("Frame")
+                    if frame then
+                        local scroll = frame:FindFirstChild("ScrollingFrame")
+                        if scroll then
+                            local f = scroll:FindFirstChild(selectgear)
+                            if f then
+                                local main = f:FindFirstChild("Main_Frame")
+                                if main then
+                                    local cost = main:FindFirstChild("Cost_Text")
+                                    local stock = main:FindFirstChild("Stock_Text")
+                                    GearInfoLabel:SetDesc("价格: " .. (cost and cost.Text or "?") .. " | 数量: " .. (stock and stock.Text or "?"))
+                                end
+                            end
                         end
                     end
                 end
             end
         end)
     end
-end
+end)
 
-------------------------------------------------------------
--- 4. UI 构建
-------------------------------------------------------------
-local existing = CoreGui:FindFirstChild("LielMonitorGui")
-if existing then existing:Destroy() end
+-- ================= 传送标签页 =================
+local TeleportGroup = Tabs.Teleport:Section({ Title = "传送地点", Side = "Left" })
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "LielMonitorGui"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.DisplayOrder = 999
-gui.Parent = (RunService:IsStudio() and player:WaitForChild("PlayerGui")) or CoreGui
+TeleportGroup:Button({
+    Title = "传送到出售店",
+    Variant = "Primary",
+    Callback = function()
+        character.HumanoidRootPart.CFrame = CFrame.new(36.6, 3.0, 0.4)
+    end
+})
 
--- 主悬浮窗
-local frame = Instance.new("Frame")
-frame.Name = "Panel"
-frame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
-frame.Position = UDim2.new(0, 40, 0, 40)
-frame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Draggable = true
-frame.Parent = gui
+TeleportGroup:Button({
+    Title = "传送到购买店",
+    Variant = "Primary",
+    Callback = function()
+        character.HumanoidRootPart.CFrame = CFrame.new(38.0, 3.0, -26.7)
+    end
+})
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = frame
+TeleportGroup:Button({
+    Title = "传送到装备店",
+    Variant = "Primary",
+    Callback = function()
+        character.HumanoidRootPart.CFrame = CFrame.new(-237.5, 3.0, -5.0)
+    end
+})
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(70, 70, 80)
-stroke.Thickness = 1
-stroke.Parent = frame
-
--- 标题栏
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -100, 0, 32)
-title.Position = UDim2.new(0, 12, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "Liel Monitor  ·  脚本监控"
-title.TextColor3 = Color3.fromRGB(235, 235, 240)
-title.TextSize = 14
-title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = frame
-
--- 开始 / 停止 按钮
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "Toggle"
-toggleBtn.Size = UDim2.new(0, 72, 0, 24)
-toggleBtn.Position = UDim2.new(1, -160, 0, 4)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.TextSize = 13
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Text = "开始监控"
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Parent = frame
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 4)
-
--- 全部复制 按钮
-local copyAllBtn = Instance.new("TextButton")
-copyAllBtn.Name = "CopyAll"
-copyAllBtn.Size = UDim2.new(0, 72, 0, 24)
-copyAllBtn.Position = UDim2.new(1, -84, 0, 4)
-copyAllBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 180)
-copyAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-copyAllBtn.TextSize = 13
-copyAllBtn.Font = Enum.Font.GothamBold
-copyAllBtn.Text = "全部复制"
-copyAllBtn.BorderSizePixel = 0
-copyAllBtn.Parent = frame
-Instance.new("UICorner", copyAllBtn).CornerRadius = UDim.new(0, 4)
-
--- 左右两栏：左=条目列表，右=源码查看
-local list = Instance.new("ScrollingFrame")
-list.Name = "List"
-list.Size = UDim2.new(0, 220, 1, -76)
-list.Position = UDim2.new(0, 12, 0, 44)
-list.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-list.BorderSizePixel = 0
-list.ScrollBarThickness = 6
-list.CanvasSize = UDim2.new(0, 0, 0, 0)
-list.Parent = frame
-Instance.new("UICorner", list).CornerRadius = UDim.new(0, 4)
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 2)
-listLayout.Parent = list
-
-local viewer = Instance.new("TextBox")
-viewer.Name = "Viewer"
-viewer.Size = UDim2.new(1, -244, 1, -76)
-viewer.Position = UDim2.new(0, 232, 0, 44)
-viewer.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-viewer.BorderSizePixel = 0
-viewer.TextColor3 = Color3.fromRGB(200, 230, 200)
-viewer.PlaceholderText = "选中左侧条目查看源码"
-viewer.PlaceholderColor3 = Color3.fromRGB(110, 110, 120)
-viewer.Font = CONFIG.Font
-viewer.TextSize = CONFIG.FontSize
-viewer.TextWrapped = false
-viewer.TextXAlignment = Enum.TextXAlignment.Left
-viewer.TextYAlignment = Enum.TextYAlignment.Top
-viewer.ClearTextOnFocus = false
-viewer.MultiLine = true
-viewer.TextEditable = true
-viewer.Text = ""
-viewer.Parent = frame
-Instance.new("UICorner", viewer).CornerRadius = UDim.new(0, 4)
-
--- 状态条
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -24, 0, 20)
-status.Position = UDim2.new(0, 12, 1, -26)
-status.BackgroundTransparency = 1
-status.Text = string.format("就绪 · loadstring hook=%s · require hook=%s",
-    tostring(hooked.loadstring), tostring(hooked.require))
-status.TextColor3 = Color3.fromRGB(160, 160, 170)
-status.TextSize = 12
-status.Font = Enum.Font.Gotham
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = frame
-
-------------------------------------------------------------
--- 5. 列表刷新
-------------------------------------------------------------
-local function refreshList()
-    for _, child in ipairs(list:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
+    Window:OnClose(function()
+        windowOpen = false
+        if rainbowBorderAnimation then
+            rainbowBorderAnimation:Disconnect()
+            rainbowBorderAnimation = nil
         end
-    end
-    local shown = 0
-    for i = #store.entries, 1, -1 do
-        local e = store.entries[i]
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -8, 0, 22)
-        btn.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
-        btn.BorderSizePixel = 0
-        btn.TextColor3 = Color3.fromRGB(220, 220, 230)
-        btn.TextSize = 12
-        btn.Font = Enum.Font.Code
-        btn.TextXAlignment = Enum.TextXAlignment.Left
-        btn.Text = string.format("[%s] %s", e.kind:sub(1, 4), e.name:sub(-60))
-        btn.TextTruncate = Enum.TextTruncate.AtEnd
-        btn.Parent = list
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 3)
-        btn.MouseButton1Click:Connect(function()
-            viewer.Text = string.format("-- %s (%s, %d chars)\n\n%s", e.name, e.kind, #e.source, e.source)
-            status.Text = string.format("已载入：%s（%d 字符）", e.name, #e.source)
-        end)
-        shown = shown + 1
-        if shown >= CONFIG.MaxEntries then break end
-    end
-    list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 4)
-    status.Text = string.format("条目 %d · loadstring=%s · require=%s · 扫描=%.1fs",
-        #store.entries, tostring(hooked.loadstring), tostring(hooked.require), CONFIG.PollInterval)
+        applyBlurEffect(false)
+    end)
+
+    Window:OnDestroy(function()
+        windowOpen = false
+        if rainbowBorderAnimation then
+            rainbowBorderAnimation:Disconnect()
+            rainbowBorderAnimation = nil
+        end
+        for _, animation in pairs(fontColorAnimations) do
+            animation:Disconnect()
+        end
+        fontColorAnimations = {}
+        applyBlurEffect(false)
+    end)
 end
-
-------------------------------------------------------------
--- 6. 全部复制（含右侧当前内容）
-------------------------------------------------------------
-local function buildAllText()
-    local lines = {}
-    table.insert(lines, string.format("-- Liel Monitor 导出\n-- 共 %d 条\n\n", #store.entries))
-    for i = #store.entries, 1, -1 do
-        local e = store.entries[i]
-        table.insert(lines, string.format("-- ===== [%s] %s (%d chars) =====\n%s\n\n",
-            e.kind, e.name, #e.source, e.source))
-    end
-    return table.concat(lines)
-end
-
-local function copyText(text)
-    if not text or #text == 0 then return false end
-    local ok = false
-    -- 优先 setclipboard（执行器环境）
-    local fn = rawget(getfenv(), "setclipboard") or select(2, pcall(function() return setclipboard end))
-    if type(fn) == "function" then
-        local ok2 = pcall(fn, text)
-        if ok2 then ok = true end
-    end
-    -- 退路：TextBox Focus + 系统快捷键
-    if not ok then
-        local tmp = Instance.new("TextBox")
-        tmp.Size = UDim2.new(0, 1, 0, 1)
-        tmp.Text = text
-        tmp.Visible = true
-        tmp.TextEditable = true
-        tmp.Parent = gui
-        tmp:CaptureFocus()
-        tmp.SelectionStart = 0
-        tmp.CursorPosition = #text
-        task.wait(0.05)
-        -- Roblox 客户端无原生剪贴板 API，靠平台快捷键，这里把内容塞给 viewer 兜底
-        viewer.Text = text
-        status.Text = "已载入到右侧，Ctrl+A / Ctrl+C 复制"
-        tmp:Destroy()
-        ok = true
-    end
-    return ok
-end
-
-copyAllBtn.MouseButton1Click:Connect(function()
-    local all = buildAllText()
-    if copyText(all) then
-        status.Text = string.format("已复制 %d 条 · 共 %d 字符", #store.entries, #all)
-    else
-        status.Text = "复制失败：内容已放在右侧文本框"
-    end
-end)
-
-------------------------------------------------------------
--- 7. 监控循环
-------------------------------------------------------------
-local monitoring = false
-local lastScan = 0
-
-toggleBtn.MouseButton1Click:Connect(function()
-    monitoring = not monitoring
-    if monitoring then
-        toggleBtn.Text = "停止监控"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
-        status.Text = "监控中…"
-        lastScan = 0
-    else
-        toggleBtn.Text = "开始监控"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
-        status.Text = "已停止"
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if not monitoring then return end
-    local now = tick()
-    if now - lastScan < CONFIG.PollInterval then return end
-    lastScan = now
-    scanScripts()
-    refreshList()
-end)
-
-refreshList()
-status.Text = string.format("就绪 · loadstring hook=%s · require hook=%s",
-    tostring(hooked.loadstring), tostring(hooked.require))
