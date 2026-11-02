@@ -3215,6 +3215,7 @@ function createUI()
     end
     n10 = 0
     local lastNPCCheckAura = 0
+    local AURA_NPC_RANGE = 30
     RunService.Heartbeat:Connect(function()
         if not tbl11.auraEnabled or not playerEvent then
             currentTarget = nil
@@ -3224,39 +3225,79 @@ function createUI()
         local now = tick()
         local v32, v33, v34 = fn40(player)
         if not v34 then currentTarget = nil; UpdateTargetDisplay(); return end
-        local v35 = nil; local v36 = nil
+        local myPos = v34.Position
+
+        -- 找最近的玩家目标
+        local playerTarget, playerDist = nil, nil
         for _, plr in ipairs(Players:GetPlayers()) do
             if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian) and fn62(plr) and fn85(plr, tbl11.auraCombatCheck) then
                 local char = plr.Character
-                local v39 = char and fn87(char)
-                if v39 then
-                    local magnitude = (v39.Position - v34.Position).Magnitude
-                    if magnitude <= tbl11.auraRange and (not v36 or magnitude < v36) then v35 = plr; v36 = magnitude end
+                local head = char and fn87(char)
+                if head then
+                    local dist = (head.Position - myPos).Magnitude
+                    if dist <= tbl11.auraRange and (not playerDist or dist < playerDist) then
+                        playerTarget, playerDist = plr, dist
+                    end
                 end
             end
         end
-        currentTarget = v35
-        UpdateTargetDisplay()
-        if now - n10 < tbl11.auraInterval then return end
-        if v35 then
-            local targetChar = v35.Character
-            local v39 = targetChar and fn87(targetChar)
-            local position = v34.Position
-            if v39 then
-                pcall(function()
-                    playerEvent:FireServer("damage", {
-                        bodyParts = { { "Head", 1 } },
-                        shotCode = { position, (v39.Position - position).Unit },
-                        pos = v39.Position,
-                        target = v35,
-                        damageFactor = tbl11.auraDamage,
-                        bulletProofTool = false,
-                    })
-                    if tbl11.auraBeam and fn90 then fn90(position, v39.Position) end
-                end)
-                n10 = now
+
+        -- 找最近的 NPC 目标（仅当开启"攻击NPC"）
+        local npcTarget, npcDist, npcHum, npcHead = nil, nil, nil, nil
+        if tbl11.affectNPC then
+            local charactersFolder = workspace:FindFirstChild("Characters")
+            if charactersFolder then
+                for _, model in ipairs(charactersFolder:GetChildren()) do
+                    if model:IsA("Model") and not Players:GetPlayerFromCharacter(model) then
+                        local hum = model:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.Health > 0 then
+                            local head = model:FindFirstChild("Head") or hum.RootPart or model.PrimaryPart
+                            if head then
+                                local dist = (head.Position - myPos).Magnitude
+                                if dist <= AURA_NPC_RANGE and (not npcDist or dist < npcDist) then
+                                    npcTarget, npcDist, npcHum, npcHead = model, dist, hum, head
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end
+
+        -- 玩家和 NPC 中选最近的
+        local finalTarget, finalHead, finalHum
+        if playerTarget and npcTarget then
+            if playerDist <= npcDist then
+                finalTarget, finalHead = playerTarget, playerTarget.Character and fn87(playerTarget.Character)
+            else
+                finalTarget, finalHead, finalHum = npcTarget, npcHead, npcHum
+            end
+        elseif playerTarget then
+            finalTarget, finalHead = playerTarget, playerTarget.Character and fn87(playerTarget.Character)
+        elseif npcTarget then
+            finalTarget, finalHead, finalHum = npcTarget, npcHead, npcHum
+        end
+
+        currentTarget = finalTarget
+        UpdateTargetDisplay()
+
+        if now - n10 < tbl11.auraInterval then return end
+        if not finalTarget or not finalHead then return end
+
+        local position = myPos
+        local damageTarget = finalHum or finalTarget
+        pcall(function()
+            playerEvent:FireServer("damage", {
+                bodyParts = { { "Head", 1 } },
+                shotCode = { position, (finalHead.Position - position).Unit },
+                pos = finalHead.Position,
+                target = damageTarget,
+                damageFactor = tbl11.auraDamage,
+                bulletProofTool = false,
+            })
+            if tbl11.auraBeam and fn90 then fn90(position, finalHead.Position) end
+        end)
+        n10 = now
     end)
     C:Toggle({ Title = "杀戮光环", Default = false, Callback = function(v)
         tbl11.auraEnabled = v
