@@ -3168,8 +3168,14 @@ function createUI()
         if not targetDisplayGui then CreateTargetDisplay() end
         targetDisplayGui.Enabled = true
         if currentTarget then
-            targetDisplayLabel.Text = currentTarget.Name .. "（" .. GetAuraTeamName(currentTarget) .. "）"
-            targetDisplayLabel.TextColor3 = GetAuraTeamColor(currentTarget)
+            local teamName = "NPC"
+            local color = Color3.fromRGB(255, 180, 60)
+            if Players:GetPlayerFromCharacter(currentTarget) then
+                teamName = GetAuraTeamName(currentTarget)
+                color = GetAuraTeamColor(currentTarget)
+            end
+            targetDisplayLabel.Text = currentTarget.Name .. "（" .. teamName .. "）"
+            targetDisplayLabel.TextColor3 = color
         else
             targetDisplayLabel.Text = "未检测到目标"
             targetDisplayLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
@@ -3213,11 +3219,115 @@ function createUI()
         end
         return arg11:FindFirstChild("HumanoidRootPart")
     end
+    fn90 = function(position, position2)
+        local part = Instance.new("Part")
+        local part2 = Instance.new("Part")
+        for _, v32 in ipairs({ part, part2 }) do
+            v32.Anchored = true
+            v32.CanCollide = false
+            v32.Transparency = 1
+            v32.Size = Vector3.new(0.1, 0.1, 0.1)
+            v32.Parent = Workspace
+        end
+        part.Position = position
+        part2.Position = position2
+        local attachment = Instance.new("Attachment", part)
+        local attachment2 = Instance.new("Attachment", part2)
+        local beam = Instance.new("Beam", part)
+        beam.Attachment0 = attachment
+        beam.Attachment1 = attachment2
+        beam.Width0 = 0.15
+        beam.Width1 = 0.15
+        beam.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+            ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 165, 0)),
+            ColorSequenceKeypoint.new(0.34, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 200, 255)),
+            ColorSequenceKeypoint.new(0.84, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(148, 0, 211))
+        })
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://6534948092"
+        sound.Volume = 0.5
+        sound.Parent = part
+        local soundEndedConn
+        soundEndedConn = sound.Ended:Connect(function()
+            if part and part.Parent then sound:Play() end
+        end)
+        sound:Play()
+        task.delay(0.8, function()
+            pcall(function()
+                if soundEndedConn then soundEndedConn:Disconnect() end
+                if sound then sound:Stop() end
+                part:Destroy()
+                part2:Destroy()
+            end)
+        end)
+    end
+
     n10 = 0
-    local lastNPCCheckAura = 0
     local AURA_NPC_RANGE = 30
+
+    -- NPC 攻击辅助：只做扣血，不做弹道显示（弹道显示在主循环统一处理）
+    local function auraAttackNPC(model, hum, myPos)
+        -- 方式1：damage 事件，target 传 Model
+        if playerEvent then
+            pcall(function()
+                local head = model:FindFirstChild("Head") or hum.RootPart or model.PrimaryPart
+                if not head then return end
+                playerEvent:FireServer("damage", {
+                    bodyParts = { { "Head", 1 } },
+                    shotCode = { myPos, (head.Position - myPos).Unit },
+                    pos = head.Position,
+                    target = model,
+                    damageFactor = tbl11.auraDamage,
+                    bulletProofTool = false,
+                })
+            end)
+        end
+        -- 方式2：直接扣血
+        pcall(function()
+            if hum.Health > 0 then
+                hum.Health = math.max(0, hum.Health - tbl11.auraDamage)
+            end
+        end)
+        -- 方式3：物理触碰
+        pcall(function()
+            local char = player.Character
+            if not char then return end
+            local tool = char:FindFirstChildOfClass("Tool")
+            if not tool then
+                local backpack = player:FindFirstChild("Backpack")
+                if backpack then
+                    for _, t in ipairs(backpack:GetChildren()) do
+                        if t:IsA("Tool") then tool = t; break end
+                    end
+                    if tool then pcall(function() tool.Parent = char end) end
+                end
+            end
+            local toucher
+            if tool then toucher = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart") end
+            if not toucher then toucher = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm") end
+            if not toucher then return end
+            local head = model:FindFirstChild("Head") or hum.RootPart
+            if head then
+                firetouchinterest(toucher, head, 0)
+                task.wait()
+                firetouchinterest(toucher, head, 1)
+            end
+            local torso = model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso")
+            if torso then
+                firetouchinterest(toucher, torso, 0)
+                task.wait()
+                firetouchinterest(toucher, torso, 1)
+            end
+            if tool and tool.Activate then pcall(function() tool:Activate() end) end
+        end)
+    end
+
     RunService.Heartbeat:Connect(function()
-        if not tbl11.auraEnabled or not playerEvent then
+        if not tbl11.auraEnabled then
             currentTarget = nil
             UpdateTargetDisplay()
             return
@@ -3227,36 +3337,35 @@ function createUI()
         if not v34 then currentTarget = nil; UpdateTargetDisplay(); return end
         local myPos = v34.Position
 
-        -- 找最近的玩家目标
-        local playerTarget, playerDist = nil, nil
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian) and fn62(plr) and fn85(plr, tbl11.auraCombatCheck) then
-                local char = plr.Character
-                local head = char and fn87(char)
-                if head then
-                    local dist = (head.Position - myPos).Magnitude
-                    if dist <= tbl11.auraRange and (not playerDist or dist < playerDist) then
-                        playerTarget, playerDist = plr, dist
+        -- 找最近玩家（受队伍过滤、战斗检测控制）
+        local playerTarget, playerDist, playerHead = nil, nil, nil
+        if playerEvent then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if fn84(plr, tbl11.auraOnlyPolice, tbl11.auraOnlyCivilian) and fn62(plr) and fn85(plr, tbl11.auraCombatCheck) then
+                    local char = plr.Character
+                    local head = char and fn87(char)
+                    if head then
+                        local dist = (head.Position - myPos).Magnitude
+                        if dist <= tbl11.auraRange and (not playerDist or dist < playerDist) then
+                            playerTarget, playerDist, playerHead = plr, dist, head
+                        end
                     end
                 end
             end
         end
 
-        -- 找最近的 NPC 目标（仅当开启"攻击NPC"）
+        -- 找最近 NPC（不受队伍过滤、战斗检测控制）
         local npcTarget, npcDist, npcHum, npcHead = nil, nil, nil, nil
         if tbl11.affectNPC then
-            local charactersFolder = workspace:FindFirstChild("Characters")
-            if charactersFolder then
-                for _, model in ipairs(charactersFolder:GetChildren()) do
-                    if model:IsA("Model") and not Players:GetPlayerFromCharacter(model) then
-                        local hum = model:FindFirstChildOfClass("Humanoid")
-                        if hum and hum.Health > 0 then
-                            local head = model:FindFirstChild("Head") or hum.RootPart or model.PrimaryPart
-                            if head then
-                                local dist = (head.Position - myPos).Magnitude
-                                if dist <= AURA_NPC_RANGE and (not npcDist or dist < npcDist) then
-                                    npcTarget, npcDist, npcHum, npcHead = model, dist, hum, head
-                                end
+            for _, model in ipairs(Workspace:GetDescendants()) do
+                if model:IsA("Model") and not Players:GetPlayerFromCharacter(model) then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local head = model:FindFirstChild("Head") or hum.RootPart or model.PrimaryPart
+                        if head then
+                            local dist = (head.Position - myPos).Magnitude
+                            if dist <= AURA_NPC_RANGE and (not npcDist or dist < npcDist) then
+                                npcTarget, npcDist, npcHum, npcHead = model, dist, hum, head
                             end
                         end
                     end
@@ -3264,41 +3373,46 @@ function createUI()
             end
         end
 
-        -- 玩家和 NPC 中选最近的
-        local finalTarget, finalHead, finalHum
+        -- 显示目标（取最近的）
         if playerTarget and npcTarget then
-            if playerDist <= npcDist then
-                finalTarget, finalHead = playerTarget, playerTarget.Character and fn87(playerTarget.Character)
-            else
-                finalTarget, finalHead, finalHum = npcTarget, npcHead, npcHum
-            end
+            currentTarget = (playerDist <= npcDist) and playerTarget or npcTarget
         elseif playerTarget then
-            finalTarget, finalHead = playerTarget, playerTarget.Character and fn87(playerTarget.Character)
+            currentTarget = playerTarget
         elseif npcTarget then
-            finalTarget, finalHead, finalHum = npcTarget, npcHead, npcHum
+            currentTarget = npcTarget
+        else
+            currentTarget = nil
         end
-
-        currentTarget = finalTarget
         UpdateTargetDisplay()
 
         if now - n10 < tbl11.auraInterval then return end
-        if not finalTarget or not finalHead then return end
 
-        local position = myPos
-        local damageTarget = finalHum or finalTarget
-        pcall(function()
-            playerEvent:FireServer("damage", {
-                bodyParts = { { "Head", 1 } },
-                shotCode = { position, (finalHead.Position - position).Unit },
-                pos = finalHead.Position,
-                target = damageTarget,
-                damageFactor = tbl11.auraDamage,
-                bulletProofTool = false,
-            })
-            if tbl11.auraBeam and fn90 then fn90(position, finalHead.Position) end
-        end)
+        -- 攻击玩家（不受攻击NPC开关影响）
+        if playerTarget and playerHead and playerEvent then
+            pcall(function()
+                playerEvent:FireServer("damage", {
+                    bodyParts = { { "Head", 1 } },
+                    shotCode = { myPos, (playerHead.Position - myPos).Unit },
+                    pos = playerHead.Position,
+                    target = playerTarget,
+                    damageFactor = tbl11.auraDamage,
+                    bulletProofTool = false,
+                })
+            end)
+            -- 弹道显示：打玩家时统一调 fn90
+            if tbl11.auraBeam and fn90 then pcall(fn90, myPos, playerHead.Position) end
+        end
+
+        -- 攻击 NPC（只在开启"攻击NPC"时生效）
+        if npcTarget and npcHead then
+            auraAttackNPC(npcTarget, npcHum, myPos)
+            -- 弹道显示：打NPC时同样调 fn90（跟打玩家一样的光柱）
+            if tbl11.auraBeam and fn90 then pcall(fn90, myPos, npcHead.Position) end
+        end
+
         n10 = now
     end)
+
     C:Toggle({ Title = "杀戮光环", Default = false, Callback = function(v)
         tbl11.auraEnabled = v
         if not v then currentTarget = nil; if targetDisplayGui then targetDisplayGui.Enabled = false end
