@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Key系统 - 后台管理</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,90 +12,101 @@
                 extend: {
                     colors: {
                         dark: {
-                            bg: '#0a0c10',      // 最底层背景
-                            surface: '#13161c', // 侧边栏/卡片背景
-                            border: '#212631',  // 边框颜色
-                            hover: '#1c212a',   // hover状态
+                            bg: '#0a0c10',
+                            surface: '#13161c',
+                            border: '#212631',
+                            hover: '#1c212a',
                         },
-                        primary: {
-                            500: '#6366f1',     // 主紫
-                            600: '#4f46e5',     // 主紫 hover
-                            900: '#312e81',
-                        },
-                        text: {
-                            main: '#e2e8f0',
-                            muted: '#94a3b8',
-                            disabled: '#475569'
-                        }
+                        primary: { 500: '#6366f1', 600: '#4f46e5' },
+                        text: { main: '#e2e8f0', muted: '#94a3b8', disabled: '#475569' }
                     },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif', 'Microsoft YaHei'],
-                        mono: ['Consolas', 'Monaco', 'Courier New', 'monospace']
-                    }
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif', 'Microsoft YaHei'], mono: ['Consolas', 'Monaco', 'monospace'] }
                 }
             }
         }
     </script>
     <style>
-        /* 自定义滚动条样式 */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #2d3748;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #4a5568;
-        }
-        
-        /* 隐藏元素的过渡 */
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal-overlay { display: none; }
+        .modal-overlay.active { display: flex; }
+        /* 防止长按选中文字 */
+        .no-select { user-select: none; -webkit-user-select: none; }
+        /* 长按动画 */
+        .long-pressing { transform: scale(0.97); opacity: 0.8; transition: all 0.2s; }
     </style>
 </head>
-<body class="bg-dark-bg text-text-main font-sans h-screen w-screen overflow-hidden flex antialiased">
+<body class="bg-dark-bg text-text-main font-sans h-screen w-screen overflow-hidden flex antialiased relative">
+
+    <!-- ==================== 登录遮罩层 ==================== -->
+    <div id="login-overlay" class="fixed inset-0 bg-dark-bg z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-dark-surface border border-dark-border p-8 rounded-2xl w-96 shadow-2xl relative overflow-hidden">
+            <!-- 装饰背景 -->
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-primary-500 rounded-full blur-3xl opacity-20"></div>
+            
+            <div class="text-center mb-8 relative z-10">
+                <div class="w-12 h-12 bg-primary-500 rounded-xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">系统登录</h2>
+                <p class="text-sm text-text-muted">请输入开发者密码或代理账号</p>
+            </div>
+
+            <!-- 开发者登录 -->
+            <div id="admin-login-form" class="space-y-4 relative z-10">
+                <div>
+                    <input type="password" id="admin-password" placeholder="请输入开发者密码" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 transition-colors">
+                </div>
+                <button onclick="handleLogin('admin')" class="w-full bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg text-sm font-medium transition-colors">进入后台</button>
+                <div class="text-center mt-4">
+                    <button onclick="switchLoginMode('agent')" class="text-xs text-text-muted hover:text-white transition-colors underline decoration-dark-border underline-offset-4">我是代理，前往登录</button>
+                </div>
+            </div>
+
+            <!-- 代理登录 -->
+            <div id="agent-login-form" class="space-y-4 relative z-10 hidden">
+                <div>
+                    <input type="text" id="agent-username" placeholder="代理账号" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 transition-colors mb-3">
+                    <input type="password" id="agent-password" placeholder="代理密码" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 transition-colors">
+                </div>
+                <button onclick="handleLogin('agent')" class="w-full bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg text-sm font-medium transition-colors">代理登录</button>
+                <div class="text-center mt-4">
+                    <button onclick="switchLoginMode('admin')" class="text-xs text-text-muted hover:text-white transition-colors underline decoration-dark-border underline-offset-4">返回开发者登录</button>
+                </div>
+            </div>
+            <div id="login-error" class="text-red-400 text-xs text-center mt-3 hidden">密码错误或项目已被删除</div>
+        </div>
+    </div>
 
     <!-- ==================== 左侧侧边栏 ==================== -->
-    <aside class="w-64 bg-dark-surface border-r border-dark-border flex flex-col h-full shrink-0">
-        <!-- 顶部标题与退出 -->
+    <aside class="w-64 bg-dark-surface border-r border-dark-border flex flex-col h-full shrink-0 z-20">
         <div class="p-4 flex items-center justify-between">
             <div class="flex items-center gap-2 font-bold text-lg text-white">
                 <div class="w-3 h-3 bg-primary-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-                Key系统
+                <span id="sidebar-title">Key系统</span>
             </div>
-            <button class="text-xs text-text-muted hover:text-white bg-dark-border hover:bg-dark-hover px-3 py-1.5 rounded transition-colors">
+            <button onclick="handleLogout()" class="text-xs text-text-muted hover:text-white bg-dark-border hover:bg-dark-hover px-3 py-1.5 rounded transition-colors">
                 退出
             </button>
         </div>
 
-        <!-- 新建项目按钮 -->
-        <div class="px-4 pb-4">
-            <button class="w-full bg-primary-500 hover:bg-primary-600 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
+        <!-- 新建项目按钮 (仅开发者可见) -->
+        <div class="px-4 pb-4" id="btn-new-project-container">
+            <button onclick="openModal('new-project')" class="w-full bg-primary-500 hover:bg-primary-600 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1 shadow-lg shadow-primary-500/20">
                 + 新建项目
             </button>
         </div>
 
-        <!-- 项目列表容器 (空占位) -->
-        <div class="flex-1 overflow-y-auto px-2 space-y-1">
-            <!-- 后端动态渲染的项目列表将在这里插入 -->
-            <!-- 无项目提示 -->
-            <div class="flex flex-col items-center justify-center text-text-muted text-sm mt-10">
-                <svg class="w-8 h-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                <span>暂无项目，请点击新建项目</span>
-            </div>
+        <!-- 项目列表 -->
+        <div class="flex-1 overflow-y-auto px-2 space-y-1" id="project-list">
+            <!-- 动态渲染 -->
         </div>
 
-        <!-- 底部提示 -->
-        <div class="p-4 text-xs text-text-disabled">
+        <div class="p-4 text-xs text-text-disabled" id="sidebar-footer">
             仅内网可访问 · 公网 IP 拒绝
         </div>
     </aside>
@@ -104,221 +114,661 @@
     <!-- ==================== 右侧主内容区 ==================== -->
     <main class="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        <!-- 顶部 IP 状态栏 -->
+        <!-- 顶部状态栏 -->
         <div class="absolute top-0 w-full h-12 flex items-center justify-center z-10 pointer-events-none">
             <div class="bg-[#1c212a] text-text-muted text-xs px-4 py-1 rounded-full border border-dark-border">
                 192.168.10.102
             </div>
         </div>
 
-        <!-- 主内容滚动区 -->
         <div class="flex-1 overflow-y-auto pt-12 pb-8 px-8">
             
-            <!-- 项目头部信息 -->
+            <!-- 头部信息 -->
             <div class="flex items-start justify-between mb-8">
                 <div class="flex items-center gap-4">
-                    <!-- 项目图标占位 -->
-                    <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-lg">
-                        <!-- 这里的图标由后端渲染，目前留空或用纯色块 -->
-                    </div>
+                    <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-lg" id="project-icon"></div>
                     <div>
-                        <h1 class="text-2xl font-bold text-white mb-1">wdfec</h1>
-                        <p class="text-sm text-text-muted">项目 ID 318bb196... · HWID 绑定开启 · 默认 30 天</p>
+                        <h1 class="text-2xl font-bold text-white mb-1" id="project-name-header">请选择或新建项目</h1>
+                        <p class="text-sm text-text-muted" id="project-meta-header">项目 ID: - · HWID 绑定开启 · 默认 30 天</p>
                     </div>
                 </div>
-                <button class="bg-dark-surface border border-dark-border hover:bg-dark-hover text-text-main px-4 py-1.5 rounded-lg text-sm transition-colors">
+                <button id="btn-project-settings" class="hidden bg-dark-surface border border-dark-border hover:bg-dark-hover text-text-main px-4 py-1.5 rounded-lg text-sm transition-colors" onclick="alert('项目设置功能暂未开放')">
                     项目设置
                 </button>
             </div>
 
-            <!-- 标签导航栏 -->
+            <!-- 标签导航 -->
             <div class="flex items-center gap-6 border-b border-dark-border mb-6 text-sm" id="tabs-container">
                 <button class="tab-btn pb-3 border-b-2 border-primary-500 text-white font-medium" data-target="tab-keys">Key 列表</button>
                 <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-script">脚本 / 加载器</button>
                 <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-online">在线 / 封禁</button>
+                <button id="tab-btn-agents" class="tab-btn hidden pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-agents">代理管理</button>
                 <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-stats">数据统计</button>
                 <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-docs">接入说明</button>
             </div>
 
-            <!-- ==================== 页面 1：Key 列表 ==================== -->
-            <div id="tab-keys" class="tab-content active">
-                <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                    <!-- 工具栏 -->
-                    <div class="flex items-center gap-4 mb-6">
-                        <input type="text" placeholder="搜索 Key / 备注 / HWID" class="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 w-64 transition-colors">
-                        <button class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-2 rounded-lg text-sm transition-colors">搜索</button>
-                        <button class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors ml-auto">+ 生成 Key</button>
-                    </div>
-
-                    <!-- 表格 -->
-                    <div class="w-full overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="text-text-muted text-sm border-b border-dark-border">
-                                    <th class="py-3 px-4 font-medium">Key</th>
-                                    <th class="py-3 px-4 font-medium">状态</th>
-                                    <th class="py-3 px-4 font-medium">HWID</th>
-                                    <th class="py-3 px-4 font-medium">使用次数</th>
-                                    <th class="py-3 px-4 font-medium">到期</th>
-                                    <th class="py-3 px-4 font-medium">备注</th>
-                                    <th class="py-3 px-4 font-medium">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- 数据由后端渲染，此处为空状态占位 -->
-                                <tr>
-                                    <td colspan="7" class="py-12 text-center text-text-muted text-sm">
-                                        暂无Key数据
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <!-- 空状态提示 -->
+            <div id="empty-project-state" class="flex flex-col items-center justify-center py-20 text-text-muted">
+                <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <p>请在左侧新建或选择一个项目</p>
             </div>
 
-            <!-- ==================== 页面 2：脚本 / 加载器 ==================== -->
-            <div id="tab-script" class="tab-content">
-                <div class="space-y-6">
-                    <!-- 卡片 1：你的脚本 -->
+            <!-- 具体的 Tab 内容容器 -->
+            <div id="project-content-area" class="hidden">
+                <!-- 页面 1：Key列表 -->
+                <div id="tab-keys" class="tab-content active">
                     <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                        <div class="flex flex-col mb-4">
-                            <h2 class="text-base font-medium text-white mb-1">你的脚本</h2>
-                            <p class="text-xs text-text-muted">最后更新：—</p>
+                        <div class="flex items-center gap-4 mb-6">
+                            <input type="text" placeholder="搜索 Key / 备注" oninput="searchKeys(this.value)" class="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 w-64 transition-colors">
+                            <button class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-2 rounded-lg text-sm transition-colors">搜索</button>
+                            <button onclick="openModal('new-key')" class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors ml-auto">+ 生成 Key</button>
                         </div>
-                        <!-- 代码输入框 -->
-                        <textarea class="w-full h-64 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-gray-300 font-mono focus:outline-none focus:border-primary-500 resize-y custom-scrollbar" placeholder="在此粘贴你的Roblox脚本源码..."></textarea>
-                        <div class="flex justify-end mt-4">
-                            <button class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">保存脚本</button>
-                        </div>
-                    </div>
-
-                    <!-- 卡片 2：加载器 -->
-                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                        <div class="flex flex-col mb-4">
-                            <h2 class="text-base font-medium text-white mb-1">加载器（发给用户）</h2>
-                            <p class="text-xs text-text-muted">用户执行这段：先校验卡密，通过后才下载并运行你的脚本。</p>
-                        </div>
-                        <!-- 代码输入框 -->
-                        <textarea class="w-full h-24 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-green-400 font-mono focus:outline-none focus:border-primary-500 resize-none custom-scrollbar" placeholder="加载器代码将自动生成在这里" readonly></textarea>
-                        <div class="flex gap-3 mt-4">
-                            <button class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-1.5 rounded text-sm transition-colors">复制</button>
-                            <button class="bg-[#2c1e1e] border border-[#4a2b2b] text-[#e06c6c] hover:bg-[#3a2525] px-4 py-1.5 rounded text-sm transition-colors">重置链接</button>
+                        <div class="w-full overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-text-muted text-sm border-b border-dark-border">
+                                        <th class="py-3 px-4 font-medium">Key</th>
+                                        <th class="py-3 px-4 font-medium">状态</th>
+                                        <th class="py-3 px-4 font-medium">HWID</th>
+                                        <th class="py-3 px-4 font-medium">使用次数</th>
+                                        <th class="py-3 px-4 font-medium">到期</th>
+                                        <th class="py-3 px-4 font-medium">来源</th>
+                                        <th class="py-3 px-4 font-medium">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="keys-table-body">
+                                    <!-- 动态渲染 -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ==================== 页面 3：在线 / 封禁 ==================== -->
-            <div id="tab-online" class="tab-content">
-                <!-- 统计卡片 -->
-                <div class="grid grid-cols-3 gap-6 mb-6">
-                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                        <div class="text-3xl font-bold text-white mb-1">0</div>
-                        <div class="text-sm text-text-muted">在线设备（5分钟内）</div>
-                    </div>
-                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                        <div class="text-3xl font-bold text-white mb-1">0</div>
-                        <div class="text-sm text-text-muted">已封设备</div>
-                    </div>
-                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                        <div class="text-3xl font-bold text-white mb-1">0</div>
-                        <div class="text-sm text-text-muted">已封 IP</div>
-                    </div>
-                </div>
-
-                <!-- 在线设备表格 -->
-                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 mb-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-base font-medium text-white">在线设备</h2>
-                        <span class="text-xs text-text-muted">5分钟内有校验即视为在线</span>
-                    </div>
-                    <div class="w-full overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="text-text-muted text-sm border-b border-dark-border">
-                                    <th class="py-3 px-4 font-medium">服务器名</th>
-                                    <th class="py-3 px-4 font-medium">服务器 ID</th>
-                                    <th class="py-3 px-4 font-medium">卡密</th>
-                                    <th class="py-3 px-4 font-medium">设备 (HWID)</th>
-                                    <th class="py-3 px-4 font-medium">IP</th>
-                                    <th class="py-3 px-4 font-medium">最后活跃</th>
-                                    <th class="py-3 px-4 font-medium">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="7" class="py-12 text-center text-text-muted text-sm">
-                                        暂无在线设备
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- 封禁名单 -->
-                <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
-                    <h2 class="text-base font-medium text-white mb-4">封禁名单</h2>
-                    <div class="border-t border-dark-border pt-4">
-                        <div class="mb-4">
-                            <div class="text-sm text-text-main mb-2">设备 (0)</div>
-                            <div class="text-sm text-text-muted">暂无</div>
+                <!-- 页面 2：脚本/加载器 -->
+                <div id="tab-script" class="tab-content">
+                    <div class="space-y-6">
+                        <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                            <div class="flex flex-col mb-4">
+                                <h2 class="text-base font-medium text-white mb-1">你的脚本</h2>
+                                <p class="text-xs text-text-muted">最后更新：—</p>
+                            </div>
+                            <textarea class="w-full h-64 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-gray-300 font-mono focus:outline-none focus:border-primary-500 resize-y custom-scrollbar" placeholder="在此粘贴你的Roblox脚本源码..."></textarea>
+                            <div class="flex justify-end mt-4">
+                                <button onclick="alert('脚本已保存（模拟）')" class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">保存脚本</button>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-sm text-text-main mb-2">IP (0)</div>
-                            <div class="text-sm text-text-muted">暂无</div>
+                        <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                            <div class="flex flex-col mb-4">
+                                <h2 class="text-base font-medium text-white mb-1">加载器（发给用户）</h2>
+                                <p class="text-xs text-text-muted">用户执行这段：先校验卡密，通过后才下载并运行你的脚本。</p>
+                            </div>
+                            <textarea class="w-full h-24 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-green-400 font-mono focus:outline-none focus:border-primary-500 resize-none custom-scrollbar" placeholder="加载器代码将自动生成在这里" readonly></textarea>
+                            <div class="flex gap-3 mt-4">
+                                <button onclick="alert('已复制到剪贴板')" class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-1.5 rounded text-sm transition-colors">复制</button>
+                                <button onclick="alert('链接已重置')" class="bg-[#2c1e1e] border border-[#4a2b2b] text-[#e06c6c] hover:bg-[#3a2525] px-4 py-1.5 rounded text-sm transition-colors">重置链接</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ==================== 页面 4：数据统计 ==================== -->
-            <div id="tab-stats" class="tab-content">
-                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px] flex items-center justify-center">
-                    <p class="text-text-muted text-sm">等待后端统计数据</p>
+                <!-- 页面 3：在线/封禁 -->
+                <div id="tab-online" class="tab-content">
+                    <div class="grid grid-cols-3 gap-6 mb-6">
+                        <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                            <div class="text-3xl font-bold text-white mb-1" id="stat-online-count">0</div>
+                            <div class="text-sm text-text-muted">在线设备（5分钟内）</div>
+                        </div>
+                        <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                            <div class="text-3xl font-bold text-white mb-1">0</div>
+                            <div class="text-sm text-text-muted">已封设备</div>
+                        </div>
+                        <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                            <div class="text-3xl font-bold text-white mb-1">0</div>
+                            <div class="text-sm text-text-muted">已封 IP</div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6 mb-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-base font-medium text-white">在线设备</h2>
+                            <span class="text-xs text-text-muted">5分钟内有校验即视为在线</span>
+                        </div>
+                        <div class="w-full overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-text-muted text-sm border-b border-dark-border">
+                                        <th class="py-3 px-4 font-medium">服务器名</th>
+                                        <th class="py-3 px-4 font-medium">卡密</th>
+                                        <th class="py-3 px-4 font-medium">设备 (HWID)</th>
+                                        <th class="py-3 px-4 font-medium">IP</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="4" class="py-12 text-center text-text-muted text-sm">暂无在线设备</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <!-- ==================== 页面 5：接入说明 ==================== -->
-            <div id="tab-docs" class="tab-content">
-                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px]">
-                    <p class="text-text-muted text-sm">API文档、接入教程内容</p>
+                <!-- 页面 4：代理管理 (新增) -->
+                <div id="tab-agents" class="tab-content">
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-base font-medium text-white">代理管理</h2>
+                            <button onclick="openModal('new-agent')" class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">+ 新建代理</button>
+                        </div>
+                        <div class="w-full overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-text-muted text-sm border-b border-dark-border">
+                                        <th class="py-3 px-4 font-medium">代理账号</th>
+                                        <th class="py-3 px-4 font-medium">密码</th>
+                                        <th class="py-3 px-4 font-medium">专属登录链接</th>
+                                        <th class="py-3 px-4 font-medium">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="agents-table-body">
+                                    <!-- 动态渲染 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 页面 5：数据统计 -->
+                <div id="tab-stats" class="tab-content">
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px] flex items-center justify-center">
+                        <p class="text-text-muted text-sm">等待后端统计数据</p>
+                    </div>
+                </div>
+
+                <!-- 页面 6：接入说明 -->
+                <div id="tab-docs" class="tab-content">
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px]">
+                        <p class="text-text-muted text-sm">API文档、接入教程内容</p>
+                    </div>
                 </div>
             </div>
 
         </div>
     </main>
 
-    <!-- ==================== 标签切换逻辑 (纯前端 UI) ==================== -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            const tabContents = document.querySelectorAll('.tab-content');
+    <!-- ==================== 通用弹窗 Modal ==================== -->
+    <div id="global-modal" class="modal-overlay fixed inset-0 bg-black/60 z-50 items-center justify-center backdrop-blur-sm">
+        <div class="bg-dark-surface border border-dark-border p-6 rounded-xl w-[400px] shadow-2xl relative">
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-4">标题</h3>
+            <div id="modal-body" class="space-y-4 mb-6">
+                <!-- 动态内容 -->
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 rounded-lg text-sm text-text-muted hover:text-white transition-colors">取消</button>
+                <button id="modal-confirm-btn" class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">确定</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- ==================== 核心逻辑 ==================== -->
+    <script>
+        // 状态管理 (纯内存，刷新重置)
+        const appState = {
+            isLoggedIn: false,
+            role: 'admin', // 'admin' | 'agent'
+            currentProjectId: null,
+            currentAgentId: null,
+            projects: [
+                {
+                    id: 'p_demo',
+                    name: '演示项目',
+                    keys: [
+                        { id: 'k1', key: 'VIP-TEST-001', status: 'unused', hwid: '-', useCount: 0, expire: '永久', creator: 'admin' }
+                    ],
+                    agents: []
+                }
+            ],
+            agents: [], // 全局代理列表： { id, username, password, projectId }
+            keyFilter: ''
+        };
+
+        // ==================== 初始化与渲染 ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            initTabs();
+            renderSidebar();
+            
+            // 开发者密码登录事件
+            document.getElementById('admin-password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin('admin');
+            });
+            document.getElementById('agent-password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleLogin('agent');
+            });
+        });
+
+        // 标签切换逻辑
+        function initTabs() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
             tabBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
-                    // 移除所有按钮的激活样式
                     tabBtns.forEach(b => {
                         b.classList.remove('border-primary-500', 'text-white');
                         b.classList.add('border-transparent', 'text-text-muted');
                     });
-                    
-                    // 添加当前按钮的激活样式
                     btn.classList.remove('border-transparent', 'text-text-muted');
                     btn.classList.add('border-primary-500', 'text-white');
 
-                    // 隐藏所有内容区
-                    tabContents.forEach(content => {
-                        content.classList.remove('active');
-                    });
-
-                    // 显示目标内容区
-                    const targetId = btn.getAttribute('data-target');
-                    document.getElementById(targetId).classList.add('active');
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById(btn.getAttribute('data-target')).classList.add('active');
                 });
             });
+        }
+
+        // 切换登录模式
+        function switchLoginMode(mode) {
+            document.getElementById('login-error').classList.add('hidden');
+            if (mode === 'admin') {
+                document.getElementById('admin-login-form').classList.remove('hidden');
+                document.getElementById('agent-login-form').classList.add('hidden');
+            } else {
+                document.getElementById('admin-login-form').classList.add('hidden');
+                document.getElementById('agent-login-form').classList.remove('hidden');
+            }
+        }
+
+        // 登录处理
+        function handleLogin(type) {
+            const errEl = document.getElementById('login-error');
+            errEl.classList.add('hidden');
+
+            if (type === 'admin') {
+                const pwd = document.getElementById('admin-password').value;
+                if (pwd === '177457rtr') {
+                    appState.isLoggedIn = true;
+                    appState.role = 'admin';
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('sidebar-title').innerText = 'Key系统 (开发者)';
+                    document.getElementById('btn-new-project-container').classList.remove('hidden');
+                    document.getElementById('tab-btn-agents').classList.remove('hidden');
+                    document.getElementById('sidebar-footer').innerText = '仅内网可访问 · 公网 IP 拒绝';
+                    renderSidebar();
+                    selectProject(appState.projects[0]?.id);
+                } else {
+                    errEl.innerText = '开发者密码错误';
+                    errEl.classList.remove('hidden');
+                }
+            } else {
+                const username = document.getElementById('agent-username').value;
+                const password = document.getElementById('agent-password').value;
+                const agent = appState.agents.find(a => a.username === username && a.password === password);
+                
+                if (agent) {
+                    const project = appState.projects.find(p => p.id === agent.projectId);
+                    if (!project) {
+                        errEl.innerText = '该代理所属的项目已被开发者删除，请联系上级';
+                        errEl.classList.remove('hidden');
+                        return;
+                    }
+                    appState.isLoggedIn = true;
+                    appState.role = 'agent';
+                    appState.currentAgentId = agent.id;
+                    appState.currentProjectId = agent.projectId;
+                    
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    document.getElementById('sidebar-title').innerText = '代理后台';
+                    document.getElementById('btn-new-project-container').classList.add('hidden');
+                    document.getElementById('tab-btn-agents').classList.add('hidden');
+                    document.getElementById('sidebar-footer').innerText = `欢迎，代理 ${username}`;
+                    
+                    renderSidebar();
+                    selectProject(agent.projectId);
+                } else {
+                    errEl.innerText = '代理账号或密码错误';
+                    errEl.classList.remove('hidden');
+                }
+            }
+        }
+
+        function handleLogout() {
+            location.reload();
+        }
+
+        // ==================== 侧边栏与项目逻辑 ====================
+        function renderSidebar() {
+            const list = document.getElementById('project-list');
+            list.innerHTML = '';
+
+            // 如果是代理，只显示自己分配的项目
+            let displayProjects = appState.projects;
+            if (appState.role === 'agent') {
+                const agent = appState.agents.find(a => a.id === appState.currentAgentId);
+                displayProjects = appState.projects.filter(p => p.id === agent.projectId);
+            }
+
+            if (displayProjects.length === 0) {
+                list.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-text-muted text-sm mt-10">
+                        <span>暂无项目</span>
+                    </div>
+                `;
+                document.getElementById('empty-project-state').classList.remove('hidden');
+                document.getElementById('project-content-area').classList.add('hidden');
+                document.getElementById('project-name-header').innerText = '请选择或新建项目';
+                document.getElementById('project-meta-header').innerText = '项目 ID: - · HWID 绑定开启';
+                document.getElementById('project-icon').className = 'w-12 h-12 bg-gray-600 rounded-lg';
+                document.getElementById('btn-project-settings').classList.add('hidden');
+                return;
+            }
+
+            displayProjects.forEach(project => {
+                const isActive = project.id === appState.currentProjectId;
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors no-select ${isActive ? 'bg-primary-500/10 border border-primary-500/30 text-white' : 'hover:bg-dark-hover text-text-muted hover:text-white border border-transparent'}`;
+                item.innerHTML = `
+                    <span class="text-sm font-medium truncate">${project.name}</span>
+                    <span class="text-xs bg-dark-bg px-2 py-0.5 rounded text-text-disabled border border-dark-border">${project.keys.length}</span>
+                `;
+                
+                // 点击切换项目
+                item.onclick = () => selectProject(project.id);
+
+                // 长按删除逻辑 (仅开发者)
+                if (appState.role === 'admin') {
+                    let pressTimer;
+                    let isLongPress = false;
+
+                    const startPress = (e) => {
+                        if (e.type === 'mousedown' && e.button !== 0) return;
+                        isLongPress = false;
+                        item.classList.add('long-pressing');
+                        pressTimer = setTimeout(() => {
+                            isLongPress = true;
+                            item.classList.remove('long-pressing');
+                            confirmDeleteProject(project.id, project.name);
+                        }, 600);
+                    };
+
+                    const cancelPress = () => {
+                        clearTimeout(pressTimer);
+                        item.classList.remove('long-pressing');
+                    };
+
+                    item.addEventListener('mousedown', startPress);
+                    item.addEventListener('touchstart', startPress, {passive: true});
+                    item.addEventListener('mouseup', cancelPress);
+                    item.addEventListener('mouseleave', cancelPress);
+                    item.addEventListener('touchend', cancelPress);
+                    item.addEventListener('touchcancel', cancelPress);
+
+                    // 拦截原有的点击事件以防冲突
+                    item.addEventListener('click', (e) => {
+                        if (isLongPress) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                        }
+                    }, true);
+                }
+
+                list.appendChild(item);
+            });
+        }
+
+        function selectProject(projectId) {
+            if (!projectId) return;
+            appState.currentProjectId = projectId;
+            const project = appState.projects.find(p => p.id === projectId);
+            if (!project) return;
+
+            document.getElementById('project-name-header').innerText = project.name;
+            document.getElementById('project-meta-header').innerText = `项目 ID ${project.id} · HWID 绑定开启 · 默认 30 天`;
+            document.getElementById('project-icon').className = 'w-12 h-12 bg-green-500 rounded-lg shadow-lg';
+            document.getElementById('btn-project-settings').classList.remove('hidden');
+            
+            document.getElementById('empty-project-state').classList.add('hidden');
+            document.getElementById('project-content-area').classList.remove('hidden');
+
+            // 权限控制
+            if (appState.role === 'admin') {
+                document.getElementById('tab-btn-agents').classList.remove('hidden');
+            } else {
+                document.getElementById('tab-btn-agents').classList.add('hidden');
+                // 强制切回 Key列表
+                document.querySelector('.tab-btn[data-target="tab-keys"]').click();
+            }
+
+            renderSidebar();
+            renderKeys();
+            renderAgents();
+            renderOnlineStats();
+        }
+
+        function confirmDeleteProject(id, name) {
+            showModal('删除项目', `
+                <p class="text-sm text-text-muted">确定要删除项目 <strong class="text-white">${name}</strong> 吗？</p>
+                <p class="text-xs text-red-400 mt-2">警告：删除后，该项目的代理将无法登录，所有卡密数据将被清空！</p>
+            `, () => {
+                appState.projects = appState.projects.filter(p => p.id !== id);
+                appState.agents = appState.agents.filter(a => a.projectId !== id);
+                
+                if (appState.currentProjectId === id) {
+                    appState.currentProjectId = appState.projects[0]?.id || null;
+                }
+                renderSidebar();
+                if (appState.currentProjectId) {
+                    selectProject(appState.currentProjectId);
+                } else {
+                    document.getElementById('empty-project-state').classList.remove('hidden');
+                    document.getElementById('project-content-area').classList.add('hidden');
+                    document.getElementById('project-name-header').innerText = '请选择或新建项目';
+                    document.getElementById('btn-project-settings').classList.add('hidden');
+                }
+                closeModal();
+            });
+        }
+
+        // ==================== Key 列表逻辑 ====================
+        function renderKeys() {
+            const tbody = document.getElementById('keys-table-body');
+            tbody.innerHTML = '';
+            
+            const project = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!project) return;
+
+            let keys = project.keys;
+            
+            // 如果是代理，只显示自己的卡密
+            if (appState.role === 'agent') {
+                keys = keys.filter(k => k.creator === appState.currentAgentId);
+            }
+
+            // 搜索过滤
+            if (appState.keyFilter) {
+                keys = keys.filter(k => k.key.toLowerCase().includes(appState.keyFilter.toLowerCase()));
+            }
+
+            if (keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-text-muted text-sm">暂无 Key 数据</td></tr>`;
+                return;
+            }
+
+            keys.forEach(k => {
+                const isUnused = k.status === 'unused';
+                const statusBadge = isUnused 
+                    ? `<span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded border border-gray-500/30">未使用·通用</span>`
+                    : `<span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/30">已绑定</span>`;
+                
+                let creatorName = '开发者';
+                if (k.creator !== 'admin') {
+                    const agent = appState.agents.find(a => a.id === k.creator);
+                    creatorName = agent ? `代理: ${agent.username}` : '未知代理';
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-dark-border/50 hover:bg-dark-hover/30 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-4 px-4 text-sm text-white font-mono">${k.key}</td>
+                    <td class="py-4 px-4">${statusBadge}</td>
+                    <td class="py-4 px-4 text-sm text-text-muted font-mono">${k.hwid}</td>
+                    <td class="py-4 px-4 text-sm text-text-muted">${k.useCount}</td>
+                    <td class="py-4 px-4 text-sm text-text-muted">${k.expire}</td>
+                    <td class="py-4 px-4 text-sm text-text-muted">${creatorName}</td>
+                    <td class="py-4 px-4 flex gap-2">
+                        <button onclick="alert('已复制 Key')" class="text-xs bg-dark-border hover:bg-dark-hover text-white px-2 py-1 rounded transition-colors">复制</button>
+                        ${appState.role === 'admin' || k.creator === appState.currentAgentId 
+                            ? `<button onclick="deleteKey('${k.id}')" class="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-2 py-1 rounded transition-colors">删除</button>` 
+                            : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function searchKeys(val) {
+            appState.keyFilter = val;
+            renderKeys();
+        }
+
+        function deleteKey(keyId) {
+            showModal('删除卡密', '<p class="text-sm text-text-muted">确定要删除这个卡密吗？删除后将无法使用。</p>', () => {
+                const project = appState.projects.find(p => p.id === appState.currentProjectId);
+                if (project) {
+                    project.keys = project.keys.filter(k => k.id !== keyId);
+                    renderKeys();
+                    renderSidebar(); // 更新数量
+                }
+                closeModal();
+            });
+        }
+
+        // ==================== 代理管理逻辑 ====================
+        function renderAgents() {
+            const tbody = document.getElementById('agents-table-body');
+            tbody.innerHTML = '';
+
+            const project = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!project) return;
+
+            const agents = appState.agents.filter(a => a.projectId === project.id);
+
+            if (agents.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-text-muted text-sm">暂无代理，请点击右上角新建</td></tr>`;
+                return;
+            }
+
+            agents.forEach(agent => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-dark-border/50 hover:bg-dark-hover/30 transition-colors';
+                
+                // 生成一个静态的模拟登录链接
+                const loginUrl = `http://192.168.10.102/#agent-login?p=${project.id}&u=${agent.username}`;
+
+                tr.innerHTML = `
+                    <td class="py-4 px-4 text-sm text-white">${agent.username}</td>
+                    <td class="py-4 px-4 text-sm text-text-muted">${agent.password}</td>
+                    <td class="py-4 px-4 text-sm text-primary-500 cursor-pointer hover:underline" onclick="alert('链接已复制，请前往登录页选择代理登录进入')">${loginUrl}</td>
+                    <td class="py-4 px-4">
+                        <button onclick="simulateAgentLogin('${agent.username}', '${agent.password}')" class="text-xs bg-primary-500/20 text-primary-500 border border-primary-500/30 px-3 py-1 rounded hover:bg-primary-500/30 transition-colors">模拟进入代理端</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function simulateAgentLogin(username, password) {
+            document.getElementById('agent-username').value = username;
+            document.getElementById('agent-password').value = password;
+            handleLogin('agent');
+        }
+
+        // ==================== 在线统计逻辑 ====================
+        function renderOnlineStats() {
+            // 模拟在线人数
+            const onlineCount = appState.role === 'admin' ? Math.floor(Math.random() * 5) : Math.floor(Math.random() * 2);
+            document.getElementById('stat-online-count').innerText = onlineCount;
+        }
+
+        // ==================== 弹窗控制系统 ====================
+        let modalCallback = null;
+
+        function showModal(title, bodyHtml, onConfirm) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = bodyHtml;
+            document.getElementById('global-modal').classList.add('active');
+            modalCallback = onConfirm;
+        }
+
+        function closeModal() {
+            document.getElementById('global-modal').classList.remove('active');
+            modalCallback = null;
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if (modalCallback) modalCallback();
         });
+
+        // 打开特定类型弹窗
+        function openModal(type) {
+            if (type === 'new-project') {
+                showModal('新建项目', `
+                    <input type="text" id="input-project-name" placeholder="请输入项目名称" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-primary-500 mb-2">
+                `, () => {
+                    const name = document.getElementById('input-project-name').value.trim();
+                    if (!name) return alert('项目名称不能为空');
+                    
+                    const newId = 'p_' + Date.now();
+                    appState.projects.push({ id: newId, name: name, keys: [], agents: [] });
+                    closeModal();
+                    renderSidebar();
+                    selectProject(newId);
+                });
+            } 
+            else if (type === 'new-agent') {
+                showModal('新建代理', `
+                    <input type="text" id="input-agent-user" placeholder="代理账号" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-primary-500 mb-3">
+                    <input type="text" id="input-agent-pass" placeholder="代理密码" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
+                `, () => {
+                    const user = document.getElementById('input-agent-user').value.trim();
+                    const pass = document.getElementById('input-agent-pass').value.trim();
+                    if (!user || !pass) return alert('账号和密码不能为空');
+                    
+                    appState.agents.push({
+                        id: 'a_' + Date.now(),
+                        username: user,
+                        password: pass,
+                        projectId: appState.currentProjectId
+                    });
+                    closeModal();
+                    renderAgents();
+                });
+            }
+            else if (type === 'new-key') {
+                showModal('生成 Key', `
+                    <input type="text" id="input-key-remark" placeholder="备注 (可选)" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
+                `, () => {
+                    const remark = document.getElementById('input-key-remark').value.trim();
+                    const project = appState.projects.find(p => p.id === appState.currentProjectId);
+                    if (!project) return;
+
+                    // 生成随机Key
+                    const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
+                    const newKey = {
+                        id: 'k_' + Date.now(),
+                        key: `KEY-${randomStr}`,
+                        status: 'unused',
+                        hwid: '-',
+                        useCount: 0,
+                        expire: '30天',
+                        creator: appState.role === 'admin' ? 'admin' : appState.currentAgentId,
+                        remark: remark
+                    };
+
+                    project.keys.push(newKey);
+                    closeModal();
+                    renderKeys();
+                    renderSidebar();
+                });
+            }
+        }
     </script>
 </body>
 </html>
