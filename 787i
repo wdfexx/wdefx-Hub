@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Key系统 - 后台管理</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0c10',      // 最底层背景
+                            surface: '#13161c', // 侧边栏/卡片背景
+                            border: '#212631',  // 边框颜色
+                            hover: '#1c212a',   // hover状态
+                        },
+                        primary: {
+                            500: '#6366f1',     // 主紫
+                            600: '#4f46e5',     // 主紫 hover
+                            900: '#312e81',
+                        },
+                        text: {
+                            main: '#e2e8f0',
+                            muted: '#94a3b8',
+                            disabled: '#475569'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif', 'Microsoft YaHei'],
+                        mono: ['Consolas', 'Monaco', 'Courier New', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2d3748;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5568;
+        }
+        
+        /* 隐藏元素的过渡 */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-text-main font-sans h-screen w-screen overflow-hidden flex antialiased">
+
+    <!-- ==================== 左侧侧边栏 ==================== -->
+    <aside class="w-64 bg-dark-surface border-r border-dark-border flex flex-col h-full shrink-0">
+        <!-- 顶部标题与退出 -->
+        <div class="p-4 flex items-center justify-between">
+            <div class="flex items-center gap-2 font-bold text-lg text-white">
+                <div class="w-3 h-3 bg-primary-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+                Key系统
+            </div>
+            <button class="text-xs text-text-muted hover:text-white bg-dark-border hover:bg-dark-hover px-3 py-1.5 rounded transition-colors">
+                退出
+            </button>
+        </div>
+
+        <!-- 新建项目按钮 -->
+        <div class="px-4 pb-4">
+            <button class="w-full bg-primary-500 hover:bg-primary-600 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
+                + 新建项目
+            </button>
+        </div>
+
+        <!-- 项目列表容器 (空占位) -->
+        <div class="flex-1 overflow-y-auto px-2 space-y-1">
+            <!-- 后端动态渲染的项目列表将在这里插入 -->
+            <!-- 无项目提示 -->
+            <div class="flex flex-col items-center justify-center text-text-muted text-sm mt-10">
+                <svg class="w-8 h-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                <span>暂无项目，请点击新建项目</span>
+            </div>
+        </div>
+
+        <!-- 底部提示 -->
+        <div class="p-4 text-xs text-text-disabled">
+            仅内网可访问 · 公网 IP 拒绝
+        </div>
+    </aside>
+
+    <!-- ==================== 右侧主内容区 ==================== -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        <!-- 顶部 IP 状态栏 -->
+        <div class="absolute top-0 w-full h-12 flex items-center justify-center z-10 pointer-events-none">
+            <div class="bg-[#1c212a] text-text-muted text-xs px-4 py-1 rounded-full border border-dark-border">
+                192.168.10.102
+            </div>
+        </div>
+
+        <!-- 主内容滚动区 -->
+        <div class="flex-1 overflow-y-auto pt-12 pb-8 px-8">
+            
+            <!-- 项目头部信息 -->
+            <div class="flex items-start justify-between mb-8">
+                <div class="flex items-center gap-4">
+                    <!-- 项目图标占位 -->
+                    <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-lg">
+                        <!-- 这里的图标由后端渲染，目前留空或用纯色块 -->
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-white mb-1">wdfec</h1>
+                        <p class="text-sm text-text-muted">项目 ID 318bb196... · HWID 绑定开启 · 默认 30 天</p>
+                    </div>
+                </div>
+                <button class="bg-dark-surface border border-dark-border hover:bg-dark-hover text-text-main px-4 py-1.5 rounded-lg text-sm transition-colors">
+                    项目设置
+                </button>
+            </div>
+
+            <!-- 标签导航栏 -->
+            <div class="flex items-center gap-6 border-b border-dark-border mb-6 text-sm" id="tabs-container">
+                <button class="tab-btn pb-3 border-b-2 border-primary-500 text-white font-medium" data-target="tab-keys">Key 列表</button>
+                <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-script">脚本 / 加载器</button>
+                <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-online">在线 / 封禁</button>
+                <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-stats">数据统计</button>
+                <button class="tab-btn pb-3 border-b-2 border-transparent text-text-muted hover:text-white transition-colors" data-target="tab-docs">接入说明</button>
+            </div>
+
+            <!-- ==================== 页面 1：Key 列表 ==================== -->
+            <div id="tab-keys" class="tab-content active">
+                <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                    <!-- 工具栏 -->
+                    <div class="flex items-center gap-4 mb-6">
+                        <input type="text" placeholder="搜索 Key / 备注 / HWID" class="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-sm text-white placeholder-text-muted focus:outline-none focus:border-primary-500 w-64 transition-colors">
+                        <button class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-2 rounded-lg text-sm transition-colors">搜索</button>
+                        <button class="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors ml-auto">+ 生成 Key</button>
+                    </div>
+
+                    <!-- 表格 -->
+                    <div class="w-full overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="text-text-muted text-sm border-b border-dark-border">
+                                    <th class="py-3 px-4 font-medium">Key</th>
+                                    <th class="py-3 px-4 font-medium">状态</th>
+                                    <th class="py-3 px-4 font-medium">HWID</th>
+                                    <th class="py-3 px-4 font-medium">使用次数</th>
+                                    <th class="py-3 px-4 font-medium">到期</th>
+                                    <th class="py-3 px-4 font-medium">备注</th>
+                                    <th class="py-3 px-4 font-medium">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 数据由后端渲染，此处为空状态占位 -->
+                                <tr>
+                                    <td colspan="7" class="py-12 text-center text-text-muted text-sm">
+                                        暂无Key数据
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== 页面 2：脚本 / 加载器 ==================== -->
+            <div id="tab-script" class="tab-content">
+                <div class="space-y-6">
+                    <!-- 卡片 1：你的脚本 -->
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="flex flex-col mb-4">
+                            <h2 class="text-base font-medium text-white mb-1">你的脚本</h2>
+                            <p class="text-xs text-text-muted">最后更新：—</p>
+                        </div>
+                        <!-- 代码输入框 -->
+                        <textarea class="w-full h-64 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-gray-300 font-mono focus:outline-none focus:border-primary-500 resize-y custom-scrollbar" placeholder="在此粘贴你的Roblox脚本源码..."></textarea>
+                        <div class="flex justify-end mt-4">
+                            <button class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">保存脚本</button>
+                        </div>
+                    </div>
+
+                    <!-- 卡片 2：加载器 -->
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="flex flex-col mb-4">
+                            <h2 class="text-base font-medium text-white mb-1">加载器（发给用户）</h2>
+                            <p class="text-xs text-text-muted">用户执行这段：先校验卡密，通过后才下载并运行你的脚本。</p>
+                        </div>
+                        <!-- 代码输入框 -->
+                        <textarea class="w-full h-24 bg-dark-bg border border-dark-border rounded-lg p-4 text-sm text-green-400 font-mono focus:outline-none focus:border-primary-500 resize-none custom-scrollbar" placeholder="加载器代码将自动生成在这里" readonly></textarea>
+                        <div class="flex gap-3 mt-4">
+                            <button class="bg-dark-hover border border-dark-border hover:bg-dark-border text-white px-4 py-1.5 rounded text-sm transition-colors">复制</button>
+                            <button class="bg-[#2c1e1e] border border-[#4a2b2b] text-[#e06c6c] hover:bg-[#3a2525] px-4 py-1.5 rounded text-sm transition-colors">重置链接</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== 页面 3：在线 / 封禁 ==================== -->
+            <div id="tab-online" class="tab-content">
+                <!-- 统计卡片 -->
+                <div class="grid grid-cols-3 gap-6 mb-6">
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="text-3xl font-bold text-white mb-1">0</div>
+                        <div class="text-sm text-text-muted">在线设备（5分钟内）</div>
+                    </div>
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="text-3xl font-bold text-white mb-1">0</div>
+                        <div class="text-sm text-text-muted">已封设备</div>
+                    </div>
+                    <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                        <div class="text-3xl font-bold text-white mb-1">0</div>
+                        <div class="text-sm text-text-muted">已封 IP</div>
+                    </div>
+                </div>
+
+                <!-- 在线设备表格 -->
+                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 mb-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-base font-medium text-white">在线设备</h2>
+                        <span class="text-xs text-text-muted">5分钟内有校验即视为在线</span>
+                    </div>
+                    <div class="w-full overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="text-text-muted text-sm border-b border-dark-border">
+                                    <th class="py-3 px-4 font-medium">服务器名</th>
+                                    <th class="py-3 px-4 font-medium">服务器 ID</th>
+                                    <th class="py-3 px-4 font-medium">卡密</th>
+                                    <th class="py-3 px-4 font-medium">设备 (HWID)</th>
+                                    <th class="py-3 px-4 font-medium">IP</th>
+                                    <th class="py-3 px-4 font-medium">最后活跃</th>
+                                    <th class="py-3 px-4 font-medium">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="py-12 text-center text-text-muted text-sm">
+                                        暂无在线设备
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 封禁名单 -->
+                <div class="bg-dark-surface border border-dark-border rounded-xl p-6">
+                    <h2 class="text-base font-medium text-white mb-4">封禁名单</h2>
+                    <div class="border-t border-dark-border pt-4">
+                        <div class="mb-4">
+                            <div class="text-sm text-text-main mb-2">设备 (0)</div>
+                            <div class="text-sm text-text-muted">暂无</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-text-main mb-2">IP (0)</div>
+                            <div class="text-sm text-text-muted">暂无</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== 页面 4：数据统计 ==================== -->
+            <div id="tab-stats" class="tab-content">
+                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px] flex items-center justify-center">
+                    <p class="text-text-muted text-sm">等待后端统计数据</p>
+                </div>
+            </div>
+
+            <!-- ==================== 页面 5：接入说明 ==================== -->
+            <div id="tab-docs" class="tab-content">
+                <div class="bg-dark-surface border border-dark-border rounded-xl p-6 min-h-[400px]">
+                    <p class="text-text-muted text-sm">API文档、接入教程内容</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ==================== 标签切换逻辑 (纯前端 UI) ==================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // 移除所有按钮的激活样式
+                    tabBtns.forEach(b => {
+                        b.classList.remove('border-primary-500', 'text-white');
+                        b.classList.add('border-transparent', 'text-text-muted');
+                    });
+                    
+                    // 添加当前按钮的激活样式
+                    btn.classList.remove('border-transparent', 'text-text-muted');
+                    btn.classList.add('border-primary-500', 'text-white');
+
+                    // 隐藏所有内容区
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                    });
+
+                    // 显示目标内容区
+                    const targetId = btn.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>
