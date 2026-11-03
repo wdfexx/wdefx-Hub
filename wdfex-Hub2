@@ -239,15 +239,31 @@ function createUI()
         HideSearchBar = false,
         ScrollBarEnabled = true,
         Resizable = true,
-        Background = "rbxassetid://120259800200854",
+        Background = "rbxassetid://110659547102129",
         BackgroundImageTransparency = 0.1,
         User = { Enabled = true, Callback = function() end, Anonymous = false },
         SideBarWidth = 250,
         Search = { Enabled = true, Placeholder = "搜索...", Callback = function(searchText) end },
         SidePanel = { Enabled = true, Content = { { Type = "Button", Text = "wdfex-Hub", Style = "Subtle", Size = UDim2.new(1, -20, 0, 30), Callback = function() end } } }
     })
+    
     Window:Tag({ Title = "wdfex-HubNB", Color = Color3.fromHex("#00ffff") })
-    Window:EditOpenButton({ Title = 'wdfex-<font color="rgb(255, 255, 0)">Hub</font>', RichText = true, Icon = "crown", IconThemed = true, CornerRadius = UDim.new(0,16), StrokeThickness = 4, Color = ColorSequence.new(Color3.fromHex("FF6B6B")), Draggable = true })
+    
+    Window:EditOpenButton({
+        Title = "wdfex-Hub",
+        Icon = "crown",
+        IconThemed = true,
+        CornerRadius = UDim.new(0,16),
+        StrokeThickness = 2,
+        Transparency = 0,
+        Color = ColorSequence.new(Color3.fromHex("FFFFFF"), Color3.fromHex("333333")),
+        Draggable = true,
+        StrokeColor = Color3.fromHex("FFFFFF"),
+        GlowColor = Color3.fromHex("FFFFFF"),
+        GlowSize = 3,
+        GlowTransparency = 0.4,
+        Size = UDim2.new(0, 180, 0, 50)
+    })
 
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
@@ -264,83 +280,118 @@ function createUI()
         end
     end)
 
-    task.spawn(function()
-        task.wait(1)
-        pcall(function()
-            if Window and Window.UIElements and Window.UIElements.Main and Window.UIElements.Main.TitleBar then
-                for _, v in ipairs(Window.UIElements.Main.TitleBar:GetDescendants()) do
-                    if v:IsA("ImageLabel") or v:IsA("TextLabel") then
-                        if v.Name:lower():find("icon") or v.Name == "Icon" then
-                            v.ImageColor3 = Color3.fromRGB(255, 215, 0)
-                            v.TextColor3 = Color3.fromRGB(255, 215, 0)
-                        end
-                    end
-                end
+    -- 高级波浪变色文字（从左向右流动，右边纯白透明感）
+    spawn(function()
+        local text = "wdfex-Hub"
+        local textLen = #text
+        while true do
+            local time = tick()
+            local richText = ""
+            for i = 1, textLen do
+                local char = text:sub(i, i)
+                local hue = ((i / textLen) - time * 0.15) % 1
+                local wave = math.sin((i / textLen) * math.pi * 2 - time * 4)
+                local sat = (wave + 1) / 2
+                local col = Color3.fromHSV(hue, sat, 1)
+                local r = math.floor(col.R * 255)
+                local g = math.floor(col.G * 255)
+                local b = math.floor(col.B * 255)
+                richText = richText .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', r, g, b, char)
             end
-            local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-            for _, gui in ipairs(playerGui:GetChildren()) do
-                if gui:IsA("ScreenGui") then
-                    for _, btn in ipairs(gui:GetDescendants()) do
-                        if btn:IsA("TextButton") and btn.Text:find("wdfex") then
-                            btn.TextColor3 = Color3.fromRGB(255, 255, 0)
-                            for _, v in ipairs(btn:GetDescendants()) do
-                                if v:IsA("ImageLabel") or v:IsA("TextLabel") then
-                                    v.ImageColor3 = Color3.fromRGB(255, 215, 0)
-                                    v.TextColor3 = Color3.fromRGB(255, 255, 0)
+            pcall(function()
+                Window:EditOpenButton({
+                    Title = richText,
+                    RichText = true,
+                    Color = ColorSequence.new(Color3.fromHSV((time * 0.2) % 1, 0.8, 1))
+                })
+            end)
+            task.wait(0.03)
+        end
+    end)
+
+    -- 主界面彩虹描边流光（修复最小化重开导致静止）
+    task.spawn(function()
+        task.wait(0.5)
+        pcall(function()
+            local mainFrame = Window.UIElements and Window.UIElements.Main
+            if mainFrame then
+                if not mainFrame:FindFirstChildOfClass("UICorner") then
+                    local corner = Instance.new("UICorner")
+                    corner.CornerRadius = UDim.new(0, 16)
+                    corner.Parent = mainFrame
+                end
+                local existingStroke = mainFrame:FindFirstChild("RainbowStroke")
+                if not existingStroke then
+                    local rainbowStroke = Instance.new("UIStroke")
+                    rainbowStroke.Name = "RainbowStroke"
+                    rainbowStroke.Thickness = 1.5
+                    rainbowStroke.Color = Color3.new(1, 1, 1)
+                    rainbowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    rainbowStroke.LineJoinMode = Enum.LineJoinMode.Round
+                    rainbowStroke.Parent = mainFrame
+                    
+                    local glowEffect = Instance.new("UIGradient")
+                    glowEffect.Name = "GlowEffect"
+                    glowEffect.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, Color3.fromHex("FF0000")),
+                        ColorSequenceKeypoint.new(0.16, Color3.fromHex("FFA500")),
+                        ColorSequenceKeypoint.new(0.33, Color3.fromHex("FFFF00")),
+                        ColorSequenceKeypoint.new(0.5, Color3.fromHex("00FF00")),
+                        ColorSequenceKeypoint.new(0.66, Color3.fromHex("0000FF")),
+                        ColorSequenceKeypoint.new(0.83, Color3.fromHex("4B0082")),
+                        ColorSequenceKeypoint.new(1, Color3.fromHex("EE82EE"))
+                    })
+                    glowEffect.Rotation = 0
+                    glowEffect.Parent = rainbowStroke
+
+                    local colorConn = RunService.Heartbeat:Connect(function()
+                        if rainbowStroke and rainbowStroke.Parent then
+                            glowEffect.Rotation = (tick() * 120) % 360
+                        else
+                            if colorConn then colorConn:Disconnect() end
+                        end
+                    end)
+                    table.insert(connections, colorConn)
+                end
+                
+                local originalOpen = Window.Open
+                Window.Open = function(...)
+                    local result = originalOpen(...)
+                    task.wait(0.1)
+                    local mFrame = Window.UIElements and Window.UIElements.Main
+                    if mFrame then
+                        local rStroke = mFrame:FindFirstChild("RainbowStroke")
+                        if rStroke and rStroke:FindFirstChild("GlowEffect") then
+                            local gEffect = rStroke.GlowEffect
+                            local newConn = RunService.Heartbeat:Connect(function()
+                                if rStroke and rStroke.Parent then
+                                    gEffect.Rotation = (tick() * 120) % 360
+                                else
+                                    newConn:Disconnect()
                                 end
-                            end
+                            end)
+                            table.insert(connections, newConn)
                         end
                     end
+                    return result
                 end
             end
         end)
     end)
 
-    task.wait(0.1)
-    local mainGui = player.PlayerGui:FindFirstChild("CloudHub")
-    if mainGui then
-        local mainFrame = mainGui:FindFirstChildOfClass("Frame")
-        if mainFrame then
-            local stroke1 = Instance.new("UIStroke")
-            stroke1.Thickness = 3
-            stroke1.Color = Color3.fromHSV(0, 1, 1)
-            stroke1.Transparency = 0.5
-            stroke1.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-            stroke1.Parent = mainFrame
-            local stroke2 = Instance.new("UIStroke")
-            stroke2.Thickness = 5
-            stroke2.Color = Color3.fromHSV(0.5, 1, 1)
-            stroke2.Transparency = 0.3
-            stroke2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-            stroke2.Parent = mainFrame
-            local hue1, hue2 = 0, 0.5
-            local colorConn = RunService.Heartbeat:Connect(function()
-                hue1 = (hue1 + 0.01) % 1
-                hue2 = (hue2 - 0.01) % 1
-                stroke1.Color = Color3.fromHSV(hue1, 1, 1)
-                stroke2.Color = Color3.fromHSV(hue2, 1, 1)
-            end)
-            table.insert(connections, colorConn)
-        end
-    end
-    spawn(function()
-        while true do
-            for hue = 0, 1, 0.01 do
-                Window:EditOpenButton({ Color = ColorSequence.new(Color3.fromHSV(hue, 0.8, 1)) })
-                wait(0.04)
-            end
-        end
-    end)
+    -- 加载音效（音量最大 1，持续 5 秒）
     task.spawn(function()
         pcall(function()
             local sound = Instance.new("Sound")
             sound.SoundId = "rbxassetid://80701295792893"
-            sound.Volume = 0.5
-            sound.Parent = player:WaitForChild("PlayerGui")
-            sound:Play()
-            task.wait(7)
-            sound:Stop()
-            sound:Destroy()
+            sound.Volume = 1
+            sound.Parent = game:GetService("SoundService")
+            game:GetService("SoundService"):PlayLocalSound(sound)
+            task.wait(5)
+            if sound then
+                sound:Stop()
+                sound:Destroy()
+            end
         end)
     end)
 
@@ -349,7 +400,7 @@ function createUI()
 
     UpdateSection:Paragraph({
         Title = "5.5更新公告",
-        Desc = "优化部分机型卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型是DeepSeek\n可能会增加用户聊天使用wdfex-Hub的用户可以在里面和其他的wdefx-Hub用户进行聊天",
+        Desc = "修复所有卡顿的问题\n修复所有功能的问题以及增加一些功能\n重写部分功能\n修复车辆加速的部分问题\n可能会增加隐身\n删除愤怒机器人（因为打开杀戮光环之后再打开愤怒机器人伤害会大幅度降低）\n增加AI使用的AI模型DeepSeek",
         ThumbnailSize = 150,
     })
 
@@ -2338,7 +2389,6 @@ function createUI()
             if not interaction or not interaction.Parent then return false end
             local fullName = interaction:GetFullName()
 
-            -- 屏蔽目标：保持原样，不要动
             if fullName:find("Entities.Reward.Content.Cash._Interaction", 1, true) then
                 return false
             end
@@ -2468,7 +2518,6 @@ function createUI()
                         if not hrp then return end
                         local myPos = hrp.Position
 
-                        -- 30 米内的互动目标秒捡
                         for interaction in pairs(AutoCollect.Cache) do
                             if not interaction.Parent then
                                 AutoCollect.Cache[interaction] = nil
@@ -2480,7 +2529,6 @@ function createUI()
                             end
                         end
 
-                        -- 地上钱保持 30 米内秒捡
                         local gameplay = workspace:FindFirstChild("Gameplay")
                         local entities = gameplay and gameplay:FindFirstChild("Entities")
                         if entities then
