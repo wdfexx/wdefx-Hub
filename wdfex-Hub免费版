@@ -483,7 +483,7 @@ function createUI()
         HideSearchBar = false,
         ScrollBarEnabled = true,
         Resizable = true,
-        Background = "rbxassetid://110386755019381",
+        Background = "rbxassetid://110659547102129",
         BackgroundImageTransparency = 0.1,
         User = { Enabled = true, Callback = function() end, Anonymous = false },
         SideBarWidth = 250,
