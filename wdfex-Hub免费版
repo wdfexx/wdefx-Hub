@@ -262,7 +262,7 @@ WindUI:Popup({
     Title = '<font color="#00FF00">wdfex-Hub</font>',
     IconThemed = true,
     Icon = "crown",
-    Content = "欢迎尊重的用户 " .. coloredUsername .. " 你的支持是我们更新的动力\n当前版本: " .. version,
+    Content = "欢迎尊重的用户 " .. coloredUsername .. " 您使用的wdfex-Hub\n当前版本: " .. version,
     Buttons = {
         { Title = "取消", Callback = function() end, Variant = "Secondary" },
         { Title = "执行", Icon = "arrow-right", Callback = function() Confirmed = true; createUI() end, Variant = "Primary" }
