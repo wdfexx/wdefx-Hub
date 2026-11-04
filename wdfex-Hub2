@@ -3794,8 +3794,8 @@ function createUI()
     local teleNames = {}
     for _, data in ipairs(FIXED_TELEPORTS) do table.insert(teleNames, data.n) end
     local selectedTeleport = teleNames[1] or ""
-    D:Divider({ Text = "常规传送" })
-    D:Dropdown({ Title = "常规传送", Values = teleNames, Value = teleNames[1], Callback = function(value) selectedTeleport = value end })
+    D:Divider({ Text = "传送" })
+    D:Dropdown({ Title = "传送", Values = teleNames, Value = teleNames[1], Callback = function(value) selectedTeleport = value end })
     D:Button({ Title = "传送到选定地点", Callback = function()
         for _, data in ipairs(FIXED_TELEPORTS) do if data.n == selectedTeleport then doTeleport(data.p, data.n); return end end
     end })
