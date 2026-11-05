@@ -1,995 +1,2045 @@
-local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/tfcygvunbind/557/main/😭😭😭😭'))()
-WindUI.TransparencyValue = 0.1
-WindUI:SetTheme("MonokaiPro")
-
-local rainbowBorderAnimation
-local currentBorderColorScheme = "彩虹颜色"
-local currentFontColorScheme = "彩虹颜色"
-local borderInitialized = false
-local animationSpeed = 2
-local borderEnabled = true
-local fontColorEnabled = false
-local uiScale = 1
-local blurEnabled = false
-local soundEnabled = true
-
-local FONT_STYLES = {
-    "SourceSansBold","SourceSansItalic","SourceSansLight","SourceSans",
-    "GothamSSm","GothamSSm-Bold","GothamSSm-Medium","GothamSSm-Light",
-    "GothamSSm-Black","GothamSSm-Book","GothamSSm-XLight","GothamSSm-Thin",
-    "GothamSSm-Ultra","GothamSSm-SemiBold","GothamSSm-ExtraLight","GothamSSm-Heavy",
-    "GothamSSm-ExtraBold","GothamSSm-Regular","Gotham","GothamBold",
-    "GothamMedium","GothamBlack","GothamLight","Arial","ArialBold",
-    "Code","CodeLight","CodeBold","Highway","HighwayBold","HighwayLight",
-    "SciFi","SciFiBold","SciFiItalic","Cartoon","CartoonBold","Handwritten"
-}
-
-local FONT_DESCRIPTIONS = {
-    ["SourceSansBold"] = "标准粗体",["SourceSansItalic"] = "斜体",["SourceSansLight"] = "细体",
-    ["SourceSans"] = "标准体",["GothamSSm"] = "哥特标准",["GothamSSm-Bold"] = "哥特粗体",
-    ["GothamSSm-Medium"] = "哥特中等",["GothamSSm-Light"] = "哥特细体",["GothamSSm-Black"] = "哥特黑体",
-    ["GothamSSm-Book"] = "哥特书本体",["GothamSSm-XLight"] = "哥特超细体",["GothamSSm-Thin"] = "哥特极细体",
-    ["GothamSSm-Ultra"] = "哥特超黑体",["GothamSSm-SemiBold"] = "哥特半粗体",["GothamSSm-ExtraLight"] = "哥特特细体",
-    ["GothamSSm-Heavy"] = "哥特粗重体",["GothamSSm-ExtraBold"] = "哥特特粗体",["GothamSSm-Regular"] = "哥特常规体",
-    ["Gotham"] = "经典哥特体",["GothamBold"] = "经典哥特粗体",["GothamMedium"] = "经典哥特中等",
-    ["GothamBlack"] = "经典哥特黑体",["GothamLight"] = "经典哥特细体",["Arial"] = "标准Arial体",
-    ["ArialBold"] = "Arial粗体",["Code"] = "代码字体",["CodeLight"] = "代码细体",
-    ["CodeBold"] = "代码粗体",["Highway"] = "高速公路体",["HighwayBold"] = "高速公路粗体",
-    ["HighwayLight"] = "高速公路细体",["SciFi"] = "科幻字体",["SciFiBold"] = "科幻粗体",
-    ["SciFiItalic"] = "科幻斜体",["Cartoon"] = "卡通字体",["CartoonBold"] = "卡通粗体",
-    ["Handwritten"] = "手写体"
-}
-
-local currentFontStyle = "SourceSansBold"
-
-local COLOR_SCHEMES = {
-    ["彩虹颜色"] = {ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromHex("FF0000")),ColorSequenceKeypoint.new(0.16, Color3.fromHex("FFA500")),ColorSequenceKeypoint.new(0.33, Color3.fromHex("FFFF00")),ColorSequenceKeypoint.new(0.5, Color3.fromHex("00FF00")),ColorSequenceKeypoint.new(0.66, Color3.fromHex("0000FF")),ColorSequenceKeypoint.new(0.83, Color3.fromHex("4B0082")),ColorSequenceKeypoint.new(1, Color3.fromHex("EE82EE"))}),"palette"},
-}
-
-local fontColorAnimations = {}
-
-local function applyFontColorGradient(textElement, colorScheme)
-    if not textElement or not textElement:IsA("TextLabel") and not textElement:IsA("TextButton") and not textElement:IsA("TextBox") then
-        return
-    end
-    
-    local existingGradient = textElement:FindFirstChild("FontColorGradient")
-    if existingGradient then
-        existingGradient:Destroy()
-    end
-    
-    if fontColorAnimations[textElement] then
-        fontColorAnimations[textElement]:Disconnect()
-        fontColorAnimations[textElement] = nil
-    end
-    
-    if not fontColorEnabled then
-        textElement.TextColor3 = Color3.new(1, 1, 1)
-        return
-    end
-    
-    local schemeData = COLOR_SCHEMES[colorScheme or currentFontColorScheme]
-    if not schemeData then return end
-    
-    local fontGradient = Instance.new("UIGradient")
-    fontGradient.Name = "FontColorGradient"
-    fontGradient.Color = schemeData[1]
-    fontGradient.Rotation = 0
-    fontGradient.Parent = textElement
-    
-    textElement.TextColor3 = Color3.new(1, 1, 1)
-    
-    local animation
-    animation = game:GetService("RunService").Heartbeat:Connect(function()
-        if not textElement or textElement.Parent == nil then
-            animation:Disconnect()
-            fontColorAnimations[textElement] = nil
-            return
-        end
-        
-        if not fontGradient or fontGradient.Parent == nil then
-            animation:Disconnect()
-            fontColorAnimations[textElement] = nil
-            return
-        end
-        
-        local time = tick()
-        fontGradient.Rotation = (time * animationSpeed * 30) % 360
-    end)
-    
-    fontColorAnimations[textElement] = animation
-end
-
-local function applyFontStyleToWindow(fontStyle)
-    if not Window or not Window.UIElements then 
-        wait(0.5)
-        if not Window or not Window.UIElements then
-            return false
-        end
-    end
-    
-    local successCount = 0
-    local totalCount = 0
-    
-    local function processElement(element)
-        for _, child in ipairs(element:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
-                totalCount = totalCount + 1
-                pcall(function()
-                    child.Font = Enum.Font[fontStyle]
-                    successCount = successCount + 1
-                end)
-            end
-        end
-    end
-    
-    processElement(Window.UIElements.Main)
-    
-    return successCount, totalCount
-end
-
-local function applyFontColorsToWindow(colorScheme)
-    if not Window or not Window.UIElements then return end
-    
-    local function processElement(element)
-        for _, child in ipairs(element:GetDescendants()) do
-            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
-                applyFontColorGradient(child, colorScheme)
-            end
-        end
-    end
-    
-    processElement(Window.UIElements.Main)
-end
-
-local function createRainbowBorder(window, colorScheme, speed)
-    if not window or not window.UIElements then
-        wait(1)
-        if not window or not window.UIElements then
-            return nil, nil
-        end
-    end
-    
-    local mainFrame = window.UIElements.Main
-    if not mainFrame then
-        return nil, nil
-    end
-    
-    local existingStroke = mainFrame:FindFirstChild("RainbowStroke")
-    if existingStroke then
-        local glowEffect = existingStroke:FindFirstChild("GlowEffect")
-        if glowEffect then
-            local schemeData = COLOR_SCHEMES[colorScheme or currentBorderColorScheme]
-            if schemeData then
-                glowEffect.Color = schemeData[1]
-            end
-        end
-        return existingStroke, rainbowBorderAnimation
-    end
-    
-    if not mainFrame:FindFirstChildOfClass("UICorner") then
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 16)
-        corner.Parent = mainFrame
-    end
-    
-    local rainbowStroke = Instance.new("UIStroke")
-    rainbowStroke.Name = "RainbowStroke"
-    rainbowStroke.Thickness = 1.5
-    rainbowStroke.Color = Color3.new(1, 1, 1)
-    rainbowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    rainbowStroke.LineJoinMode = Enum.LineJoinMode.Round
-    rainbowStroke.Enabled = borderEnabled
-    rainbowStroke.Parent = mainFrame
-    
-    local glowEffect = Instance.new("UIGradient")
-    glowEffect.Name = "GlowEffect"
-    
-    local schemeData = COLOR_SCHEMES[colorScheme or currentBorderColorScheme]
-    if schemeData then
-        glowEffect.Color = schemeData[1]
-    else
-        glowEffect.Color = COLOR_SCHEMES["彩虹颜色"][1]
-    end
-    
-    glowEffect.Rotation = 0
-    glowEffect.Parent = rainbowStroke
-    
-    return rainbowStroke, nil
-end
-
-local function startBorderAnimation(window, speed)
-    if not window or not window.UIElements then
-        return nil
-    end
-    
-    local mainFrame = window.UIElements.Main
-    if not mainFrame then
-        return nil
-    end
-    
-    local rainbowStroke = mainFrame:FindFirstChild("RainbowStroke")
-    if not rainbowStroke or not rainbowStroke.Enabled then
-        return nil
-    end
-    
-    local glowEffect = rainbowStroke:FindFirstChild("GlowEffect")
-    if not glowEffect then
-        return nil
-    end
-    
-    if rainbowBorderAnimation then
-        rainbowBorderAnimation:Disconnect()
-        rainbowBorderAnimation = nil
-    end
-    
-    local animation
-    animation = game:GetService("RunService").Heartbeat:Connect(function()
-        if not rainbowStroke or rainbowStroke.Parent == nil or not rainbowStroke.Enabled then
-            animation:Disconnect()
-            return
-        end
-        
-        local time = tick()
-        glowEffect.Rotation = (time * speed * 60) % 360
-    end)
-    
-    rainbowBorderAnimation = animation
-    return animation
-end
-
-local function initializeRainbowBorder(scheme, speed)
-    speed = speed or animationSpeed
-    
-    local rainbowStroke, _ = createRainbowBorder(Window, scheme, speed)
-    if rainbowStroke then
-        if borderEnabled then
-            startBorderAnimation(Window, speed)
-        end
-        borderInitialized = true
-        return true
-    end
-    return false
-end
-
-local function gradient(text, startColor, endColor)
-    local result = ""
-    for i = 1, #text do
-        local t = (i - 1) / (#text - 1)
-        local r = math.floor((startColor.R + (endColor.R - startColor.R) * t) * 255)
-        local g = math.floor((startColor.G + (endColor.G - startColor.G) * t) * 255)
-        local b = math.floor((startColor.B + (endColor.B - startColor.B) * t) * 255)
-        result = result .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', r, g, b, text:sub(i, i))
-    end
-    return result
-end
-
-local function playSound()
-    if soundEnabled then
-        pcall(function()
-            local sound = Instance.new("Sound")
-            sound.SoundId = "rbxassetid://9047002353"
-            sound.Volume = 0.3
-            sound.Parent = game:GetService("SoundService")
-            sound:Play()
-            game:GetService("Debris"):AddItem(sound, 2)
-        end)
-    end
-end
-
-local function applyBlurEffect(enabled)
-    if enabled then
-        pcall(function()
-            local blur = Instance.new("BlurEffect")
-            blur.Size = 8
-            blur.Name = "UISX HUBBlur"
-            blur.Parent = game:GetService("Lighting")
-        end)
-    else
-        pcall(function()
-            local existingBlur = game:GetService("Lighting"):FindFirstChild("UISX HUBBlur")
-            if existingBlur then
-                existingBlur:Destroy()
-            end
-        end)
-    end
-end
-
-local function applyUIScale(scale)
-    if Window and Window.UIElements and Window.UIElements.Main then
-        local mainFrame = Window.UIElements.Main
-        mainFrame.Size = UDim2.new(0, 600 * scale, 0, 400 * scale)
-    end
-end
-
-local Confirmed = false
-local gradientColors = {
-    "#4169E1", 
-    "#6A5ACD",  
-    "#9370DB",  
-    "#8A2BE2", 
-    "#4B0082"   
-}
-local goldColor = "#FFD700"
-local username = game:GetService("Players").LocalPlayer.Name
-local coloredUsername = ""
-
-for i = 1, #username do
-    local char = username:sub(i, i)
-    
-    if char:match("[A-Za-z0-9]") then
-        local colorIndex = (i - 1) % #gradientColors + 1
-        coloredUsername = coloredUsername .. '<font color="' .. gradientColors[colorIndex] .. '">' .. char .. '</font>'
-    else
-        coloredUsername = coloredUsername .. '<font color="' .. goldColor .. '">' .. char .. '</font>'
-    end
-end
-
-WindUI:Popup({
-    Title = '黑白脚本种植花园',
-    IconThemed = true,
-    Icon = "crown",
-    Content = "欢迎尊重的用户 " .. coloredUsername .. " 你的支持是我们更新的动力",
-    Buttons = {
-        {
-            Title = "取消",
-            Callback = function() end,
-            Variant = "Secondary",
-        },
-        {
-            Title = "执行",
-            Icon = "arrow-right",
-            Callback = function() 
-                Confirmed = true
-                createUI()
-            end,
-            Variant = "Primary",
+local PlayerTabModule = {
+    LoadPlayerTab = function(MainWindow, UI_Library)
+        local Module = {
+            state = {
+                selectedPlayer = nil,
+                allPlayers = {},
+                isSitting = false,
+                isLoopHeadSit = false,
+                isOrbiting = false,
+                isMirroring = false,
+                isFloating = false,
+                isShadowFollowing = false,
+                isReversing = false,
+                isDancing = false,
+                isShadowAscending = false,
+                isMonitoring = false,
+                isTeleportingSame = false,
+                isTeleportingAll = false,
+                isAntiFollowing = false,
+                isSpinning = false,
+                isShaking = false,
+                isFaceStanding = false,
+                isBackSitting = false,
+                isAutoFollowing = false,
+                isSucking = false,
+                isSusFollowing = false,
+                isFlingingSingle = false,
+                isFlingingAll = false,
+                isLoopFlingingSingle = false,
+                isLoopFlingingAll = false,
+                isModernFollowing = false,
+                isEnhancedSuckFollowing = false,
+                suckingAnim = nil,
+                susAnim = nil,
+                modernAnim = nil,
+                enhancedSuckAnim = nil
+            },
+            connections = {
+                playerListRefresh = nil,
+                headSit = nil,
+                orbit = nil,
+                mirror = nil,
+                float = nil,
+                shadow = nil,
+                reverse = nil,
+                dance = nil,
+                shadowAscend = nil,
+                monitor = nil,
+                antiFollow = nil,
+                spin = nil,
+                shake = nil,
+                faceStand = nil,
+                backSit = nil,
+                autoFollow = nil,
+                suckFollow = nil,
+                susFollow = nil,
+                teleportThreads = {},
+                flingThreads = {},
+                modernFollow = nil,
+                enhancedSuckFollow = nil
+            },
+            config = {
+                orbitRadius = 5,
+                orbitSpeed = 0.05,
+                floatHeight = 3,
+                shadowAscendSpeed = 0.5,
+                teleportInterval = 0.3,
+                mirrorDistance = 4,
+                antiFollowDistance = 8,
+                spinSpeed = 5,
+                shakeIntensity = 2
+            }
         }
-    }
-})
 
-function createUI()
-Window = WindUI:CreateWindow({
-    Title = "<font color='#00FF00'>黑白脚本种植花园</font>",
-    Icon = "crown",
-    IconThemed = true,
-    Author = "作者：未必量黑白",
-    Folder = "CloudHub",
-    Size = UDim2.fromOffset(300, 200),
-    Transparent = true,
-    Theme = "MonokaiPro",
-    HideSearchBar = false,
-    ScrollBarEnabled = true,
-    Resizable = true,
-    Background = "rbxassetid://98188886183397",
-    BackgroundImageTransparency = 0.5,
+        local TweenService = game:GetService("TweenService")
+        local LocalPlayer = game.Players.LocalPlayer
+        local RunService = game:GetService("RunService")
+        local Players = game:GetService("Players")
 
-    User = {
-        Enabled = true,
-        Callback = function()
-            WindUI:Notify({
-                Title = "点击了自己",
-                Content = "没什么",
-                Duration = 1,
-                Icon = "4483362748"
-            })
-        end,
-        Anonymous = false
-    },
+        local function getLocalCharacter()
+            local localPlayer = game.Players.LocalPlayer
+            if not localPlayer then return nil end
+            return localPlayer.Character or localPlayer.CharacterAdded:Wait()
+        end
 
-    SideBarWidth = 250
-})
+        local function getTargetPlayer(playerName)
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player.Name == playerName or player.DisplayName == playerName then
+                    return player
+                end
+            end
+            return nil
+        end
 
-    Window:EditOpenButton({
-        Title = "打开黑白脚本种植花园",
-        Icon = "monitor",
-        CornerRadius = UDim.new(0,16),
-        StrokeThickness = 2,
-        Transparency = 0,
-        Color = ColorSequence.new(
-            Color3.fromHex("FFFFFF"),
-            Color3.fromHex("333333")
-        ),
-        Draggable = true,
-        StrokeColor = Color3.fromHex("FFFFFF"),
-        GlowColor = Color3.fromHex("FFFFFF"),
-        GlowSize = 3,
-        GlowTransparency = 0.4,
-        Size = UDim2.new(0, 180, 0, 50)
-    })
+        local function disableCollision(localChar)
+            if not localChar then return end
+            for _, part in ipairs(localChar:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                    part.CanTouch = false
+                end
+            end
+        end
 
-    Window:CreateTopbarButton("theme-switcher", "moon", function()
-        WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "GoldenTheme" or "MonokaiPro")
-        WindUI:Notify({
-            Title = "主题已更改",
-            Content = "当前主题: "..WindUI:GetCurrentTheme(),
-            Duration = 2
-        })
-    end, 990)
-    
-    Window:Tag({
-        Title = "诞生于2025年暑假",
-        Icon = "calendar",
-        Color = Color3.fromHex("#4169E1")
-    })
+        local function enableCollision(localChar)
+            if not localChar then return end
+            for _, part in ipairs(localChar:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                    part.CanTouch = true
+                end
+            end
+        end
 
-    local TimeTag = Window:Tag({
-        Title = "--:--",
-        Icon = "clock", 
-        Radius = 999,
-        Color = Color3.fromRGB("#4169E1"),
-    })
-
-    task.spawn(function()
-        while true do
-            local now = os.date("*t")
-            local hours = string.format("%02d", now.hour)
-            local minutes = string.format("%02d", now.min)
+        local function cleanAllResources()
+            for _, conn in pairs(Module.connections) do
+                if typeof(conn) == "RBXScriptConnection" then
+                    conn:Disconnect()
+                elseif typeof(conn) == "table" then
+                    for _, thread in ipairs(conn) do
+                        if thread then task.cancel(thread) end
+                    end
+                end
+            end
+            for k in pairs(Module.state) do
+                if type(Module.state[k]) == "boolean" then
+                    Module.state[k] = false
+                elseif type(Module.state[k]) == "table" then
+                    Module.state[k] = {}
+                else
+                    Module.state[k] = nil
+                end
+            end
+            Module.connections = {teleportThreads = {}, flingThreads = {}}
             
-            TimeTag:SetTitle(hours .. ":" .. minutes)
-            task.wait(0.06)
-        end
-    end)
-
-    spawn(function()
-        while true do
-            for hue = 0, 1, 0.01 do  
-                local color = Color3.fromHSV(hue, 0.8, 1)  
-                Window:EditOpenButton({
-                    Color = ColorSequence.new(color)
-                })
-                wait(0.04)  
+            local localChar = getLocalCharacter()
+            if localChar then
+                enableCollision(localChar)
+            end
+            if workspace then
+                workspace.Gravity = 196.2
             end
         end
-    end)
-    
-    if not borderInitialized then
-        spawn(function()
-            wait(0.5)
-            initializeRainbowBorder("彩虹颜色", animationSpeed)
-            wait(1)
-            applyFontStyleToWindow(currentFontStyle)
-        end)
-    end
 
-    local windowOpen = true
-
-    Window:OnClose(function()
-        windowOpen = false
-        if rainbowBorderAnimation then
-            rainbowBorderAnimation:Disconnect()
-            rainbowBorderAnimation = nil
+        local function showNotify(title, text, duration)
+            local success, err = pcall(function()
+                if UI_Library and UI__G.Notify then
+                    UI__G.Notify(title, text, duration or 3)
+                else
+                    _G.Notify(tostring(title), tostring(text), duration)
+                end
+            end)
+            if not success then
+                warn("通知发送失败:", err)
+            end
         end
-    end)
 
-    local originalOpenFunction = Window.Open
-    Window.Open = function(...)
-        windowOpen = true
-        local result = originalOpenFunction(...)
-        
-        if borderInitialized and borderEnabled and not rainbowBorderAnimation then
-            wait(0.1)
-            startBorderAnimation(Window, animationSpeed)
+        local function stopHeadSit()
+            Module.state.isSitting = false
+            if Module.connections.headSit then
+                Module.connections.headSit:Disconnect()
+                Module.connections.headSit = nil
+            end
+
+            local localChar = getLocalCharacter()
+            if localChar then
+                local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+                if localHumanoid then
+                    localHumanoid.Sit = false
+                    enableCollision(localChar)
+                end
+            end
+            showNotify("坐头停止", "已停止坐头", 3)
         end
-        
-        return result
-    end
 
-    local Tabs = {
-        Settings = Window:Section({ Title = "界面", Opened = false }),
-    }
+        local function startHeadSit(targetPlayerName)
+            if Module.connections.headSit then
+                Module.connections.headSit:Disconnect()
+                Module.connections.headSit = nil
+            end
+            Module.state.isSitting = true
 
-    local TabHandles = {
-        Appearance = Tabs.Settings:Tab({ Title = "颜色", Icon = "brush" }),
-    }
+            local localPlayer = game.Players.LocalPlayer
+            local localChar = getLocalCharacter()
+            if not localChar then
+                showNotify("坐头失败", "本地角色未加载", 3)
+                Module.state.isSitting = false
+                return
+            end
+            local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localHumanoid or not localRoot then
+                showNotify("坐头失败", "角色缺少关键部件", 3)
+                Module.state.isSitting = false
+                return
+            end
 
-    TabHandles.Appearance:Paragraph({
-        Title = "自定义界面",
-        Desc = "个性化您的体验",
-        Image = "palette",
-        ImageSize = 20,
-        Color = "White"
-    })
+            disableCollision(localChar)
+            localHumanoid.Sit = true
 
-    local themes = {}
-    for themeName, _ in pairs(WindUI:GetThemes()) do
-        table.insert(themes, themeName)
-    end
-    table.sort(themes)
+            Module.connections.headSit = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isSitting or not localChar.Parent then
+                        if Module.state.isLoopHeadSit and localPlayer.Character then
+                            task.wait(1)
+                            if Module.state.isLoopHeadSit and Module.state.selectedPlayer then
+                                startHeadSit(Module.state.selectedPlayer)
+                            end
+                        else
+                            cleanAllResources()
+                        end
+                        return
+                    end
 
-    local themeDropdown = TabHandles.Appearance:Dropdown({
-        Title = "颜色",
-        Values = themes,
-        Value = "MonokaiPro",
-        Callback = function(theme)
-            WindUI:SetTheme(theme)
-            WindUI:Notify({
-                Title = "主题已应用",
-                Content = theme,
-                Icon = "crown",
-                Duration = 2
-            })
+                    local targetPlayer = getTargetPlayer(targetPlayerName)
+                    if not targetPlayer or not targetPlayer.Character then
+                        showNotify("坐头停止", "目标玩家角色消失", 3)
+                        if Module.state.isLoopHeadSit then
+                            task.wait(1)
+                            if Module.state.isLoopHeadSit and Module.state.selectedPlayer then
+                                startHeadSit(Module.state.selectedPlayer)
+                            end
+                        else
+                            cleanAllResources()
+                        end
+                        return
+                    end
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local headPos = targetRoot.CFrame * CFrame.new(0, 1.6, 0.4)
+                    localRoot.CFrame = headPos
+                    disableCollision(localChar)
+                end)
+            end)
+
+            showNotify("坐头启动", "已开始坐 " .. tostring(targetPlayerName) .. " 的头", 3)
         end
-    })
 
-    local transparencySlider = TabHandles.Appearance:Slider({
-        Title = "透明度",
-        Value = { 
-            Min = 0,
-            Max = 1,
-            Default = 0.2,
-        },
-        Step = 0.1,
-        Callback = function(value)
-            Window:ToggleTransparency(tonumber(value) > 0)
-            WindUI.TransparencyValue = tonumber(value)
+        local function stopAllTeleports()
+            for _, thread in ipairs(Module.connections.teleportThreads) do
+                if thread then task.cancel(thread) end
+            end
+            Module.connections.teleportThreads = {}
         end
-    })
 
-    TabHandles.Appearance:Toggle({
-        Title = "启用深色模式",
-        Desc = "使用深色配色方案",
-        Value = true,
-        Callback = function(state)
-            WindUI:SetTheme(state and "GoldenTheme" or "Light")
-            themeDropdown:Select(state and "GoldenTheme" or "Light")
+        local function teleportToPlayer(targetPlayer)
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                localRoot.CFrame = targetRoot.CFrame
+            end
         end
-    })
 
-    local Tab0 = Window:Tab({Title = "简介", Icon = "info"})
-task.wait(0.1)    
-    if Tab0 and Tab0.Select then
-        Tab0:Select()
-    end
+        local function startOrbit(targetPlayer)
+            stopAllTeleports()
+            Module.state.isOrbiting = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
 
-    Tab0:Paragraph({
-        Title = "欢迎尊贵的用户",
-        Desc = "此脚本会一直更新感谢你对我们的支持",
-        Image = "info",
-        ImageSize = 15
-    })
+            disableCollision(localChar)
 
-    Tab0:Paragraph({
-        Title = "作者名单",
-        Desc = "未必量黑白",
-        Image = "user",
-        ImageSize = 12
-    })
+            local angle = 0
+            Module.connections.orbit = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isOrbiting or not localChar.Parent then
+                        if Module.state.isOrbiting and localChar then
+                            task.wait(1)
+                            if Module.state.isOrbiting and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startOrbit(newTarget) end
+                            end
+                        else
+                            Module.connections.orbit:Disconnect()
+                            Module.connections.orbit = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
 
-    Tab0:Divider()
+                    if not targetPlayer.Character then
+                        showNotify("环绕停止", "目标玩家角色消失", 3)
+                        Module.connections.orbit:Disconnect()
+                        Module.connections.orbit = nil
+                        enableCollision(localChar)
+                        return
+                    end
 
-Tab0:Paragraph({
-    Title = "黑白脚本群",
-    Desc = "点击按钮获取黑白脚本群QQ号",
-    Image = "rbxassetid://98188886183397",
-    ImageSize = 42,
-    Thumbnail = "rbxassetid://90132615229704",
-    ThumbnailSize = 120,
-    Buttons = {
-        {
-            Title = "复制QQ群号",
-            Variant = "Primary",
-            Icon = "crown",
-            Callback = function()
-                local cardKey = "1062578052"
-                
-                local success, errorMsg = pcall(function()
-                    if not setclipboard then
-                        error("剪贴板功能不可用")
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    angle = angle + Module.config.orbitSpeed
+                    if angle > 360 then angle = 0 end
+                    local offset = Vector3.new(
+                        math.cos(angle) * Module.config.orbitRadius,
+                        2,
+                        math.sin(angle) * Module.config.orbitRadius
+                    )
+                    localRoot.CFrame = CFrame.new(targetRoot.Position + offset, targetRoot.Position)
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopOrbit()
+            Module.state.isOrbiting = false
+            if Module.connections.orbit then
+                Module.connections.orbit:Disconnect()
+                Module.connections.orbit = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startMirror(targetPlayer)
+            Module.state.isMirroring = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.mirror = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isMirroring or not localChar.Parent then
+                        if Module.state.isMirroring and localChar then
+                            task.wait(1)
+                            if Module.state.isMirroring and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startMirror(newTarget) end
+                            end
+                        else
+                            Module.connections.mirror:Disconnect()
+                            Module.connections.mirror = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("镜像停止", "目标玩家角色消失", 3)
+                        Module.connections.mirror:Disconnect()
+                        Module.connections.mirror = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local mirrorPos = targetRoot.CFrame * CFrame.new(Module.config.mirrorDistance, 0, 0)
+                    local lookVector = targetRoot.CFrame.LookVector
+                    local mirrorCFrame = CFrame.new(mirrorPos.Position) * CFrame.Angles(0, math.pi, 0)
+                    localRoot.CFrame = mirrorCFrame
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopMirror()
+            Module.state.isMirroring = false
+            if Module.connections.mirror then
+                Module.connections.mirror:Disconnect()
+                Module.connections.mirror = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startFloat(targetPlayer)
+            Module.state.isFloating = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.float = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isFloating or not localChar.Parent then
+                        if Module.state.isFloating and localChar then
+                            task.wait(1)
+                            if Module.state.isFloating and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startFloat(newTarget) end
+                            end
+                        else
+                            Module.connections.float:Disconnect()
+                            Module.connections.float = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("漂浮停止", "目标玩家角色消失", 3)
+                        Module.connections.float:Disconnect()
+                        Module.connections.float = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local floatPos = targetRoot.Position + Vector3.new(0, Module.config.floatHeight, 0)
+                    localRoot.CFrame = CFrame.new(floatPos)
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopFloat()
+            Module.state.isFloating = false
+            if Module.connections.float then
+                Module.connections.float:Disconnect()
+                Module.connections.float = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startShadow(targetPlayer)
+            Module.state.isShadowFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.shadow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isShadowFollowing or not localChar.Parent then
+                        if Module.state.isShadowFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isShadowFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startShadow(newTarget) end
+                            end
+                        else
+                            Module.connections.shadow:Disconnect()
+                            Module.connections.shadow = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("影子停止", "目标玩家角色消失", 3)
+                        Module.connections.shadow:Disconnect()
+                        Module.connections.shadow = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local shadowPos = targetRoot.Position - Vector3.new(0, 3, 0)
+                    localRoot.CFrame = CFrame.new(shadowPos)
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopShadow()
+            Module.state.isShadowFollowing = false
+            if Module.connections.shadow then
+                Module.connections.shadow:Disconnect()
+                Module.connections.shadow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startAntiFollow(targetPlayer)
+            Module.state.isAntiFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.antiFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isAntiFollowing or not localChar.Parent then
+                        if Module.state.isAntiFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isAntiFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startAntiFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.antiFollow:Disconnect()
+                            Module.connections.antiFollow = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("反向停止", "目标玩家角色消失", 3)
+                        Module.connections.antiFollow:Disconnect()
+                        Module.connections.antiFollow = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local antiPos = targetRoot.Position - targetRoot.CFrame.LookVector * Module.config.antiFollowDistance
+                    localRoot.CFrame = CFrame.new(antiPos)
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopAntiFollow()
+            Module.state.isAntiFollowing = false
+            if Module.connections.antiFollow then
+                Module.connections.antiFollow:Disconnect()
+                Module.connections.antiFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startSpin(targetPlayer)
+            Module.state.isSpinning = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            local spinAngle = 0
+            Module.connections.spin = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isSpinning or not localChar.Parent then
+                        if Module.state.isSpinning and localChar then
+                            task.wait(1)
+                            if Module.state.isSpinning and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startSpin(newTarget) end
+                            end
+                        else
+                            Module.connections.spin:Disconnect()
+                            Module.connections.spin = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("旋转停止", "目标玩家角色消失", 3)
+                        Module.connections.spin:Disconnect()
+                        Module.connections.spin = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    spinAngle = spinAngle + Module.config.spinSpeed
+                    local offset = Vector3.new(
+                        math.cos(spinAngle) * 3,
+                        0,
+                        math.sin(spinAngle) * 3
+                    )
+                    local spinCFrame = CFrame.new(targetRoot.Position + offset) * CFrame.Angles(0, spinAngle, 0)
+                    localRoot.CFrame = spinCFrame
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopSpin()
+            Module.state.isSpinning = false
+            if Module.connections.spin then
+                Module.connections.spin:Disconnect()
+                Module.connections.spin = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startShake(targetPlayer)
+            Module.state.isShaking = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.shake = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isShaking or not localChar.Parent then
+                        if Module.state.isShaking and localChar then
+                            task.wait(1)
+                            if Module.state.isShaking and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startShake(newTarget) end
+                            end
+                        else
+                            Module.connections.shake:Disconnect()
+                            Module.connections.shake = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("抖动停止", "目标玩家角色消失", 3)
+                        Module.connections.shake:Disconnect()
+                        Module.connections.shake = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local shakeOffset = Vector3.new(
+                        math.random(-Module.config.shakeIntensity, Module.config.shakeIntensity),
+                        math.random(-Module.config.shakeIntensity, Module.config.shakeIntensity),
+                        math.random(-Module.config.shakeIntensity, Module.config.shakeIntensity)
+                    )
+                    localRoot.CFrame = CFrame.new(targetRoot.Position + shakeOffset)
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopShake()
+            Module.state.isShaking = false
+            if Module.connections.shake then
+                Module.connections.shake:Disconnect()
+                Module.connections.shake = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startFaceStand(targetPlayer)
+            Module.state.isFaceStanding = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            Module.connections.faceStand = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isFaceStanding or not localChar.Parent then
+                        if Module.state.isFaceStanding and localChar then
+                            task.wait(1)
+                            if Module.state.isFaceStanding and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startFaceStand(newTarget) end
+                            end
+                        else
+                            Module.connections.faceStand:Disconnect()
+                            Module.connections.faceStand = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("脸上站立停止", "目标玩家角色消失", 3)
+                        Module.connections.faceStand:Disconnect()
+                        Module.connections.faceStand = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local facePos = targetRoot.CFrame * CFrame.new(0, 2.5, 0.5)
+                    localRoot.CFrame = facePos
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopFaceStand()
+            Module.state.isFaceStanding = false
+            if Module.connections.faceStand then
+                Module.connections.faceStand:Disconnect()
+                Module.connections.faceStand = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+        end
+
+        local function startBackSit(targetPlayer)
+            Module.state.isBackSitting = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localHumanoid or not localRoot then return end
+
+            disableCollision(localChar)
+            localHumanoid.Sit = true
+
+            Module.connections.backSit = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isBackSitting or not localChar.Parent then
+                        if Module.state.isBackSitting and localChar then
+                            task.wait(1)
+                            if Module.state.isBackSitting and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startBackSit(newTarget) end
+                            end
+                        else
+                            Module.connections.backSit:Disconnect()
+                            Module.connections.backSit = nil
+                            enableCollision(localChar)
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("背上坐下停止", "目标玩家角色消失", 3)
+                        Module.connections.backSit:Disconnect()
+                        Module.connections.backSit = nil
+                        enableCollision(localChar)
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local backPos = targetRoot.CFrame * CFrame.new(0, 0.5, -1.5)
+                    localRoot.CFrame = backPos
+                    disableCollision(localChar)
+                    localHumanoid.Sit = true
+                end)
+            end)
+        end
+
+        local function stopBackSit()
+            Module.state.isBackSitting = false
+            if Module.connections.backSit then
+                Module.connections.backSit:Disconnect()
+                Module.connections.backSit = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then
+                local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+                if localHumanoid then
+                    localHumanoid.Sit = false
+                end
+                enableCollision(localChar)
+            end
+        end
+
+        local function startAutoFollow(targetPlayer)
+            Module.state.isAutoFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            local humanoid = localChar:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local animation = Instance.new("Animation")
+                animation.AnimationId = "rbxassetid://189854234"
+                Module.state.autoFollowAnim = humanoid:LoadAnimation(animation)
+                Module.state.autoFollowAnim:Play()
+            end
+
+            local forwardOffset, backwardOffset = -2.5, -1.3
+
+            Module.connections.autoFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isAutoFollowing or not localChar.Parent then
+                        if Module.state.isAutoFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isAutoFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startAutoFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.autoFollow:Disconnect()
+                            Module.connections.autoFollow = nil
+                            enableCollision(localChar)
+                            if Module.state.autoFollowAnim then
+                                Module.state.autoFollowAnim:Stop()
+                                Module.state.autoFollowAnim = nil
+                            end
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("动画跟随停止", "目标玩家角色消失", 3)
+                        Module.connections.autoFollow:Disconnect()
+                        Module.connections.autoFollow = nil
+                        enableCollision(localChar)
+                        if Module.state.autoFollowAnim then
+                            Module.state.autoFollowAnim:Stop()
+                            Module.state.autoFollowAnim = nil
+                        end
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local forwardCFrame = targetRoot.CFrame * CFrame.new(0, 0, forwardOffset)
+                    local backwardCFrame = targetRoot.CFrame * CFrame.new(0, 0, backwardOffset)
+
+                    local tweenForward = TweenService:Create(
+                        localRoot,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                        {CFrame = forwardCFrame}
+                    )
+                    tweenForward:Play()
+                    
+                    task.wait(0.15)
+                    
+                    if not Module.state.isAutoFollowing then return end
+                    
+                    local tweenBackward = TweenService:Create(
+                        localRoot,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                        {CFrame = backwardCFrame}
+                    )
+                    tweenBackward:Play()
+                    
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopAutoFollow()
+            Module.state.isAutoFollowing = false
+            if Module.connections.autoFollow then
+                Module.connections.autoFollow:Disconnect()
+                Module.connections.autoFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+            if Module.state.autoFollowAnim then
+                Module.state.autoFollowAnim:Stop()
+                Module.state.autoFollowAnim = nil
+            end
+        end
+
+        local function startSuckFollow(targetPlayer)
+            Module.state.isSucking = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+            
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not targetRoot then
+                stopSuckFollow()
+                return
+            end
+
+            local originalGravity = workspace.Gravity
+            workspace.Gravity = 0
+
+            local riseComplete = false
+            
+            Module.connections.suckFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isSucking or not localChar.Parent then
+                        if Module.state.isSucking and localChar then
+                            task.wait(1)
+                            if Module.state.isSucking and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startSuckFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.suckFollow:Disconnect()
+                            Module.connections.suckFollow = nil
+                            enableCollision(localChar)
+                            workspace.Gravity = originalGravity
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("吸管跟随停止", "目标玩家角色消失", 3)
+                        Module.connections.suckFollow:Disconnect()
+                        Module.connections.suckFollow = nil
+                        enableCollision(localChar)
+                        workspace.Gravity = originalGravity
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    if not riseComplete and localRoot.Position.Y <= 44 then
+                        localRoot.CFrame = localRoot.CFrame * CFrame.new(0, 1.5, 0)
+                        if localRoot.Position.Y >= 44 then
+                            riseComplete = true
+                            task.wait(1)
+                        end
+                    else
+                        localRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 2.3, -1.1) * CFrame.Angles(0, math.pi, 0)
+                        localRoot.Velocity = Vector3.new(0, 0, 0)
+                        
+                        local humanoid = localChar:FindFirstChildOfClass("Humanoid")
+                        if humanoid and not Module.state.suckingAnim then
+                            local animationId = "rbxassetid://5918726674"
+                            local animation = Instance.new('Animation')
+                            animation.AnimationId = animationId
+                            Module.state.suckingAnim = humanoid:LoadAnimation(animation)
+                            Module.state.suckingAnim:Play()
+                            Module.state.suckingAnim:AdjustSpeed(1)
+                        end
                     end
                     
-                    setclipboard(cardKey)
-                    
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "✅ 复制成功",
-                        Text = "QQ群号已复制到剪贴板: " .. cardKey,
-                        Icon = "rbxassetid://7040347038",
-                        Duration = 5,
-                        Button1 = "确定"
-                    })
-                    
-                    print("[系统] 已复制QQ号: " .. cardKey)
+                    disableCollision(localChar)
                 end)
-                
-                if not success then
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "❌ 复制失败",
-                        Text = "请手动复制QQ号: " .. cardKey,
-                        Icon = "rbxassetid://7040347038",
-                        Duration = 8,
-                        Button1 = "我知道了"
-                    })
+            end)
+        end
+
+        local function stopSuckFollow()
+            Module.state.isSucking = false
+            if Module.connections.suckFollow then
+                Module.connections.suckFollow:Disconnect()
+                Module.connections.suckFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then 
+                enableCollision(localChar)
+            end
+            workspace.Gravity = 196.2
+            if Module.state.suckingAnim then
+                Module.state.suckingAnim:Stop()
+                Module.state.suckingAnim = nil
+            end
+        end
+
+        local function startSusFollow(targetPlayer)
+            Module.state.isSusFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            local humanoid = localChar:FindFirstChildOfClass("Humanoid")
+            local isR15 = humanoid and humanoid.RigType == Enum.HumanoidRigType.R15
+            
+            local animationId, forwardOffset, backwardOffset
+            if isR15 then
+                animationId = "10714360343"
+                forwardOffset = -1.5
+                backwardOffset = -1.1
+            else
+                animationId = "189854234"
+                forwardOffset = -2.5
+                backwardOffset = -1.3
+            end
+
+            if humanoid then
+                local animation = Instance.new("Animation")
+                animation.AnimationId = "rbxassetid://" .. animationId
+                Module.state.susAnim = humanoid:LoadAnimation(animation)
+                Module.state.susAnim:Play()
+            end
+
+            Module.connections.susFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isSusFollowing or not localChar.Parent then
+                        if Module.state.isSusFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isSusFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startSusFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.susFollow:Disconnect()
+                            Module.connections.susFollow = nil
+                            enableCollision(localChar)
+                            if Module.state.susAnim then
+                                Module.state.susAnim:Stop()
+                                Module.state.susAnim = nil
+                            end
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("Sus跟随停止", "目标玩家角色消失", 3)
+                        Module.connections.susFollow:Disconnect()
+                        Module.connections.susFollow = nil
+                        enableCollision(localChar)
+                        if Module.state.susAnim then
+                            Module.state.susAnim:Stop()
+                            Module.state.susAnim = nil
+                        end
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local forwardCFrame = targetRoot.CFrame * CFrame.new(0, 0, forwardOffset)
+                    local backwardCFrame = targetRoot.CFrame * CFrame.new(0, 0, backwardOffset)
+
+                    local tweenForward = TweenService:Create(
+                        localRoot,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                        {CFrame = forwardCFrame}
+                    )
+                    tweenForward:Play()
                     
-                    warn("复制失败:", errorMsg)
-                    print("请手动复制QQ号: " .. cardKey)
+                    task.wait(0.15)
+                    
+                    if not Module.state.isSusFollowing then return end
+                    
+                    local tweenBackward = TweenService:Create(
+                        localRoot,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                        {CFrame = backwardCFrame}
+                    )
+                    tweenBackward:Play()
+                    
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopSusFollow()
+            Module.state.isSusFollowing = false
+            if Module.connections.susFollow then
+                Module.connections.susFollow:Disconnect()
+                Module.connections.susFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+            if Module.state.susAnim then
+                Module.state.susAnim:Stop()
+                Module.state.susAnim = nil
+            end
+        end
+
+        local function startMonitor(targetPlayer)
+            Module.state.isMonitoring = true
+            local camera = workspace.CurrentCamera
+            if not camera then return end
+
+            Module.connections.monitor = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isMonitoring or not targetPlayer.Character then
+                        Module.connections.monitor:Disconnect()
+                        Module.connections.monitor = nil
+                        local localChar = getLocalCharacter()
+                        if localChar then
+                            local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+                            if localHumanoid then
+                                camera.CameraSubject = localHumanoid
+                            end
+                        end
+                        return
+                    end
+
+                    local targetSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if not targetSubject then
+                        targetSubject = targetPlayer.Character:FindFirstChild("Head") or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    end
+                    if targetSubject then
+                        camera.CameraSubject = targetSubject
+                    end
+                end)
+            end)
+            showNotify("监视启动", "已开始监视 " .. targetPlayer.Name, 3)
+        end
+
+        local function stopMonitor()
+            Module.state.isMonitoring = false
+            if Module.connections.monitor then
+                Module.connections.monitor:Disconnect()
+                Module.connections.monitor = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then
+                local localHumanoid = localChar:FindFirstChildOfClass("Humanoid")
+                if localHumanoid then
+                    workspace.CurrentCamera.CameraSubject = localHumanoid
                 end
+            end
+            showNotify("监视停止", "已停止监视", 3)
+        end
+
+        local function SkidFling(TargetPlayer)
+            local Character = LocalPlayer.Character
+            local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+            local RootPart = Humanoid and Humanoid.RootPart
+
+            local TCharacter = TargetPlayer.Character
+            local THumanoid
+            local TRootPart
+            local THead
+            local Accessory
+            local Handle
+
+            if TCharacter:FindFirstChildOfClass("Humanoid") then
+                THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+            end
+            if THumanoid and THumanoid.RootPart then
+                TRootPart = THumanoid.RootPart
+            end
+            if TCharacter:FindFirstChild("Head") then
+                THead = TCharacter.Head
+            end
+            if TCharacter:FindFirstChildOfClass("Accessory") then
+                Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+            end
+            if Accessory and Accessory:FindFirstChild("Handle") then
+                Handle = Accessory.Handle
+            end
+
+            if Character and Humanoid and RootPart then
+                if RootPart.Velocity.Magnitude < 50 then
+                    getgenv().OldPos = RootPart.CFrame
+                end
+                if THumanoid and THumanoid.Sit then
+                    return
+                end
+                if THead then
+                    workspace.CurrentCamera.CameraSubject = THead
+                elseif not THead and Handle then
+                    workspace.CurrentCamera.CameraSubject = Handle
+                elseif THumanoid and TRootPart then
+                    workspace.CurrentCamera.CameraSubject = THumanoid
+                end
+                if not TCharacter:FindFirstChildWhichIsA("BasePart") then
+                    return
+                end
+                
+                local FPos = function(BasePart, Pos, Ang)
+                    RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+                    Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+                    RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+                    RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+                end
+                
+                local SFBasePart = function(BasePart)
+                    local TimeToWait = 2
+                    local Time = tick()
+                    local Angle = 0
+
+                    repeat
+                        if RootPart and THumanoid then
+                            if BasePart.Velocity.Magnitude < 50 then
+                                Angle = Angle + 100
+
+                                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle),0 ,0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(2.25, 1.5, -2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(-2.25, -1.5, 2.25) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection,CFrame.Angles(math.rad(Angle), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection,CFrame.Angles(math.rad(Angle), 0, 0))
+                                task.wait()
+                            else
+                                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                                task.wait()
+                                
+                                FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, -TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(0, 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, 1.5, TRootPart.Velocity.Magnitude / 1.25), CFrame.Angles(math.rad(90), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5 ,0), CFrame.Angles(math.rad(-90), 0, 0))
+                                task.wait()
+
+                                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                                task.wait()
+                            end
+                        else
+                            break
+                        end
+                    until BasePart.Velocity.Magnitude > 500 or BasePart.Parent ~= TargetPlayer.Character or TargetPlayer.Parent ~= game.Players or not TargetPlayer.Character == TCharacter or THumanoid.Sit or Humanoid.Health <= 0 or tick() > Time + TimeToWait
+                end
+                
+                workspace.FallenPartsDestroyHeight = 0/0
+                
+                local BV = Instance.new("BodyVelocity")
+                BV.Name = "EpixVel"
+                BV.Parent = RootPart
+                BV.Velocity = Vector3.new(9e8, 9e8, 9e8)
+                BV.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+                
+                Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+                
+                if TRootPart and THead then
+                    if (TRootPart.CFrame.p - THead.CFrame.p).Magnitude > 5 then
+                        SFBasePart(THead)
+                    else
+                        SFBasePart(TRootPart)
+                    end
+                elseif TRootPart and not THead then
+                    SFBasePart(TRootPart)
+                elseif not TRootPart and THead then
+                    SFBasePart(THead)
+                elseif not TRootPart and not THead and Accessory and Handle then
+                    SFBasePart(Handle)
+                else
+                    return
+                end
+                
+                BV:Destroy()
+                Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+                workspace.CurrentCamera.CameraSubject = Humanoid
+                
+                repeat
+                    RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
+                    Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
+                    Humanoid:ChangeState("GettingUp")
+                    table.foreach(Character:GetChildren(), function(_, x)
+                        if x:IsA("BasePart") then
+                            x.Velocity, x.RotVelocity = Vector3.new(), Vector3.new()
+                        end
+                    end)
+                    task.wait()
+                until (RootPart.Position - getgenv().OldPos.p).Magnitude < 25
+                workspace.FallenPartsDestroyHeight = getgenv().FPDH
+            else
+                return
+            end
+        end
+
+        local function startFlingSingle()
+            if not Module.state.selectedPlayer then
+                showNotify("错误", "请先选择玩家", 3)
+                return
+            end
+            local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+            if not targetPlayer then
+                showNotify("错误", "未找到玩家", 3)
+                return
+            end
+            SkidFling(targetPlayer)
+            showNotify("成功", "甩飞玩家一次", 3)
+        end
+
+        local function startLoopFlingSingle()
+            if not Module.state.selectedPlayer then
+                showNotify("错误", "请先选择玩家", 3)
+                return
+            end
+            local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+            if not targetPlayer then
+                showNotify("错误", "未找到玩家", 3)
+                return
+            end
+            Module.state.isLoopFlingingSingle = true
+            showNotify("开始", "循环甩飞玩家", 3)
+            local thread = task.spawn(function()
+                while Module.state.isLoopFlingingSingle do
+                    SkidFling(targetPlayer)
+                    task.wait(0.1)
+                end
+            end)
+            table.insert(Module.connections.flingThreads, thread)
+        end
+
+        local function startFlingAll()
+            local players = game.Players:GetPlayers()
+            for _, player in ipairs(players) do
+                if player ~= LocalPlayer then
+                    SkidFling(player)
+                end
+            end
+            showNotify("成功", "甩飞所有玩家一次", 3)
+        end
+
+        local function startLoopFlingAll()
+            Module.state.isLoopFlingingAll = true
+            showNotify("开始", "循环甩飞所有玩家", 3)
+            local thread = task.spawn(function()
+                while Module.state.isLoopFlingingAll do
+                    local players = game.Players:GetPlayers()
+                    for _, player in ipairs(players) do
+                        if not Module.state.isLoopFlingingAll then break end
+                        if player ~= LocalPlayer then
+                            SkidFling(player)
+                        end
+                    end
+                    task.wait(0.1)
+                end
+            end)
+            table.insert(Module.connections.flingThreads, thread)
+        end
+
+        local function stopLoopFlingSingle()
+            Module.state.isLoopFlingingSingle = false
+            showNotify("停止", "循环甩飞玩家已停止", 3)
+        end
+
+        local function stopLoopFlingAll()
+            Module.state.isLoopFlingingAll = false
+            showNotify("停止", "循环甩飞所有玩家已停止", 3)
+        end
+
+        local function getCharacterType(character)
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                return humanoid.RigType.Name
+            end
+            return "R6"
+        end
+
+        local function startModernFollow(targetPlayer)
+            Module.state.isModernFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            local animationConfig = {
+                R6 = "189854234",
+                R15 = "10714068222"
+            }
+
+            local characterType = getCharacterType(localChar)
+            local animationId = animationConfig[characterType] or animationConfig.R6
+
+            local humanoid = localChar:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local animation = Instance.new("Animation")
+                animation.AnimationId = "rbxassetid://" .. animationId
+                Module.state.modernAnim = humanoid:LoadAnimation(animation)
+                if characterType == "R15" then
+                    Module.state.modernAnim:AdjustSpeed(2)
+                end
+                Module.state.modernAnim:Play()
+            end
+
+            Module.connections.modernFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isModernFollowing or not localChar.Parent then
+                        if Module.state.isModernFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isModernFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startModernFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.modernFollow:Disconnect()
+                            Module.connections.modernFollow = nil
+                            enableCollision(localChar)
+                            if Module.state.modernAnim then
+                                Module.state.modernAnim:Stop()
+                                Module.state.modernAnim = nil
+                            end
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("现代跟随停止", "目标玩家角色消失", 3)
+                        Module.connections.modernFollow:Disconnect()
+                        Module.connections.modernFollow = nil
+                        enableCollision(localChar)
+                        if Module.state.modernAnim then
+                            Module.state.modernAnim:Stop()
+                            Module.state.modernAnim = nil
+                        end
+                        return
+                    end
+
+                    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetRoot then return end
+
+                    local followDistance = 2
+                    local characterType = getCharacterType(localChar)
+                    if characterType == "R15" then
+                        followDistance = 2.5
+                    end
+
+                    local targetCFrame = targetRoot.CFrame
+                    local followCFrame = targetCFrame * CFrame.new(0, 0, followDistance)
+
+                    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    local tween = TweenService:Create(localRoot, tweenInfo, {CFrame = followCFrame})
+                    tween:Play()
+
+                    if Module.state.modernAnim and not Module.state.modernAnim.IsPlaying then
+                        Module.state.modernAnim:Play()
+                    end
+
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopModernFollow()
+            Module.state.isModernFollowing = false
+            if Module.connections.modernFollow then
+                Module.connections.modernFollow:Disconnect()
+                Module.connections.modernFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then enableCollision(localChar) end
+            if Module.state.modernAnim then
+                Module.state.modernAnim:Stop()
+                Module.state.modernAnim = nil
+            end
+        end
+
+        local function startEnhancedSuckFollow(targetPlayer)
+            Module.state.isEnhancedSuckFollowing = true
+            local localChar = getLocalCharacter()
+            if not localChar then return end
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            if not localRoot then return end
+
+            disableCollision(localChar)
+
+            local animationConfig = {
+                R6 = {
+                    animationId = "178130996",
+                    speed = 1.0,
+                    offset = CFrame.new(0, -2.3, -1.0),
+                    rotation = CFrame.Angles(0, math.pi, 0)
+                },
+                R15 = {
+                    animationId = "5918726674",
+                    speed = 1.2,
+                    offset = CFrame.new(0, -2.0, -1.2),
+                    rotation = CFrame.Angles(0, math.pi, 0)
+                }
+            }
+
+            local characterType = getCharacterType(localChar)
+            local config = animationConfig[characterType] or animationConfig.R6
+
+            local humanoid = localChar:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local animation = Instance.new('Animation')
+                animation.AnimationId = "rbxassetid://" .. config.animationId
+                Module.state.enhancedSuckAnim = humanoid:LoadAnimation(animation)
+                Module.state.enhancedSuckAnim:Play()
+                Module.state.enhancedSuckAnim:AdjustSpeed(config.speed)
+            end
+
+            local originalGravity = workspace.Gravity
+            workspace.Gravity = 0
+
+            Module.connections.enhancedSuckFollow = _G.CreateHeartbeatConnection(function()
+                pcall(function()
+                    if not Module.state.isEnhancedSuckFollowing or not localChar.Parent then
+                        if Module.state.isEnhancedSuckFollowing and localChar then
+                            task.wait(1)
+                            if Module.state.isEnhancedSuckFollowing and Module.state.selectedPlayer then
+                                local newTarget = getTargetPlayer(Module.state.selectedPlayer)
+                                if newTarget then startEnhancedSuckFollow(newTarget) end
+                            end
+                        else
+                            Module.connections.enhancedSuckFollow:Disconnect()
+                            Module.connections.enhancedSuckFollow = nil
+                            enableCollision(localChar)
+                            workspace.Gravity = originalGravity
+                            if Module.state.enhancedSuckAnim then
+                                Module.state.enhancedSuckAnim:Stop()
+                                Module.state.enhancedSuckAnim = nil
+                            end
+                        end
+                        return
+                    end
+
+                    if not targetPlayer.Character then
+                        showNotify("增强吸管跟随停止", "目标玩家角色消失", 3)
+                        Module.connections.enhancedSuckFollow:Disconnect()
+                        Module.connections.enhancedSuckFollow = nil
+                        enableCollision(localChar)
+                        workspace.Gravity = originalGravity
+                        if Module.state.enhancedSuckAnim then
+                            Module.state.enhancedSuckAnim:Stop()
+                            Module.state.enhancedSuckAnim = nil
+                        end
+                        return
+                    end
+
+                    local targetTorso = targetPlayer.Character:FindFirstChild("LowerTorso") or 
+                                       targetPlayer.Character:FindFirstChild("UpperTorso") or
+                                       targetPlayer.Character:FindFirstChild("Torso") or
+                                       targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not targetTorso then return end
+
+                    local finalCFrame = targetTorso.CFrame * config.offset * config.rotation
+                    local tween = TweenService:Create(
+                        localRoot,
+                        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        {CFrame = finalCFrame}
+                    )
+                    tween:Play()
+
+                    disableCollision(localChar)
+                end)
+            end)
+        end
+
+        local function stopEnhancedSuckFollow()
+            Module.state.isEnhancedSuckFollowing = false
+            if Module.connections.enhancedSuckFollow then
+                Module.connections.enhancedSuckFollow:Disconnect()
+                Module.connections.enhancedSuckFollow = nil
+            end
+            local localChar = getLocalCharacter()
+            if localChar then 
+                enableCollision(localChar)
+            end
+            workspace.Gravity = 196.2
+            if Module.state.enhancedSuckAnim then
+                Module.state.enhancedSuckAnim:Stop()
+                Module.state.enhancedSuckAnim = nil
+            end
+        end
+
+        local PlayerTab = MainWindow:Tab("玩家", '81589895647169')
+task.wait(0.1)
+
+        local SelectSection = PlayerTab:section("选择玩家", true)
+        local PlayerDropdown = SelectSection:Dropdown("选择玩家", "PlayerSelect", Module.state.allPlayers, function(Value)
+            Module.state.selectedPlayer = Value
+            showNotify("选择玩家", "已选择 " .. tostring(Value), 2)
+        end)
+
+        Module.connections.playerListRefresh = _G.CreateHeartbeatConnection(function()
+            pcall(function()
+                local newPlayerList = {}
+                for _, player in ipairs(game.Players:GetPlayers()) do
+                    if player ~= game.Players.LocalPlayer then
+                        table.insert(newPlayerList, player.Name)
+                    end
+                end
+                if #newPlayerList ~= #Module.state.allPlayers then
+                    Module.state.allPlayers = newPlayerList
+                    PlayerDropdown:SetOptions(Module.state.allPlayers)
+                end
+            end)
+        end)
+
+        local FlingSection = PlayerTab:section("甩飞功能", true)
+        
+        FlingSection:Button("甩飞一次指定玩家", function()
+            startFlingSingle()
+        end)
+
+        FlingSection:Toggle("循环甩飞指定玩家", "LoopFlingSingle", false, function(Value)
+            Module.state.isLoopFlingingSingle = Value
+            if Value then
+                startLoopFlingSingle()
+            else
+                stopLoopFlingSingle()
+            end
+        end)
+
+        FlingSection:Button("甩飞一次所有玩家", function()
+            startFlingAll()
+        end)
+
+        FlingSection:Toggle("循环甩飞所有玩家", "LoopFlingAll", false, function(Value)
+            Module.state.isLoopFlingingAll = Value
+            if Value then
+                startLoopFlingAll()
+            else
+                stopLoopFlingAll()
+            end
+        end)
+
+        FlingSection:Button("停止所有甩飞", function()
+            stopLoopFlingSingle()
+            stopLoopFlingAll()
+            showNotify("停止", "已停止所有甩飞", 3)
+        end)
+
+        local HeadSitSection = PlayerTab:section("坐头功能", true)
+        HeadSitSection:Button("坐选定玩家头上", function()
+            if not Module.state.selectedPlayer then
+                showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                return
+            end
+            stopHeadSit()
+            startHeadSit(Module.state.selectedPlayer)
+        end)
+
+        HeadSitSection:Toggle("循环坐头（死亡重生后继续）", "LoopHeadSit", false, function(Value)
+            Module.state.isLoopHeadSit = Value
+            if Value and Module.state.selectedPlayer then
+                stopHeadSit()
+                startHeadSit(Module.state.selectedPlayer)
+            else
+                stopHeadSit()
+            end
+        end)
+
+        HeadSitSection:Button("停止坐头", stopHeadSit)
+
+        local TeleportSection = PlayerTab:section("传送功能", true)
+        TeleportSection:Button("传送到选定玩家", function()
+            if not Module.state.selectedPlayer then
+                showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                return
+            end
+            local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+            if not targetPlayer or not targetPlayer.Character then
+                showNotify("传送失败", "目标玩家角色不存在", 3)
+                return
+            end
+            teleportToPlayer(targetPlayer)
+            showNotify("传送成功", "已传送到 " .. targetPlayer.Name, 3)
+        end)
+
+        TeleportSection:Toggle("循环传送同个玩家", "LoopTeleportSame", false, function(Value)
+            Module.state.isTeleportingSame = Value
+            if Value then
+                stopAllTeleports()
+                local thread = task.spawn(function()
+                    while Module.state.isTeleportingSame do
+                        if not Module.state.selectedPlayer then break end
+                        local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                        if targetPlayer and targetPlayer.Character then
+                            teleportToPlayer(targetPlayer)
+                        end
+                        task.wait(Module.config.teleportInterval)
+                    end
+                end)
+                table.insert(Module.connections.teleportThreads, thread)
+            else
+                stopAllTeleports()
+            end
+        end)
+
+        TeleportSection:Toggle("循环传送所有玩家", "LoopTeleportAll", false, function(Value)
+            Module.state.isTeleportingAll = Value
+            if Value then
+                stopAllTeleports()
+                local thread = task.spawn(function()
+                    while Module.state.isTeleportingAll do
+                        for _, player in ipairs(game.Players:GetPlayers()) do
+                            if not Module.state.isTeleportingAll then break end
+                            if player ~= game.Players.LocalPlayer and player.Character then
+                                teleportToPlayer(player)
+                                task.wait(Module.config.teleportInterval)
+                            end
+                        end
+                    end
+                end)
+                table.insert(Module.connections.teleportThreads, thread)
+            else
+                stopAllTeleports()
+            end
+        end)
+
+        local MonitorSection = PlayerTab:section("视角监视", true)
+        MonitorSection:Button("开始监视选定玩家", function()
+            if not Module.state.selectedPlayer then
+                showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                return
+            end
+            local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+            if not targetPlayer then
+                showNotify("监视失败", "目标玩家不存在", 3)
+                return
+            end
+            stopMonitor()
+            startMonitor(targetPlayer)
+        end)
+
+        MonitorSection:Button("停止监视", stopMonitor)
+
+        local FollowSection = PlayerTab:section("恶搞跟随", true)
+        
+        FollowSection:Toggle("旋转环绕跟随", "OrbitFollow", false, function(Value)
+            Module.state.isOrbiting = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isOrbiting = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isOrbiting = false
+                    return
+                end
+                stopOrbit()
+                startOrbit(targetPlayer)
+            else
+                stopOrbit()
+            end
+        end)
+
+        FollowSection:Toggle("镜像跟随", "MirrorFollow", false, function(Value)
+            Module.state.isMirroring = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isMirroring = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isMirroring = false
+                    return
+                end
+                stopMirror()
+                startMirror(targetPlayer)
+            else
+                stopMirror()
+            end
+        end)
+
+        FollowSection:Toggle("漂浮跟随", "FloatFollow", false, function(Value)
+            Module.state.isFloating = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isFloating = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isFloating = false
+                    return
+                end
+                stopFloat()
+                startFloat(targetPlayer)
+            else
+                stopFloat()
+            end
+        end)
+
+        FollowSection:Toggle("影子跟随", "ShadowFollow", false, function(Value)
+            Module.state.isShadowFollowing = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isShadowFollowing = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isShadowFollowing = false
+                    return
+                end
+                stopShadow()
+                startShadow(targetPlayer)
+            else
+                stopShadow()
+            end
+        end)
+
+        FollowSection:Toggle("反向跟随", "AntiFollow", false, function(Value)
+            Module.state.isAntiFollowing = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isAntiFollowing = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isAntiFollowing = false
+                    return
+                end
+                stopAntiFollow()
+                startAntiFollow(targetPlayer)
+            else
+                stopAntiFollow()
+            end
+        end)
+
+        FollowSection:Toggle("旋转跟随", "SpinFollow", false, function(Value)
+            Module.state.isSpinning = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isSpinning = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isSpinning = false
+                    return
+                end
+                stopSpin()
+                startSpin(targetPlayer)
+            else
+                stopSpin()
+            end
+        end)
+
+        FollowSection:Toggle("抖动跟随", "ShakeFollow", false, function(Value)
+            Module.state.isShaking = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isShaking = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isShaking = false
+                    return
+                end
+                stopShake()
+                startShake(targetPlayer)
+            else
+                stopShake()
+            end
+        end)
+
+        FollowSection:Toggle("站在玩家头后", "FaceStand", false, function(Value)
+            Module.state.isFaceStanding = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isFaceStanding = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isFaceStanding = false
+                    return
+                end
+                stopFaceStand()
+                startFaceStand(targetPlayer)
+            else
+                stopFaceStand()
+            end
+        end)
+
+        FollowSection:Toggle("坐在玩家前面", "BackSit", false, function(Value)
+            Module.state.isBackSitting = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isBackSitting = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isBackSitting = false
+                    return
+                end
+                stopBackSit()
+                startBackSit(targetPlayer)
+            else
+                stopBackSit()
+            end
+        end)
+
+        FollowSection:Toggle("口交", "SuckFollow", false, function(Value)
+            Module.state.isSucking = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isSucking = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isSucking = false
+                    return
+                end
+                stopSuckFollow()
+                startSuckFollow(targetPlayer)
+            else
+                stopSuckFollow()
+            end
+        end)
+
+        FollowSection:Toggle("被超", "SusFollow", false, function(Value)
+            Module.state.isSusFollowing = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isSusFollowing = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isSusFollowing = false
+                    return
+                end
+                stopSusFollow()
+                startSusFollow(targetPlayer)
+            else
+                stopSusFollow()
+            end
+        end)
+
+        FollowSection:Toggle("超别人", "ModernFollow", false, function(Value)
+            Module.state.isModernFollowing = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isModernFollowing = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isModernFollowing = false
+                    return
+                end
+                stopModernFollow()
+                startModernFollow(targetPlayer)
+            else
+                stopModernFollow()
+            end
+        end)
+
+        FollowSection:Toggle("给别人口", "EnhancedSuckFollow", false, function(Value)
+            Module.state.isEnhancedSuckFollowing = Value
+            if Value then
+                if not Module.state.selectedPlayer then
+                    showNotify("选择玩家", "请先从下拉框选择玩家", 3)
+                    Module.state.isEnhancedSuckFollowing = false
+                    return
+                end
+                local targetPlayer = getTargetPlayer(Module.state.selectedPlayer)
+                if not targetPlayer or not targetPlayer.Character then
+                    showNotify("跟随失败", "目标玩家角色不存在", 3)
+                    Module.state.isEnhancedSuckFollowing = false
+                    return
+                end
+                stopEnhancedSuckFollow()
+                startEnhancedSuckFollow(targetPlayer)
+            else
+                stopEnhancedSuckFollow()
+            end
+        end)
+
+        FollowSection:Button("停止所有跟随", function()
+            stopOrbit()
+            stopMirror()
+            stopFloat()
+            stopShadow()
+            stopAntiFollow()
+            stopSpin()
+            stopShake()
+            stopFaceStand()
+            stopBackSit()
+            stopAutoFollow()
+            stopSuckFollow()
+            stopSusFollow()
+            stopModernFollow()
+            stopEnhancedSuckFollow()
+            showNotify("跟随停止", "已停止所有恶搞跟随", 3)
+        end)
+
+        game.Players.LocalPlayer.CharacterAdded:Connect(function()
+            if Module.state.isLoopHeadSit and Module.state.selectedPlayer then
+                task.wait(1)
+                startHeadSit(Module.state.selectedPlayer)
+            end
+        end)
+
+        local function onScriptDestroy()
+            cleanAllResources()
+        end
+        if script and script.Parent then
+            script.Parent.AncestryChanged:Connect(function(_, newParent)
+                if not newParent then
+                    onScriptDestroy()
+                end
+            end)
+        end
+
+        return {
+            Cleanup = cleanAllResources,
+            SelectPlayer = function(playerName)
+                Module.state.selectedPlayer = playerName
             end
         }
-    }
-})
-
--- ================= 基础变量与远程事件 =================
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local HttpService = game:GetService("HttpService")
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local replicatedStorage = ReplicatedStorage
-
--- ================= 状态变量 =================
-local sbns = { c = false, s = false, p = false }
-local buySeed = false
-local buyGear = false
-local selectseed = ""
-local selectgear = ""
-
--- ================= 种子/工具列表获取 =================
-local seeds = {}
-local gear = {}
-
-pcall(function()
-    local seedShop = player.PlayerGui:FindFirstChild("Seed_Shop")
-    if seedShop then
-        local frame = seedShop:FindFirstChild("Frame")
-        if frame then
-            local scroll = frame:FindFirstChild("ScrollingFrame")
-            if scroll then
-                for _, v in next, scroll:GetChildren() do
-                    if v.ClassName == "Frame" and not v.Name:find("Padding") then
-                        table.insert(seeds, v.Name)
-                    end
-                end
-            end
-        end
     end
-end)
-
-pcall(function()
-    local gearShop = player.PlayerGui:FindFirstChild("Gear_Shop")
-    if gearShop then
-        local frame = gearShop:FindFirstChild("Frame")
-        if frame then
-            local scroll = frame:FindFirstChild("ScrollingFrame")
-            if scroll then
-                for _, v in next, scroll:GetChildren() do
-                    if v.ClassName == "Frame" and not v.Name:find("_") then
-                        table.insert(gear, v.Name)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ================= 翻译功能 =================
-local translatedTexts = {}
-local function translate(name)
-    if translatedTexts[name] then return translatedTexts[name] end
-    local ok, result = pcall(function()
-        local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=" .. HttpService:UrlEncode(name)
-        local response = game:HttpGet(url)
-        local decoded = HttpService:JSONDecode(response)
-        if decoded and decoded[1] and decoded[1][1] and decoded[1][1][1] then
-            return decoded[1][1][1]
-        end
-        return nil
-    end)
-    if ok and result and result ~= name then
-        translatedTexts[name] = result
-        return result
-    end
-    translatedTexts[name] = name
-    return name
-end
-
--- ================= 构建显示列表 =================
-local seedReverse = {}
-local gearReverse = {}
-for _, name in ipairs(seeds) do seedReverse[name] = name end
-for _, name in ipairs(gear) do gearReverse[name] = name end
-
-if #seeds == 0 then table.insert(seeds, "暂无种子") end
-if #gear == 0 then table.insert(gear, "暂无工具") end
-
-local seedDisp = {}
-for _, name in ipairs(seeds) do
-    if name == "暂无种子" then
-        table.insert(seedDisp, name)
-    else
-        local t = translate(name)
-        if t ~= name then seedReverse[t] = name end
-        table.insert(seedDisp, t)
-    end
-end
-
-local gearDisp = {}
-for _, name in ipairs(gear) do
-    if name == "暂无工具" then
-        table.insert(gearDisp, name)
-    else
-        local t = translate(name)
-        if t ~= name then gearReverse[t] = name end
-        table.insert(gearDisp, t)
-    end
-end
-
--- ================= 创建标签页 =================
-local Tabs = {
-    Main = Window:Tab({ Title = "主要", Icon = "sprout" }),
-    Teleport = Window:Tab({ Title = "传送", Icon = "map-pin" }),
-    Settings = Window:Tab({ Title = "设置", Icon = "settings" }),
 }
 
-local MainLeft = Tabs.Main:Section({ Title = "主要功能", Side = "Left" })
-
--- 自动收集
-MainLeft:Toggle({
-    Title = "自动收集",
-    Desc = "自动收集已成熟的作物",
-    Default = false,
-    Callback = function(state)
-        sbns.c = state
-        task.spawn(function()
-            while sbns.c do
-                pcall(function()
-                    for _, farm in pairs(workspace.Farm:GetChildren()) do
-                        local important = farm:FindFirstChild("Important")
-                        if important then
-                            local data = important:FindFirstChild("Data")
-                            if data and data:FindFirstChild("Owner") and data.Owner.Value == player.Name then
-                                local plants = important:FindFirstChild("Plants_Physical")
-                                if plants then
-                                    for _, g in ipairs(plants:GetDescendants()) do
-                                        if g:IsA("ProximityPrompt") then
-                                            local parent = g.Parent
-                                            if parent then
-                                                character.Humanoid:MoveTo(parent.Position)
-                                                fireproximityprompt(g)
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end)
-                task.wait()
-            end
-        end)
-    end
-})
-
--- 自动售卖
-MainLeft:Toggle({
-    Title = "自动售卖",
-    Desc = "背包满时自动去商店售卖",
-    Default = false,
-    Callback = function(state)
-        sbns.s = state
-        task.spawn(function()
-            while sbns.s do
-                if #player.Backpack:GetChildren() > 20 then
-                    local hrp = character.HumanoidRootPart
-                    local originalCF = hrp.CFrame
-                    hrp.CFrame = workspace.NPCS["Sell Stands"]["Shop Stand"].CFrame * CFrame.new(0, 0, 3)
-                    task.wait(0.5)
-                    replicatedStorage.GameEvents.Sell_Item:FireServer()
-                    replicatedStorage.GameEvents.Sell_Inventory:FireServer()
-                    task.wait(1)
-                    hrp.CFrame = originalCF
-                end
-                task.wait()
-            end
-        end)
-    end
-})
-
--- 自动种植
-MainLeft:Toggle({
-    Title = "自动种植",
-    Desc = "自动种植背包中的种子",
-    Default = false,
-    Callback = function(state)
-        sbns.p = state
-        task.spawn(function()
-            while sbns.p do
-                pcall(function()
-                    local seedType, tool
-                    local containers = { character, player.Backpack }
-                    for _, cont in ipairs(containers) do
-                        for _, item in ipairs(cont:GetChildren()) do
-                            if item:IsA("Tool") and item.Name:find("Seed") then
-                                seedType = item.Name:match("^(.-) Seed")
-                                tool = item
-                                break
-                            end
-                        end
-                        if tool then break end
-                    end
-                    if tool and seedType then
-                        if tool.Parent == player.Backpack then
-                            character.Humanoid:EquipTool(tool)
-                        end
-                        local pos = character.HumanoidRootPart.Position
-                        replicatedStorage.GameEvents.Plant_RE:FireServer(
-                            Vector3.new(math.floor(pos.X), 0.1, math.floor(pos.Z)),
-                            seedType
-                        )
-                    end
-                end)
-                task.wait()
-            end
-        end)
-    end
-})
-
--- ================= 购买工具 - 右侧列 =================
-local GearGroup = Tabs.Main:Section({ Title = "购买工具", Side = "Right" })
-
-GearGroup:Toggle({
-    Title = "自动购买工具",
-    Desc = "开启后循环购买选中的工具",
-    Default = false,
-    Callback = function(state)
-        buyGear = state
-        task.spawn(function()
-            while buyGear do
-                if selectgear ~= "" then
-                    replicatedStorage.GameEvents.BuyGearStock:FireServer(selectgear)
-                end
-                task.wait()
-            end
-        end)
-    end
-})
-
-GearGroup:Dropdown({
-    Title = "选择工具",
-    Values = gearDisp,
-    Value = gearDisp[1] or "暂无工具",
-    Callback = function(value)
-        selectgear = gearReverse[value] or value
-    end
-})
-
-local GearInfoLabel = GearGroup:Paragraph({
-    Title = "工具信息",
-    Desc = "等待选择..."
-})
-
--- ================= 购买种子 - 右侧列 =================
-local SeedGroup = Tabs.Main:Section({ Title = "购买种子", Side = "Right" })
-
-SeedGroup:Toggle({
-    Title = "自动购买种子",
-    Desc = "开启后循环购买选中的种子",
-    Default = false,
-    Callback = function(state)
-        buySeed = state
-        task.spawn(function()
-            while buySeed do
-                if selectseed ~= "" then
-                    replicatedStorage.GameEvents.BuySeedStock:FireServer("Tier 1", selectseed)
-                end
-                task.wait()
-            end
-        end)
-    end
-})
-
-SeedGroup:Dropdown({
-    Title = "选择种子",
-    Values = seedDisp,
-    Value = seedDisp[1] or "暂无种子",
-    Callback = function(value)
-        selectseed = seedReverse[value] or value
-    end
-})
-
-local SeedInfoLabel = SeedGroup:Paragraph({
-    Title = "种子信息",
-    Desc = "等待选择..."
-})
-
--- ================= 信息更新循环 =================
-task.spawn(function()
-    while true do
-        task.wait(1)
-        pcall(function()
-            -- 更新种子信息
-            if selectseed ~= "" and selectseed ~= "暂无种子" then
-                local seedShop = player.PlayerGui:FindFirstChild("Seed_Shop")
-                if seedShop then
-                    local frame = seedShop:FindFirstChild("Frame")
-                    if frame then
-                        local scroll = frame:FindFirstChild("ScrollingFrame")
-                        if scroll then
-                            local f = scroll:FindFirstChild(selectseed)
-                            if f then
-                                local main = f:FindFirstChild("Main_Frame")
-                                if main then
-                                    local cost = main:FindFirstChild("Cost_Text")
-                                    local stock = main:FindFirstChild("Stock_Text")
-                                    SeedInfoLabel:SetDesc("价格: " .. (cost and cost.Text or "?") .. " | 数量: " .. (stock and stock.Text or "?"))
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            -- 更新工具信息
-            if selectgear ~= "" and selectgear ~= "暂无工具" then
-                local gearShop = player.PlayerGui:FindFirstChild("Gear_Shop")
-                if gearShop then
-                    local frame = gearShop:FindFirstChild("Frame")
-                    if frame then
-                        local scroll = frame:FindFirstChild("ScrollingFrame")
-                        if scroll then
-                            local f = scroll:FindFirstChild(selectgear)
-                            if f then
-                                local main = f:FindFirstChild("Main_Frame")
-                                if main then
-                                    local cost = main:FindFirstChild("Cost_Text")
-                                    local stock = main:FindFirstChild("Stock_Text")
-                                    GearInfoLabel:SetDesc("价格: " .. (cost and cost.Text or "?") .. " | 数量: " .. (stock and stock.Text or "?"))
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    end
-end)
-
--- ================= 传送标签页 =================
-local TeleportGroup = Tabs.Teleport:Section({ Title = "传送地点", Side = "Left" })
-
-TeleportGroup:Button({
-    Title = "传送到出售店",
-    Variant = "Primary",
-    Callback = function()
-        character.HumanoidRootPart.CFrame = CFrame.new(36.6, 3.0, 0.4)
-    end
-})
-
-TeleportGroup:Button({
-    Title = "传送到购买店",
-    Variant = "Primary",
-    Callback = function()
-        character.HumanoidRootPart.CFrame = CFrame.new(38.0, 3.0, -26.7)
-    end
-})
-
-TeleportGroup:Button({
-    Title = "传送到装备店",
-    Variant = "Primary",
-    Callback = function()
-        character.HumanoidRootPart.CFrame = CFrame.new(-237.5, 3.0, -5.0)
-    end
-})
-
-    Window:OnClose(function()
-        windowOpen = false
-        if rainbowBorderAnimation then
-            rainbowBorderAnimation:Disconnect()
-            rainbowBorderAnimation = nil
-        end
-        applyBlurEffect(false)
-    end)
-
-    Window:OnDestroy(function()
-        windowOpen = false
-        if rainbowBorderAnimation then
-            rainbowBorderAnimation:Disconnect()
-            rainbowBorderAnimation = nil
-        end
-        for _, animation in pairs(fontColorAnimations) do
-            animation:Disconnect()
-        end
-        fontColorAnimations = {}
-        applyBlurEffect(false)
-    end)
-end
+local PlayerTabAPI = PlayerTabModule.LoadPlayerTab(Window, Library)
