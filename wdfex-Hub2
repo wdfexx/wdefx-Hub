@@ -448,6 +448,55 @@ function createUI()
     A:Toggle({ Title = "免疫部分伤害", Value = false, Callback = function(value) godOn = value end })
     A:Toggle({ Title = "防监狱拉回", Default = false, Callback = fn49 })
 
+    -- ==== 防布娃娃 ====
+    local ragdollHookLoaded = false
+    A:Toggle({
+        Title = "防布娃娃",
+        Default = false,
+        Callback = function(value)
+            Settings.noRagdoll = value
+            if value and not ragdollHookLoaded then
+                ragdollHookLoaded = true
+                pcall(function()
+                    local Ragdoll = require(ReplicatedStorage.Modules.Ragdoll)
+                    activate = Ragdoll.activate
+                    activateServer = Ragdoll.activateServer
+
+                    Ragdoll.activate = function(arg11, arg12, arg13, ...)
+                        if Settings.noRagdoll and arg12 then
+                            return
+                        end
+                        local v32 = activate
+                        local v33 = table.pack(...)
+                        v33.n = 4 + v33.n - 1
+                        table.move(v33, 1, v33.n, 4, v33)
+                        v33[1] = arg11
+                        v33[2] = arg12
+                        v33[3] = arg13
+                        return v32(table.unpack(v33, 1, v33.n))
+                    end
+
+                    if activateServer then
+                        Ragdoll.activateServer = function(arg11, arg12, arg13, ...)
+                            if Settings.noRagdoll and arg12 then
+                                return
+                            end
+                            local v32 = activateServer
+                            local v33 = table.pack(...)
+                            v33.n = 4 + v33.n - 1
+                            table.move(v33, 1, v33.n, 4, v33)
+                            v33[1] = arg11
+                            v33[2] = arg12
+                            v33[3] = arg13
+                            return v32(table.unpack(v33, 1, v33.n))
+                        end
+                    end
+                end)
+            end
+        end
+    })
+    -- ==== 防布娃娃结束 ====
+
     local MovementSettings = MovementSettings or {}
     MovementSettings.noclip = false
     local FlyState = FlyState or {}
