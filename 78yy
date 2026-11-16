@@ -497,7 +497,7 @@ function createUI()
         ScrollBarEnabled = true,
         Resizable = true,
         Background = "rbxassetid://93446861573142",
-        BackgroundImageTransparency = 0.1.9,
+        BackgroundImageTransparency = 0.2,
         User = { Enabled = true, Callback = function() end, Anonymous = false },
         SideBarWidth = 250,
         Search = { Enabled = true, Placeholder = "搜索...", Callback = function(searchText) end },
